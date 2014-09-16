@@ -28,8 +28,9 @@ class RPCServer:
             kwonlyargs: list of keyword-only arguments
             kwonlydefaults: dict mapping keyword-only argument names to default values (if any)
     """
-    def __init__(self, namespace):
+    def __init__(self, namespace, verbose=False):
         self.namespace = namespace
+        self.verbose = verbose
 
     def run(self):
         """Run the RPC server. To quit the server from another thread,
@@ -37,6 +38,10 @@ class RPCServer:
         self.running = True
         while self.running:
             command, args, kwargs = self._receive()
+            if self.verbose:
+                print("Received command: {}".format(command))
+                print("\t args: {}".format(args))
+                print("\t kwargs: {}".format(kwargs))
             self.process_command(command, args, kwargs)
         
     def process_command(self, command, args, kwargs):
@@ -95,6 +100,9 @@ class RPCServer:
             return
         try:
             response = py_command(*args, **kwargs)
+            if self.verbose:
+                print("\t response: {}".format(response))
+            
         except Exception as e:
             exception_str = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
             self._reply(error=exception_str)
@@ -122,14 +130,14 @@ class RPCServer:
         raise NotImplementedError()
 
 class ZMQServer(RPCServer):
-    def __init__(self, namespace, port, context=None):
+    def __init__(self, namespace, port, context=None, verbose=False):
         """RPCServer subclass that uses ZeroMQ REQ/REP to communicate with clients.
         Arguments:
             namespace: contains a hierarchy of callable objects to expose to clients.
             port: a string ZeroMQ port identifier, like ''tcp://127.0.0.1:5555''.
             context: a ZeroMQ context to share, if one already exists.
         """
-        super().__init__(namespace)
+        super().__init__(namespace, verbose)
         self.context = context if context is not None else zmq.Context()
         self.socket = self.context.socket(zmq.REP)
         self.socket.bind(port)
