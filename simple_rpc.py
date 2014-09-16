@@ -1,6 +1,7 @@
 import zmq
 import traceback
 import inspect
+import collections
 
 class Namespace:
     """Placeholder class to hold attribute values"""

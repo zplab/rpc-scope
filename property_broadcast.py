@@ -65,13 +65,13 @@ class PropertyServer:
             print('updating property: {} to {}'.format(property_name, value))
 
 class ZMQServer(PropertyServer):
-    def __init__(self, port, context=None):
+    def __init__(self, port, context=None, verbose=False):
         """PropertyServer subclass that uses ZeroMQ PUB/SUB to send out updates.
         Arguments:
             port: a string ZeroMQ port identifier, like ''tcp://127.0.0.1:5555''.
             context: a ZeroMQ context to share, if one already exists.
         """
-        super().__init__()
+        super().__init__(verbose)
         self.context = context if context is not None else zmq.Context()
         self.socket = self.context.socket(zmq.PUB)
         self.socket.bind(port)
