@@ -21,9 +21,10 @@ class MessageManager(threading.Thread):
      """
     thread_name = 'MessageManager'
     
-    def __init__(self, daemon=True):
+    def __init__(self, verbose=False, daemon=True):
         # pending_responses holds lists of callbacks to call for each response key
         self.pending_responses = collections.defaultdict(list)
+        self.verbose = verbose
         super().__init__(name=self.thread_name, daemon=daemon)
         self.start()
     
@@ -32,9 +33,15 @@ class MessageManager(threading.Thread):
         self.running = True
         while self.running: # better than 'while True' because can alter self.running from another thread
             response = self._receive_message()
+            if self.verbose:
+                print('received response: {}'.format(response))
             response_key = self._generate_response_key(response)
+            if self.verbose:
+                print('response key: {}'.format(response_key))
             callbacks = self.pending_responses.pop(response_key, [])
             for callback, onetime in callbacks:
+                if self.verbose:
+                    print('calling callback: {}'.format(callback))
                 callback(response)
                 if not onetime:
                     self.pending_responses[response_key].append((callback, onetime))
@@ -50,6 +57,8 @@ class MessageManager(threading.Thread):
         """
         # don't worry about thread synchronization between message-sending and -receiving
         # threads. Dict getting and list appending are atomic.
+        if self.verbose:
+            print('sending message: {} with response key:'.format(message, response_key))
         if response_key is not None and response_callback is not None:
             self.pending_responses[response_key].append((response_callback, onetime))
         self._send_message(message)
@@ -69,7 +78,7 @@ class MessageManager(threading.Thread):
 
 class SerialMessageManager(MessageManager):
     """MessageManager subclass that sends and receives from a serial port."""
-    def __init__(self, serialport, response_terminator, daemon=True):
+    def __init__(self, serialport, response_terminator, verbose=False, daemon=True):
         """Arguments:
             serialport: initialized serial.Serial-like object
             response_terminator: byte or bytes that terminate a response message
@@ -78,7 +87,7 @@ class SerialMessageManager(MessageManager):
         self.serialport = serialport
         self.thread_name = 'SerialMessageManager({})'.format(serialport.port)
         self.response_terminator = response_terminator
-        super().__init__()
+        super().__init__(verbose, daemon)
     
     def _send_message(self, message):
         if type(message) != bytes:
@@ -90,6 +99,8 @@ class SerialMessageManager(MessageManager):
         response = bytearray()
         while self.running: 
             response += self.serialport.read(max(1, self.serialport.inWaiting()))
+            if self.verbose:
+                print('reading response from serial port: {}'.format(str(response, encoding='ASCII')))
             if len(response) >= tl and response[-tl:] == self.response_terminator:
                 return str(response, encoding='ASCII')
 
@@ -100,8 +111,8 @@ class EchoMessageManager(SerialMessageManager):
 
 class LeicaMessageManager(SerialMessageManager):
     """MessageManager subclass appropriate for routing messages from Leica API"""
-    def __init__(self, serialport, daemon=True):
-        super().__init__(serialport, response_terminator=b'\r', daemon=daemon)
+    def __init__(self, serialport, verbose=False, daemon=True):
+        super().__init__(serialport, response_terminator=b'\r', verbose=verbose, daemon=daemon)
         
     def _generate_response_key(self, response):
         if response[0] == '$':
