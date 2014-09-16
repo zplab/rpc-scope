@@ -80,7 +80,7 @@ class SerialMessageManager(MessageManager):
         self.response_terminator = response_terminator
         super().__init__()
     
-    def _transmit_message(self, message):
+    def _send_message(self, message):
         if type(message) != bytes:
             message = bytes(message, encoding='ASCII')
         self.serialport.write(message)

@@ -1,4 +1,5 @@
 import threading
+import collections
 
 class AsyncDeviceNamespace:
     """Simple container class for building a hierarchy of AsyncDevice-like
