@@ -14,10 +14,11 @@ DEFAULT_PROPERTY_PORT = 'tcp://127.0.0.1:6001'
 
 class Scope(message_device.AsyncDeviceNamespace):
     def __init__(self, property_server):
+        super().__init__()
         # need a timeout on the serial port so that the message manager thread can 
         # occasionally check it's 'running' attribute to decide if it needs to quit.
-        self._scope_serial = serial.Serial(SCOPE_PORT, baud=SCOPE_BAUD, timeout=5)
-        self._message_manager = message_manager.LeicaMessageManager(self._scope_serial)
+        self._scope_serial = serial.Serial(SCOPE_PORT, baudrate=SCOPE_BAUD, timeout=5)
+        self._message_manager = message_manager.LeicaMessageManager(self._scope_serial, verbose=True)
         self.stage = dm6000b.Stage(self._message_manager)
 
 def server_main(rpc_port=None, property_port=None):
@@ -32,7 +33,7 @@ def server_main(rpc_port=None, property_port=None):
     root = simple_rpc.Namespace()
     root.scope = Scope(property_server)
     
-    rpc_server = simple_rpc.ZMQServer(root, rpc_port, context=context)
+    server = simple_rpc.ZMQServer(root, rpc_port, context=context)
     server.run()
 
 def rpc_client_main(rpc_port=None):

@@ -12,9 +12,9 @@ GET_POS_Z = '71023'
 
 class Stage(message_device.LeicaAsyncDevice):
     def _setup_device(self):
-        self._x_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_X).response) * 1000
-        self._y_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_Y).response) * 1000
-        self._z_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_Z).response) * 1000
+        self._x_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_X).response) / 1000
+        self._y_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_Y).response) / 1000
+        self._z_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_Z).response) / 1000
     
     def set_position(self, x=None, y=None, z=None):
         """Set position to x, y, and z. Any may be None to indicate no motion
@@ -40,21 +40,26 @@ class Stage(message_device.LeicaAsyncDevice):
         "Set z-axis position in mm"
         self._set_pos(z, self._z_mm_per_count, POS_ABS_Z)
     
+
+    def get_position(self):
+        """Return (x,y,z) position, in mm."""
+        return self.get_x(), self.get_y(), self.get_z()
+
     def _get_pos(self, conversion_factor, command):
         counts = int(self.send_message(command, async=False, intent="get stage position").response)
         mm = counts * conversion_factor
         return mm
     
-    def get_x(self, x):
+    def get_x(self):
         """Get x-axis position in mm."""
-        return _get_pos(self._x_mm_per_count, GET_POS_X)
+        return self._get_pos(self._x_mm_per_count, GET_POS_X)
 
-    def get_y(self, y):
+    def get_y(self):
         """Get y-axis position in mm."""
-        return _get_pos(self._y_mm_per_count, GET_POS_Y)
+        return self._get_pos(self._y_mm_per_count, GET_POS_Y)
 
-    def get_z(self, z):
+    def get_z(self):
         """Get z-axis position in mm."""
-        return _get_pos(self._z_mm_per_count, GET_POS_Z)
+        return self._get_pos(self._z_mm_per_count, GET_POS_Z)
         
         

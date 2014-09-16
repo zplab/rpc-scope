@@ -58,7 +58,7 @@ class MessageManager(threading.Thread):
         # don't worry about thread synchronization between message-sending and -receiving
         # threads. Dict getting and list appending are atomic.
         if self.verbose:
-            print('sending message: {} with response key:'.format(message, response_key))
+            print('sending message: {!r} with response key: {!r}'.format(message, response_key))
         if response_key is not None and response_callback is not None:
             self.pending_responses[response_key].append((response_callback, onetime))
         self._send_message(message)
@@ -92,6 +92,8 @@ class SerialMessageManager(MessageManager):
     def _send_message(self, message):
         if type(message) != bytes:
             message = bytes(message, encoding='ASCII')
+        if self.verbose:
+            print('sending on serial port: {}'.format(message))
         self.serialport.write(message)
     
     def _receive_message(self):
@@ -99,10 +101,10 @@ class SerialMessageManager(MessageManager):
         response = bytearray()
         while self.running: 
             response += self.serialport.read(max(1, self.serialport.inWaiting()))
-            if self.verbose:
+            if self.verbose and len(response) > 0:
                 print('reading response from serial port: {}'.format(str(response, encoding='ASCII')))
             if len(response) >= tl and response[-tl:] == self.response_terminator:
-                return str(response, encoding='ASCII')
+                return str(response[:-tl], encoding='ASCII')
 
 class EchoMessageManager(SerialMessageManager):
     """MessageManager subclass for debugging: the response key is the whole response"""

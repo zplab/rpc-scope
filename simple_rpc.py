@@ -299,16 +299,23 @@ def _rich_proxy_function(doc, argspec, name, to_proxy):
 
 if __name__ == '__main__':
     import sys
-    mode = sys.argv[1]
-    assert mode in ('client', 'server')
-    if mode == 'client':
+    import argparse
+    h = '  Note that the default values for first_serial_device '
+    h+= 'and second_serial_device are appropriate for OSX but not Linux.'
+    argparser = argparse.ArgumentParser(description='ZMQ RPC echo test client/server.', epilog=h)
+    argparser.add_argument('--mode', choices=('client', 'server'), required=True)
+    argparser.add_argument('--first-serial-device', metavar='first_serial_device', default='/dev/ptyp1')
+    argparser.add_argument('--second-serial-device', metavar='second_serial_device', default='/dev/ttyp1')
+    args = argparser.parse_args()
+
+    if args.mode == 'client':
         c  = ZMQClient('tcp://localhost:5555')
         root = c.proxy_namespace()
         root.am.send_message('foo\n', async=True)
         root.am.send_message('bar\n', async=True)
         root.wait()
     
-    elif mode == 'server':
+    elif args.mode == 'server':
         import subprocess
         import serial
         import message_manager
@@ -316,10 +323,10 @@ if __name__ == '__main__':
         import time
         import atexit
         
-        p = subprocess.Popen([sys.executable, 'echo_device.py', '/dev/ptyp1'])
+        p = subprocess.Popen([sys.executable, 'echo_device.py', args.first_serial_device])
         atexit.register(p.kill)
         time.sleep(0.2)
-        s = serial.Serial('/dev/ttyp1', timeout=10)
+        s = serial.Serial(args.second_serial_device, timeout=10)
         sm = message_manager.EchoMessageManager(s, b'\n')
         am = message_device.EchoAsyncDevice(sm)
         root = message_device.AsyncDeviceNamespace()

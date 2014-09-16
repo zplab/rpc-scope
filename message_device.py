@@ -90,7 +90,11 @@ class LeicaResponse(Response):
         self.intent = intent
         
     def __call__(self, full_response):
-        header, response = full_response.split(' ')
+        header, *response = full_response.split(' ', 1)
+        if len(response) == 0:
+            response = None
+        else:
+            response = response[0]
         if header.startswith('$'):
             auto_event = True
             header = header[1:]
@@ -101,12 +105,13 @@ class LeicaResponse(Response):
     
     def wait(self):
         response = super().wait()
-        if response.error_code != 0:
+        if response.error_code != '0':
             if self.intent is not None:
                 error_text = 'Could not {} (error response "{}")'.format(self.intent, response.full_response)
             else:
                 error_text = 'Error from microscope: "{}"'.format(response.full_response)
             raise LeicaError(error_text, response=response)
+        return response
 
 class AsyncDevice:
     """A class that uses a message_manager.MessageManager to deal with sending 
@@ -178,7 +183,7 @@ class LeicaAsyncDevice(AsyncDevice):
         the intent text when the response's wait() method is called.
         
         """
-        message = ' '.join([command] + [str(param) for param in params])
+        message = ' '.join([str(command)] + [str(param) for param in params]) + '\r'
         response = LeicaResponse(intent)
         return super().send_message(message, async, response=response)
         
