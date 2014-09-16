@@ -33,15 +33,11 @@ class MessageManager(threading.Thread):
         self.running = True
         while self.running: # better than 'while True' because can alter self.running from another thread
             response = self._receive_message()
-            if self.verbose:
-                print('received response: {}'.format(response))
             response_key = self._generate_response_key(response)
-            if self.verbose:
-                print('response key: {}'.format(response_key))
             callbacks = self.pending_responses.pop(response_key, [])
+            if self.verbose:
+                print('received response: {} with response key: {} ({} callbacks)'.format(response, response_key, len(callbacks)))
             for callback, onetime in callbacks:
-                if self.verbose:
-                    print('calling callback: {}'.format(callback))
                 callback(response)
                 if not onetime:
                     self.pending_responses[response_key].append((callback, onetime))
@@ -92,8 +88,6 @@ class SerialMessageManager(MessageManager):
     def _send_message(self, message):
         if type(message) != bytes:
             message = bytes(message, encoding='ASCII')
-        if self.verbose:
-            print('sending on serial port: {}'.format(message))
         self.serialport.write(message)
     
     def _receive_message(self):
@@ -101,8 +95,6 @@ class SerialMessageManager(MessageManager):
         response = bytearray()
         while self.running: 
             response += self.serialport.read(max(1, self.serialport.inWaiting()))
-            if self.verbose and len(response) > 0:
-                print('reading response from serial port: {}'.format(str(response, encoding='ASCII')))
             if len(response) >= tl and response[-tl:] == self.response_terminator:
                 return str(response[:-tl], encoding='ASCII')
 

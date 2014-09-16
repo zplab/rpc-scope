@@ -31,15 +31,15 @@ class PropertyServer:
                 self._x = value
         
     """
-    def __init__(self):
+    def __init__(self, verbose=False):
         self.properties = {}
+        self.verbose = verbose
         
     def add_property(self, property_name, value):
         """Add a named property and provide an initial value.
         Returns a callback to call when the property's value has changed."""
         self.properties[property_name] = value
         def change_callback(value):
-            self.properties[property_name] = value
             self._publish_update(property_name, value)
         return change_callback
 
@@ -60,7 +60,9 @@ class PropertyServer:
 
     def _publish_update(self, property_name, value):
         """Send out an update to the clients"""
-        raise NotImplementedError()
+        self.properties[property_name] = value
+        if self.verbose:
+            print('updating property: {} to {}'.format(property_name, value))
 
 class ZMQServer(PropertyServer):
     def __init__(self, port, context=None):
@@ -75,6 +77,7 @@ class ZMQServer(PropertyServer):
         self.socket.bind(port)
 
     def _publish_update(self, property_name, value):
+        super()._publish_update(property_name, value)
         # dump json first to catch "not serializable" errors before sending the first part of a two-part message
         json = zmq.utils.jsonapi.dumps(value)
         self.socket.send_string(property_name, flags=zmq.SNDMORE)

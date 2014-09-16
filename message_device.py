@@ -66,6 +66,52 @@ class Response:
         self.ready.wait()
         return self.response
 
+class AsyncDevice:
+    """A class that uses a message_manager.MessageManager to deal with sending 
+    and receiving messages to and from some outside hardware device, potentially 
+    in async mode."""
+    
+    def __init__(self, message_manager):
+        self._pending_responses = set()
+        self._async = False
+        self._message_manager = message_manager
+    
+    def wait(self):
+        """Wait on all pending responses."""
+        while self._pending_responses:
+            response = self._pending_responses.pop()
+            response.wait()
+    
+    def set_async(self, async):
+        """If in async mode, send_message() returns None immediately; otherwise 
+        it waits for the device to finish before returning the response value."""
+        self._async = async
+    
+    def send_message(self, message, async=None, response=None):
+        """Send the given message through the MessageManager.
+        If the parameter 'async' is not None, it will override the async mode
+        set with set_async(). If parameter 'response' is provided, that will
+        be used as the response callback object."""
+        response_key = self._generate_response_key(message)
+        if response is None:
+            response = Response()
+        self._message_manager.send_message(message, response_key, response)
+        if async or (async is None and self._async):
+            self._pending_responses.add(response)
+        else:
+            return response.wait()
+    
+    def _generate_response_key(self, message):
+        """Subclasses must implement a method to generate the appropriate
+        response key so that the message_manager can match responses to the
+        original messages."""
+        raise NotImplementedError()
+
+class EchoAsyncDevice(AsyncDevice):
+    """For debugging purposes, a device that simply expects responses to be echoed back messages."""
+    def _generate_response_key(self, message):
+        return message
+
 LeicaResponseTuple = collections.namedtuple('LeicaResponse', ['full_response', 'auto_event', 'header', 'error_code', 'response'])
 
 class LeicaError(RuntimeError):
@@ -113,51 +159,6 @@ class LeicaResponse(Response):
             raise LeicaError(error_text, response=response)
         return response
 
-class AsyncDevice:
-    """A class that uses a message_manager.MessageManager to deal with sending 
-    and receiving messages to and from some outside hardware device, potentially 
-    in async mode."""
-    
-    def __init__(self, message_manager):
-        self._pending_responses = set()
-        self._async = False
-        self._message_manager = message_manager
-    
-    def wait(self):
-        """Wait on all pending responses."""
-        while self._pending_responses:
-            response = self._pending_responses.pop()
-            response.wait()
-    
-    def set_async(self, async):
-        """If in async mode, send_message() returns None immediately; otherwise 
-        it waits for the device to finish before returning the response value."""
-        self._async = async
-    
-    def send_message(self, message, async=None, response=None):
-        """Send the given message through the MessageManager.
-        If the parameter 'async' is not None, it will override the async mode
-        set with set_async(). If parameter 'response' is provided, that will
-        be used as the response callback object."""
-        response_key = self._generate_response_key(message)
-        if response is None:
-            response = Response()
-        self._message_manager.send_message(message, response_key, response)
-        if async or (async is None and self._async):
-            self._pending_responses.add(response)
-        else:
-            return response.wait()
-    
-    def _generate_response_key(self, message):
-        """Subclasses must implement a method to generate the appropriate
-        response key so that the message_manager can match responses to the
-        original messages."""
-        raise NotImplementedError()
-
-class EchoAsyncDevice(AsyncDevice):
-    """For debugging purposes, a device that simply expects responses to be echoed back messages."""
-    def _generate_response_key(self, message):
-        return message
 
 class LeicaAsyncDevice(AsyncDevice):
     """Base class for Leica function units. Responses keys are the function unit and

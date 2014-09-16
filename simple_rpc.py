@@ -205,7 +205,35 @@ class RPCClient:
             rpc_func = self.proxy_function(qualname)
             proxy_func = _rich_proxy_function(doc, argspec, name, rpc_func)
             setattr(namespace, name, proxy_func)
+        self._add_proxy_properties(root)
         return root
+        
+    @staticmethod
+    def _add_proxy_properties(namespace):
+        accessors = collections.defaultdict(RPCClient._accessor_pair)
+        for k in dir(namespace):
+            if k.startswith('_'):
+                continue
+            v = getattr(namespace, k)
+            if callable(v) and not inspect.isclass(v):
+                if k.startswith('get_'):
+                    accessors[k[4:]].getter = v
+                elif k.startswith('set_'):
+                    accessors[k[4:]].setter = v
+            else:
+                RPCClient._add_proxy_properties(v)
+        for name, accessor_pair in accessors.items():
+            setattr(namespace, name, accessor_pair.get_property())
+        
+    class _accessor_pair:
+        def __init__(self):
+            self.getter = None
+            self.setter = None
+
+        def get_property(self):
+            # assume one of self.getter or self.setter is set
+            return property(self.getter, self.setter, doc=self.getter.__doc__ if self.getter else self.setter.__doc__)
+        
         
 
 class ZMQClient(RPCClient):
@@ -296,6 +324,7 @@ def _rich_proxy_function(doc, argspec, name, to_proxy):
     func = fake_locals['make_func'](to_proxy) # call the factory function
     func.__qualname__ = func.__name__ = name # rename the proxy function
     return func
+
 
 if __name__ == '__main__':
     import sys
