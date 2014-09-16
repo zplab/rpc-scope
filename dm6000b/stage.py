@@ -26,11 +26,7 @@ class Stage(message_device.LeicaAsyncDevice):
     def _set_pos(self, value, conversion_factor, command):
         if value is None: return
         counts = int(round(value / conversion_factor))
-        response = self.send_message(command, counts)
-        if response is not None and response.error_code != 0:
-            # we're in synchronous mode and actually get to look at the response
-            # and there was an error
-            raise message_device.LeicaError('Could not move stage to position.')
+        response = self.send_message(command, counts, intent="move stage to position")
     
     def set_x(self, x):
         "Set x-axis position in mm"
@@ -45,7 +41,7 @@ class Stage(message_device.LeicaAsyncDevice):
         self._set_pos(z, self._z_mm_per_count, POS_ABS_Z)
     
     def _get_pos(self, conversion_factor, command):
-        counts = int(self.send_message(command, async=False).response)
+        counts = int(self.send_message(command, async=False, intent="get stage position").response)
         mm = counts * conversion_factor
         return mm
     

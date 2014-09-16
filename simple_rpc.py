@@ -315,6 +315,7 @@ if __name__ == '__main__':
         import message_device
         import time
         import atexit
+        
         p = subprocess.Popen([sys.executable, 'echo_device.py', '/dev/ptyp1'])
         atexit.register(p.kill)
         time.sleep(0.2)

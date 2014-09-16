@@ -68,7 +68,27 @@ class Response:
 
 LeicaResponseTuple = collections.namedtuple('LeicaResponse', ['full_response', 'auto_event', 'header', 'error_code', 'response'])
 
+class LeicaError(RuntimeError):
+    """Leica communications error that can optionally stash a copy of a LeicaResponse object."""
+    def __init__(self, *args, response=None):
+        super().__init__(*args)
+        self.response = response
+        
 class LeicaResponse(Response):
+    """Response subclass that unpacks a Leica-format response into a namedtuple with the following fields:
+    full_response: the entire response string
+    auto_event: if the response was auto-generated from an event (i.e. prefixed with a '$')
+    header: the function unit, error code, and command name
+    error_code: just the error code
+    response: everything after the header.
+    
+    If an error code was generated, raise a LeicaError on wait(). If constructed
+    with an 'intent' help text, this will help create a better LeicaError.
+    """
+    def __init__(self, intent=None):
+        super().__init__()
+        self.intent = intent
+        
     def __call__(self, full_response):
         header, response = full_response.split(' ')
         if header.startswith('$'):
@@ -78,7 +98,15 @@ class LeicaResponse(Response):
             auto_event = False
         error_code = header[2]
         super().__call__(LeicaResponseTuple(full_response, auto_event, header, error_code, response))
-        
+    
+    def wait(self):
+        response = super().wait()
+        if response.error_code != 0:
+            if self.intent is not None:
+                error_text = 'Could not {} (error response "{}")'.format(self.intent, response.full_response)
+            else:
+                error_text = 'Error from microscope: "{}"'.format(response.full_response)
+            raise LeicaError(error_text, response=response)
 
 class AsyncDevice:
     """A class that uses a message_manager.MessageManager to deal with sending 
@@ -89,7 +117,6 @@ class AsyncDevice:
         self._pending_responses = set()
         self._async = False
         self._message_manager = message_manager
-        self._response_class = Response
     
     def wait(self):
         """Wait on all pending responses."""
@@ -102,12 +129,14 @@ class AsyncDevice:
         it waits for the device to finish before returning the response value."""
         self._async = async
     
-    def send_message(self, message, async=None):
+    def send_message(self, message, async=None, response=None):
         """Send the given message through the MessageManager.
         If the parameter 'async' is not None, it will override the async mode
-        set with set_async()."""
+        set with set_async(). If parameter 'response' is provided, that will
+        be used as the response callback object."""
         response_key = self._generate_response_key(message)
-        response = self._response_class()
+        if response is None:
+            response = Response()
         self._message_manager.send_message(message, response_key, response)
         if async or (async is None and self._async):
             self._pending_responses.add(response)
@@ -132,21 +161,28 @@ class LeicaAsyncDevice(AsyncDevice):
     
     def __init__(self, message_manager):
         super().__init__(message_manager)
-        self._response_class = LeicaResponse
         self._setup_device()
     
     def _setup_device(self):
         """Override in subclasses to perform device-specific setup."""
         pass
     
-    def send_message(self, command, *params, async=None):
+    def send_message(self, command, *params, async=None, intent=None):
+        """Arguments:
+        command: the command number for the Leica scope
+        *params: a list of params to be coerced to strings and listed after command, separated by spaces
+        async: if not None, override the async instance variable.
+        intent: should be helpful text describing the intent of the command.
+        
+        If  a nonzero error code is returned, a LeicaError will be raised with
+        the intent text when the response's wait() method is called.
+        
+        """
         message = ' '.join([command] + [str(param) for param in params])
-        return super().send_message(message, async)
+        response = LeicaResponse(intent)
+        return super().send_message(message, async, response=response)
         
     
     def _generate_response_key(self, message):
         # return the message's function unit ID and command ID
         return message[:2] + message[3:5]
-
-class LeicaError(RuntimeError):
-    pass
