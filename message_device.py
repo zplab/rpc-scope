@@ -36,6 +36,15 @@ class AsyncDeviceNamespace:
     def set_async(self, async):
         for child in self._children:
             getattr(self, child).set_async(async)
+    
+    def get_async(self, async):
+        asyncs = [getattr(self, child).get_async() for child in self._children]
+        if all(async == True for async in asyncs):
+            return True
+        elif all(async == False for async in async):
+            return False
+        else:
+            return "child devices have mixed async status"
 
 class Response:
     """A container for a value to be provided by a background thread at some
