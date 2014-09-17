@@ -199,73 +199,59 @@ class RPCClient:
         """Use the RPC server's __DESCRIBE__ functionality to reconstitute a
         faxscimile namespace on the client side with well-described functions
         that can be seamlessly called."""
+        
         # group functions by their namespace
         namespaces = collections.defaultdict(list)
         for qualname, doc, argspec in self('__DESCRIBE__'):
             *path, name = qualname.split('.')
-            namespaces[tuple(path)].append((name, qualname, doc, argspec))
+            path = tuple(path)
+            namespaces[path].append((name, qualname, doc, argspec))
+            # make sure that intermediate (and possibly-empty) namespaces are also in the dict
+            for i in range(len(path)):
+                namespace[path[:i]] # for a defaultdict, just looking up the entry adds it
         
         # for each namespace that contains functions:
         # 1: see if there are any get/set pairs to turn into properties, and
         # 2: make a class for that namespace with the given properties and functions
         proxy_namespaces = {}
         for path, function_descriptions in namespaces.items():
-            accessors = collections.defaultdict(RPCClient._accessor_pair)
-            functions = {}
-            for name, qualname, doc, argspec in function_descriptions:
-                rpc_func = self.proxy_function(qualname)
-                proxy_func = _rich_proxy_function(doc, argspec, name, rpc_func)
-                functions[name] = proxy_func
-                if name.startswith('get_'):
-                    accessors[name[4:]].getter = proxy_func
-                elif name.startswith('set_'):
-                    accessors[name[4:]].setter = proxy_func
             # make a custom class to have the right names and more importantly to receive the namespace-specific properties
             class LocalNamespace(Namespace):
                 pass
             LocalNamespace.__name__ = path[-1]
             LocalNamespace.__qualname__ = '.'.join(path)
+            # create functions and gather property accessors
+            accessors = collections.defaultdict(RPCClient._accessor_pair)
+            for name, qualname, doc, argspec in function_descriptions:
+                rpc_func = self.proxy_function(qualname)
+                proxy_func = _rich_proxy_function(doc, argspec, name, rpc_func)
+                setattr(LocalNamespace, name, proxy_func)
+                if name.startswith('get_'):
+                    accessors[name[4:]].getter = proxy_func
+                elif name.startswith('set_'):
+                    accessors[name[4:]].setter = proxy_func
             for name, accessor_pair in accessors.items():
                 setattr(LocalNamespace, name, accessor_pair.get_property())
-            for name, proxy_func in functions.items():
-                setattr(LocalNamespace, name, proxy_func)
             local_namespace = LocalNamespace()
             proxy_namespaces[path] = local_namespace
         
-        # now assemble these namespaces into the correct hierarchy, adding intermediate
-        # namespaces as required
-        root = proxy_namespaces.pop((), Namespace())
-        for path in sorted(proxy_namespaces.keys(), key=len):
-            # paths are sorted from less-deep to more-deep, so if the path isn't already in root, 
-            # we know we need to make a new Namespace() to hold it. If we didn't sort, we might
-            # get foo.bar from the proxy_namespaces dict first, and then get foo later, but we
-            # would have already made a new Namespace() foo to hold bar at that point.
-            *parent_path, name = path
-            parent_namespace = self._namespace_lookup_or_create(root, parent_path)
-            setattr(parent_namespace, name, proxy_namespaces[path])
+        # now assemble these namespaces into the correct hierarchy, fetching intermediate
+        # namespaces from the proxy_namespaces dict as required.
+        root = proxy_namespaces[()]
+        for path in list(proxy_namespaces.keys()):
+            if path not in proxy_namespaces:
+                # we might have already popped it below
+                continue
+            namespace = root
+            for i, element in enumerate(path):
+                try:
+                    namespace = getattr(namespace, element)
+                except AttributeError:
+                    new_namespace = proxy_namespaces.pop(path[:i+1])
+                    setattr(namespace, element, new_namespace)
+                    namespace = new_namespace            
         return root
-    
-    @staticmethod
-    def _namespace_lookup_or_create(namespace, path_elements):
-        """Find names nested in a namespace; if any elements of the name
-        are not present, create a dummy Namespace object with that name.
-
-        Example:
-        namespace = Namespace()
-        _namespace_lookup_or_create(namespace, ['foo', 'bar'])
-        namespace.foo.bar.baz = 6
-        _namespace_lookup_or_create(namespace, ['foo', 'quux'])
-        namespace.foo.quux.baz = 5    
-        """
-        for element in path_elements:
-            try:
-                namespace = getattr(namespace, element)
-            except AttributeError:
-                new_namespace = Namespace()
-                setattr(namespace, element, new_namespace)
-                namespace = new_namespace
-        return namespace
-            
+                
     class _accessor_pair:
         def __init__(self):
             self.getter = None
