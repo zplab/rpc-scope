@@ -37,7 +37,7 @@ class AsyncDeviceNamespace:
         for child in self._children:
             getattr(self, child).set_async(async)
     
-    def get_async(self, async):
+    def get_async(self):
         asyncs = [getattr(self, child).get_async() for child in self._children]
         if all(async == True for async in asyncs):
             return True
