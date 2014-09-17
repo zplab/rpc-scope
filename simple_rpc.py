@@ -201,53 +201,55 @@ class RPCClient:
         that can be seamlessly called."""
         
         # group functions by their namespace
-        namespaces = collections.defaultdict(list)
+        server_namespaces = collections.defaultdict(list)
         for qualname, doc, argspec in self('__DESCRIBE__'):
-            *path, name = qualname.split('.')
-            path = tuple(path)
-            namespaces[path].append((name, qualname, doc, argspec))
+            *parents, name = qualname.split('.')
+            parents = tuple(parents)
+            server_namespaces[parents].append((name, qualname, doc, argspec))
             # make sure that intermediate (and possibly-empty) namespaces are also in the dict
-            for i in range(len(path)):
-                namespace[path[:i]] # for a defaultdict, just looking up the entry adds it
+            for i in range(len(parents)):
+                server_namespaces[parents[:i]] # for a defaultdict, just looking up the entry adds it
         
         # for each namespace that contains functions:
         # 1: see if there are any get/set pairs to turn into properties, and
         # 2: make a class for that namespace with the given properties and functions
-        proxy_namespaces = {}
-        for path, function_descriptions in namespaces.items():
+        client_namespaces = {}
+        for parents, function_descriptions in server_namespaces.items():
             # make a custom class to have the right names and more importantly to receive the namespace-specific properties
-            class LocalNamespace(Namespace):
+            class ClientNamespace(Namespace):
                 pass
-            LocalNamespace.__name__ = path[-1]
-            LocalNamespace.__qualname__ = '.'.join(path)
+            ClientNamespace.__name__ = parents[-1] if parents else 'root'
+            ClientNamespace.__qualname__ = '.'.join(parents) if parents else 'root'
             # create functions and gather property accessors
             accessors = collections.defaultdict(RPCClient._accessor_pair)
             for name, qualname, doc, argspec in function_descriptions:
                 rpc_func = self.proxy_function(qualname)
-                proxy_func = _rich_proxy_function(doc, argspec, name, rpc_func)
-                setattr(LocalNamespace, name, proxy_func)
+                client_func = _rich_proxy_function(doc, argspec, name, rpc_func)
                 if name.startswith('get_'):
-                    accessors[name[4:]].getter = proxy_func
+                    accessors[name[4:]].getter = client_func
+                    name = '_'+name
                 elif name.startswith('set_'):
-                    accessors[name[4:]].setter = proxy_func
+                    accessors[name[4:]].setter = client_func
+                    name = '_'+name
+                setattr(ClientNamespace, name, client_func)
             for name, accessor_pair in accessors.items():
-                setattr(LocalNamespace, name, accessor_pair.get_property())
-            local_namespace = LocalNamespace()
-            proxy_namespaces[path] = local_namespace
+                setattr(ClientNamespace, name, accessor_pair.get_property())
+            client_namespaces[parents] = ClientNamespace()
+
         
         # now assemble these namespaces into the correct hierarchy, fetching intermediate
         # namespaces from the proxy_namespaces dict as required.
-        root = proxy_namespaces[()]
-        for path in list(proxy_namespaces.keys()):
-            if path not in proxy_namespaces:
+        root = client_namespaces[()]
+        for parents in list(client_namespaces.keys()):
+            if parents not in client_namespaces:
                 # we might have already popped it below
                 continue
             namespace = root
-            for i, element in enumerate(path):
+            for i, element in enumerate(parents):
                 try:
                     namespace = getattr(namespace, element)
                 except AttributeError:
-                    new_namespace = proxy_namespaces.pop(path[:i+1])
+                    new_namespace = client_namespaces.pop(parents[:i+1])
                     setattr(namespace, element, new_namespace)
                     namespace = new_namespace            
         return root

@@ -86,6 +86,9 @@ class AsyncDevice:
         """If in async mode, send_message() returns None immediately; otherwise 
         it waits for the device to finish before returning the response value."""
         self._async = async
+
+    def get_async(self):
+        return self._async
     
     def send_message(self, message, async=None, response=None):
         """Send the given message through the MessageManager.
