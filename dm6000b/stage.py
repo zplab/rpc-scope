@@ -1,4 +1,4 @@
-import message_device
+from .. import message_device
 
 GET_CONVERSION_FACTOR_X = 72034
 GET_CONVERSION_FACTOR_Y = 73034
