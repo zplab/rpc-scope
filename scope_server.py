@@ -1,11 +1,11 @@
-import message_device
-import message_manager
-import simple_rpc
-import property_broadcast
+from rpc_acquisition import message_device
+from rpc_acquisition import message_manager
+from rpc_acquisition import simple_rpc
+from rpc_acquisition import property_broadcast
 import serial
 import zmq
 
-import dm6000b
+from rpc_acquisition import dm6000b
 
 SCOPE_PORT = '/dev/ttyScope'
 SCOPE_BAUD = 115200
@@ -20,6 +20,7 @@ class Scope(message_device.AsyncDeviceNamespace):
         self._scope_serial = serial.Serial(SCOPE_PORT, baudrate=SCOPE_BAUD, timeout=5)
         self._message_manager = message_manager.LeicaMessageManager(self._scope_serial, verbose=verbose)
         self.stage = dm6000b.Stage(self._message_manager)
+        self.objective_turret = dm6000b.ObjectiveTurret(self._message_manager)
 
 def server_main(rpc_port=None, property_port=None, verbose=False):
     if rpc_port is None:

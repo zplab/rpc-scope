@@ -1,0 +1,46 @@
+# The MIT License (MIT)
+#
+# Copyright (c) 2014 WUSTL ZPLAB
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+# Authors: Erik Hvatum, Zach Pincus
+
+from rpc_acquisition import message_device
+
+POS_ABS_OBJ = 76022
+GET_POS_OBJ = 76023
+SET_IMM_DRY = 76027
+GET_IMM_DRY = 76028
+GET_OBJPAR = 76033
+GET_MIN_POS_OBJ = 76038
+GET_MAX_POS_OBJ = 76039
+
+class ObjectiveTurret(message_device.LeicaAsyncDevice):
+    def _setup_device(self):
+        self._min_pos = int(self.send_message(GET_MIN_POS_OBJ, intent="get minimum objective turret position").response)
+        self._max_pos = int(self.send_message(GET_MAX_POS_OBJ, intent="get maximum objective turret position").response)
+
+    def set_position(self, position):
+        if position is not None:
+            position = int(position)
+            response = self.send_message(POS_ABS_OBJ, position, intent="switch to objective as position {}".format(position))
+
+    def get_position(self):
+        return int(self.send_message(GET_POS_OBJ, async=False, intent="get current objective position").response)
