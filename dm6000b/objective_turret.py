@@ -33,14 +33,31 @@ GET_MIN_POS_OBJ = 76038
 GET_MAX_POS_OBJ = 76039
 
 class ObjectiveTurret(message_device.LeicaAsyncDevice):
+    '''Note that objective position is reported as 0 when the objective turret is between positions.  The objective
+    turret is between positions when it is in the process of responding to a position change request and also when
+    manually placed there by physical intervention.'''
     def _setup_device(self):
-        self._min_pos = int(self.send_message(GET_MIN_POS_OBJ, intent="get minimum objective turret position").response)
-        self._max_pos = int(self.send_message(GET_MAX_POS_OBJ, intent="get maximum objective turret position").response)
+        minp, maxp = self.get_position_min_max()
+        self._mags_to_positions = {}
+        for p in range(minp, maxp+1):
+            mag = self.send_message(GET_OBJPAR, p, 1).response.split(' ')[2]
+            # Note: dm6000b reports magnifications in integer units with a dash indicating no magnification / empty
+            # turret position
+            mag = None if mag == '-' else int(mag)
+            if mag not in self._mags_to_positions:
+                self._mags_to_positions[mag] = [p]
+            else:
+                self._mags_to_positions[mag].append(p)
 
     def set_position(self, position):
         if position is not None:
-            position = int(position)
             response = self.send_message(POS_ABS_OBJ, position, intent="switch to objective as position {}".format(position))
 
     def get_position(self):
         return int(self.send_message(GET_POS_OBJ, async=False, intent="get current objective position").response)
+
+    def get_position_min_max(self):
+        return (int(self.send_message(GET_MIN_POS_OBJ, async=False, intent="get minimum objective turret position").response),
+                int(self.send_message(GET_MAX_POS_OBJ, async=False, intent="get maximum objective turret position").response))
+
+    def set_magnification(self, magnification):

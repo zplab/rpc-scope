@@ -22,13 +22,15 @@ class Scope(message_device.AsyncDeviceNamespace):
         self.stage = dm6000b.Stage(self._message_manager)
         self.objective_turret = dm6000b.ObjectiveTurret(self._message_manager)
 
-def server_main(rpc_port=None, property_port=None, verbose=False):
+def server_main(rpc_port=None, property_port=None, verbose=False, context=None):
     if rpc_port is None:
         rpc_port = DEFAULT_RPC_PORT
     if property_port is None:
         property_port = DEFAULT_PROPERTY_PORT
-        
-    context = zmq.Context()
+    
+    if context is None:
+        context = zmq.Context()
+
     property_server = property_broadcast.ZMQServer(property_port, context=context, verbose=verbose)
     
     root = simple_rpc.Namespace()
