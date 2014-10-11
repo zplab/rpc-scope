@@ -35,7 +35,7 @@ class MessageManager(threading.Thread):
             response = self._receive_message()
             response_key = self._generate_response_key(response)
             if response_key in self.pending_responses:
-                callbacks = self.pending_responses.pop(response_key, [])
+                callbacks = self.pending_responses.pop(response_key)
                 if self.verbose:
                     print('received response: {} with response key: {} ({} callbacks)'.format(response, response_key, len(callbacks)))
                 for callback, onetime in callbacks:
@@ -126,7 +126,7 @@ class LeicaMessageManager(SerialMessageManager):
 
     def _handle_unexpected_response(self, response, response_key):
         if response[0] == '$':
-            if self.verbose and response_key not in ('83023',):
+            if self.verbose and response_key not in ('$83023',):
                 # Unexpected notifications are quite common, and if the dm6000b has communicated with MicroManager or the Leica
                 # Windows software since last power cycled, they may be overwhelming in number.  Therefore, these are appropriately
                 # confined to verbose mode.
