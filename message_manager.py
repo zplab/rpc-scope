@@ -34,13 +34,16 @@ class MessageManager(threading.Thread):
         while self.running: # better than 'while True' because can alter self.running from another thread
             response = self._receive_message()
             response_key = self._generate_response_key(response)
-            callbacks = self.pending_responses.pop(response_key, [])
-            if self.verbose:
-                print('received response: {} with response key: {} ({} callbacks)'.format(response, response_key, len(callbacks)))
-            for callback, onetime in callbacks:
-                callback(response)
-                if not onetime:
-                    self.pending_responses[response_key].append((callback, onetime))
+            if response_key in self.pending_responses:
+                callbacks = self.pending_responses.pop(response_key, [])
+                if self.verbose:
+                    print('received response: {} with response key: {} ({} callbacks)'.format(response, response_key, len(callbacks)))
+                for callback, onetime in callbacks:
+                    callback(response)
+                    if not onetime:
+                        self.pending_responses[response_key].append((callback, onetime))
+            else:
+                self._handle_unexpected_response(response, response_key)
     
     def send_message(self, message, response_key=None, response_callback=None, onetime=True):
         """Send a message from a foreground thread.
@@ -70,7 +73,11 @@ class MessageManager(threading.Thread):
     def _generate_response_key(self, response):
         """Generate an appropriate response key from an incoming message."""
         raise NotImplementedError()
-    
+
+    def _handle_unexpected_response(self, response, response_key):
+        """Handle a response that could not be matched to a response key."""
+        if self.verbose:
+            print('received UNPROMPTED response: {} with response key: {}'.format(response, response_key))
 
 class SerialMessageManager(MessageManager):
     """MessageManager subclass that sends and receives from a serial port."""
@@ -117,4 +124,13 @@ class LeicaMessageManager(SerialMessageManager):
             # the error code so can match both error and non-error responses
             return response[:2] + response[3:5] 
 
-
+    def _handle_unexpected_response(self, response, response_key):
+        if response[0] == '$':
+            if self.verbose and response_key not in ('83023',):
+                # Unexpected notifications are quite common, and if the dm6000b has communicated with MicroManager or the Leica
+                # Windows software since last power cycled, they may be overwhelming in number.  Therefore, these are appropriately
+                # confined to verbose mode.
+                print('received UNEXPECTED notification from Leica device: {} with response key: {}'.format(response, response_key))
+        else:
+            # Unprompted command responses are an ominous sign and are of interest even if not in verbose mode
+            print('received UNPROMPTED COMMAND RESPONSE from Leica device: {} with response key: {}'.format(response, response_key))
