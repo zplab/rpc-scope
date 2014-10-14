@@ -9,8 +9,11 @@
 			Name="dm6000b"
 			Filters="">
 			<F N="dm6000b/__init__.py"/>
+			<F N="dm6000b/lamp.py"/>
+			<F N="dm6000b/microscopy_method_names.py"/>
 			<F N="dm6000b/objective_turret.py"/>
 			<F N="dm6000b/stage.py"/>
+			<F N="dm6000b/stand.py"/>
 		</Folder>
 		<F N="echo_device.py"/>
 		<F N="message_device.py"/>

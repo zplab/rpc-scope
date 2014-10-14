@@ -19,6 +19,7 @@ class Scope(message_device.AsyncDeviceNamespace):
         # occasionally check it's 'running' attribute to decide if it needs to quit.
         self._scope_serial = serial.Serial(SCOPE_PORT, baudrate=SCOPE_BAUD, timeout=5)
         self._message_manager = message_manager.LeicaMessageManager(self._scope_serial, verbose=verbose)
+        self.stand = dm6000b.Stand(self._message_manager)
         self.stage = dm6000b.Stage(self._message_manager)
         self.objective_turret = dm6000b.ObjectiveTurret(self._message_manager)
 

@@ -23,7 +23,6 @@
 # Authors: Erik Hvatum, Zach Pincus
 
 from rpc_acquisition import message_device
-from collections import namedtuple
 
 POS_ABS_OBJ = 76022
 GET_POS_OBJ = 76023
@@ -103,3 +102,5 @@ class ObjectiveTurret(message_device.LeicaAsyncDevice):
         '''Returns a list of dicts/None value containing information regarding objective turret positions.  List element
         index is objective turret position.  List elements representing empty positions contain None values.'''
         return self._objectives
+
+#   def ():
