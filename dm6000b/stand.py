@@ -34,11 +34,17 @@ class Stand(message_device.LeicaAsyncDevice):
         '''Returns a dict of microscopy method names to bool values indicating whether the associated
         microscopy method is available.'''
         method_mask = list(self.send_message(GET_ALL_METHODS, async=False, intent='get mask of available microscopy methods').response.strip())
-        method_dict = {}
         # Note that the mask returned by the scope in response to GET_ALL_METHODS is reversed
+        method_mask.reverse()
+        method_dict = {}
         for method, is_available in zip(MICROSCOPY_METHOD_NAMES, list(reversed(method_mask))):
             method_dict[method] = bool(int(is_available))
         return method_dict
+
+    def get_available_microscopy_methods(self):
+        available_methods = [name for name, is_available in self.get_all_microscopy_methods().items() if is_available]
+        available_methods.sort()
+        return available_methods
 
     def get_active_microscopy_method(self):
         method_idx = int(self.send_message(GET_ACT_METHOD, async=False, intent='get name of currently active microscopy method').response)
@@ -46,5 +52,5 @@ class Stand(message_device.LeicaAsyncDevice):
 
     def set_active_microscopy_method(self, microscopy_method_name):
         if microscopy_method_name not in MICROSCOPY_METHOD_NAMES_TO_IDXS:
-            raise KeyError('Value specified for microscopy method name must be one of {}.'.format([name for name, is_available in self.get_all_microscopy_methods().items() if is_available]))
+            raise KeyError('Value specified for microscopy method name must be one of {}.'.format(self.get_available_microscopy_methods()))
         response = self.send_message(SET_ACT_METHOD, MICROSCOPY_METHOD_NAMES_TO_IDXS[microscopy_method_name], intent='switch microscopy methods')
