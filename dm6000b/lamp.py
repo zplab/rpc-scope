@@ -23,3 +23,6 @@
 # Authors: Erik Hvatum, Zach Pincus
 
 from rpc_acquisition import message_device
+
+class Lamp(message_device.LeicaAsyncDevice):
+    pass

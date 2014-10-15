@@ -131,10 +131,8 @@ class ObjectiveTurret(message_device.LeicaAsyncDevice):
                     (17, 'DIC turret fine position')
                 ):
                     meth_objpars = self.send_message(GET_OBJPAR, p, objpar_idx, async=False).response.split(' ')[2:]
-                    meth_objpars.reverse()
                     details[objpar_name] = {MICROSCOPY_METHOD_NAMES[meth_idx] : int(meth_objpar) for meth_idx, meth_objpar in enumerate(meth_objpars)}
-                method_mask = list(self.send_message(GET_OBJPAR, p, 4, async=False).response.split(' ')[2:])
-                method_mask.reverse()
+                method_mask = list(self.send_message(GET_OBJPAR, p, 4, async=False).response.split(' ')[2])
                 details['microscopy methods'] = [MICROSCOPY_METHOD_NAMES[meth_idx] for meth_idx, v in enumerate(method_mask) if bool(int(v))]
                 objectives[p] = details
         return objectives
@@ -152,7 +150,6 @@ class ObjectiveTurret(message_device.LeicaAsyncDevice):
             mag = self.send_message(GET_OBJPAR, p, 1).response.split(' ')[2]
             if mag != '-':
                 intensities = self.send_message(GET_OBJPAR, p, 14, async=False).response.split(' ')[2:]
-                intensities.reverse()
                 objectives[p] = {MICROSCOPY_METHOD_NAMES[meth_idx] : int(intensity) for meth_idx, intensity in enumerate(intensities)}
         return objectives
 

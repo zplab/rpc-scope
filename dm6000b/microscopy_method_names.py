@@ -22,23 +22,33 @@
 #
 # Authors: Erik Hvatum
 
+# Note that this list is backward as compared to the Leica documentation.  It's either reverse this
+# list, or reverse every single method mask and method parameter list received from and sent to the
+# DM6000B.  That being the case, it seems rather like Leica either confused bit and byte endianness,
+# operating under the misapprehension that little-endian means the least significant BIT is first,
+# or simply has this list reversed in their documentation, or is working around a bug in their own
+# serial interface code.  Mucking up bit endianness in this manner is not as unlikely as it may seem
+# given that serial (RS232) _is_ little-bit-endian and that the DM6000B communicates between its
+# constituent components via serial.  This provides a number of opportunities for a trivial error to
+# reverse masks, become set in stone, and thus require that all other parts of the system accomodate
+# it.  Whatever the problem may be, reversing this list fixes it.
 MICROSCOPY_METHOD_NAMES = [
-    'TL BF',
-    'TL PH',
-    'TL DF',
-    'TL DIC',
-    'TL POL',
-    'IL BF',
-    'IL OBL',
-    'IL DF',
-    'IL DIC',
-    'IL POL',
-    'FLUO',
-    'FLUO/PH',
-    'FLUO/DIC',
-    'BF/BF',
+    'method15',
     'method14',
-    'method15'
+    'BF/BF',
+    'FLUO/DIC',
+    'FLUO/PH',
+    'FLUO',
+    'IL POL',
+    'IL DIC',
+    'IL DF',
+    'IL OBL',
+    'IL BF',
+    'TL POL',
+    'TL DIC',
+    'TL DF',
+    'TL PH',
+    'TL BF'
 ]
 
 MICROSCOPY_METHOD_NAMES_TO_IDXS = {name : idx for idx, name in enumerate(MICROSCOPY_METHOD_NAMES)}

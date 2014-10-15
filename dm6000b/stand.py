@@ -35,9 +35,9 @@ class Stand(message_device.LeicaAsyncDevice):
         microscopy method is available.'''
         method_mask = list(self.send_message(GET_ALL_METHODS, async=False, intent='get mask of available microscopy methods').response.strip())
         # Note that the mask returned by the scope in response to GET_ALL_METHODS is reversed
-        method_mask.reverse()
+#       method_mask.reverse()
         method_dict = {}
-        for method, is_available in zip(MICROSCOPY_METHOD_NAMES, list(reversed(method_mask))):
+        for method, is_available in zip(MICROSCOPY_METHOD_NAMES, list(method_mask)):
             method_dict[method] = bool(int(is_available))
         return method_dict
 

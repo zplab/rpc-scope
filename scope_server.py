@@ -19,9 +19,25 @@ class Scope(message_device.AsyncDeviceNamespace):
         # occasionally check it's 'running' attribute to decide if it needs to quit.
         self._scope_serial = serial.Serial(SCOPE_PORT, baudrate=SCOPE_BAUD, timeout=5)
         self._message_manager = message_manager.LeicaMessageManager(self._scope_serial, verbose=verbose)
-        self.stand = dm6000b.Stand(self._message_manager)
+
+        self._lamp = dm6000b.Lamp(self._message_manager)
         self.stage = dm6000b.Stage(self._message_manager)
+        self._stand = dm6000b.Stand(self._message_manager)
         self.objective_turret = dm6000b.ObjectiveTurret(self._message_manager)
+
+    def get_all_microscopy_methods(self):
+        '''Returns a dict of microscopy method names to bool values indicating whether the associated
+        microscopy method is available.'''
+        return self._stand.get_all_microscopy_methods()
+
+    def get_available_microscopy_methods(self):
+        return self._stand.get_available_microscopy_methods()
+
+    def get_active_microscopy_method(self):
+        return self._stand.get_active_microscopy_method()
+
+    def set_active_microscopy_method(self, microscopy_method_name):
+        self._stand.set_active_microscopy_method(microscopy_method_name)
 
 def server_main(rpc_port=None, property_port=None, verbose=False, context=None):
     if rpc_port is None:
@@ -52,4 +68,3 @@ def property_client_main(property_port=None):
         property_port = DEFAULT_PROPERTY_PORT
     client = property_broadcast.ZMQClient(property_port)
     return client
-    
