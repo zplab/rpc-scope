@@ -20,24 +20,16 @@ class Scope(message_device.AsyncDeviceNamespace):
         self._scope_serial = serial.Serial(SCOPE_PORT, baudrate=SCOPE_BAUD, timeout=5)
         self._message_manager = message_manager.LeicaMessageManager(self._scope_serial, verbose=verbose)
 
-        self._lamp = dm6000b.Lamp(self._message_manager)
         self.stage = dm6000b.Stage(self._message_manager)
-        self._stand = dm6000b.Stand(self._message_manager)
         self.objective_turret = dm6000b.ObjectiveTurret(self._message_manager)
 
-    def get_all_microscopy_methods(self):
-        '''Returns a dict of microscopy method names to bool values indicating whether the associated
-        microscopy method is available.'''
-        return self._stand.get_all_microscopy_methods()
+        self._lamp = dm6000b.Lamp(self._message_manager)
 
-    def get_available_microscopy_methods(self):
-        return self._stand.get_available_microscopy_methods()
-
-    def get_active_microscopy_method(self):
-        return self._stand.get_active_microscopy_method()
-
-    def set_active_microscopy_method(self, microscopy_method_name):
-        self._stand.set_active_microscopy_method(microscopy_method_name)
+        self._stand = dm6000b.Stand(self._message_manager)
+        self.get_all_microscopy_methods = self._stand.get_all_microscopy_methods
+        self.get_available_microscopy_methods = self._stand.get_available_microscopy_methods
+        self.get_active_microscopy_method = self._stand.get_active_microscopy_method
+        self.set_active_microscopy_method = self._stand.set_active_microscopy_method
 
 def server_main(rpc_port=None, property_port=None, verbose=False, context=None):
     if rpc_port is None:
