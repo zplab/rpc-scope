@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-# Authors: Zach Pincus
+# Authors: Zach Pincus, Erik Hvatum
 
 from rpc_acquisition import message_device
 
@@ -40,9 +40,10 @@ class Stage(message_device.LeicaAsyncDevice):
         self._y_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_Y).response) / 1000
         self._z_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_Z).response) / 1000
     
-    def set_position(self, x=None, y=None, z=None):
-        """Set position to x, y, and z. Any may be None to indicate no motion
-        is requested. Units are in mm."""
+    def set_position(self, xyz):
+        """Set x, y, and z position to respective elements of xyz tuple/iterable.
+        Any may be None to indicate no motion is requested. Units are in mm."""
+        x, y, z = xyz
         self.set_x(x)
         self.set_y(y)
         self.set_z(z)

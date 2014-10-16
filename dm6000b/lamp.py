@@ -24,5 +24,43 @@
 
 from rpc_acquisition import message_device
 
+SET_SHUTTER_LAMP = 77032
+GET_SHUTTER_LAMP = 77033
+
 class Lamp(message_device.LeicaAsyncDevice):
-    pass
+    def set_shutters_opened(self, tl_il):
+        '''Set TL and IL opened states to respective elements of tl_il tuple/iterable.'''
+        tl, il = tl_il
+        self.set_tl_shutter_opened(tl)
+        self.set_il_shutter_opened(il)
+
+    def _set_shutter_opened(self, shutter_idx, opened):
+        if type(opened) is bool:
+            opened = int(opened)
+        response = self.send_message(SET_SHUTTER_LAMP, shutter_idx, opened, intent="set shutter openedness")
+
+    def set_tl_shutter_opened(self, opened):
+        self._set_shutter_opened(0, opened)
+
+    def set_il_shutter_opened(self, opened):
+        self._set_shutter_opened(1, opened)
+
+    def get_shutters_opened(self):
+        opened = [int(s) for s in self.send_message(GET_SHUTTER_LAMP, async=False, intent="get shutter openedness").response.split(' ')]
+
+        errors = []
+        if opened[0] == -1:
+            errors.append('Scope reports that TL shutter is in a bad state.')
+        if opened[1] == -1:
+            errors.append('Scope reports that IL shutter is in a bad state.')
+
+        if errors:
+            raise RuntimeError('  '.join(errors))
+
+        return bool(opened[0]), bool(opened[1])
+
+    def get_tl_shutter_opened(self):
+        return self.get_shutters_opened()[0]
+
+    def get_il_shutter_opened(self):
+        return self.get_shutters_opened()[1]

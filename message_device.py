@@ -1,3 +1,27 @@
+# The MIT License (MIT)
+#
+# Copyright (c) 2014 WUSTL ZPLAB
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+# Authors: Zach Pincus, Erik Hvatum
+
 import threading
 import collections
 
@@ -15,17 +39,25 @@ class AsyncDeviceNamespace:
         scope.stage.set_position(10,10,10)
         scope.condensor.set_field(7)
         scope.wait()
+
+    Note that hidden children with async capability are identified by the
+    _h_ prefix.  Properties are typically forwarded from hidden children
+    by copying the associated getter and setter bound method references
+    from the hidden children to their parent object.  This copy operation
+    causes __setattr__ to be called in the same manner as storing a new
+    child in a member variable.  It is therefore necessary to distinguish
+    get_ and set_ attributes from actual child async devices.
     """
     def __init__(self):
         self._children = set()
     
     def __setattr__(self, name, value):
-        if not name.startswith('_'):
+        if name.startswith('_h_') or not name.startswith(('_', 'set_', 'get_')):
             self._children.add(name)
         super().__setattr__(name, value)
     
     def __delattr__(self, name):
-        if not name.startswith('_'):
+        if name.startswith('_h_') or not name.startswith(('_', 'set_', 'get_')):
             self._children.remove(name)
         super().__delattr__(name)
     
@@ -41,7 +73,7 @@ class AsyncDeviceNamespace:
         asyncs = [getattr(self, child).get_async() for child in self._children]
         if all(async == True for async in asyncs):
             return True
-        elif all(async == False for async in async):
+        elif all(async == False for async in asyncs):
             return False
         else:
             return "child devices have mixed async status"
