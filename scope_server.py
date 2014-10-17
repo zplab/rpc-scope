@@ -20,34 +20,11 @@ class Scope(message_device.AsyncDeviceNamespace):
         self._scope_serial = serial.Serial(SCOPE_PORT, baudrate=SCOPE_BAUD, timeout=5)
         self._message_manager = message_manager.LeicaMessageManager(self._scope_serial, verbose=verbose)
 
+        self.condensers = dm6000b.Condensers(self._message_manager)
         self.stage = dm6000b.Stage(self._message_manager)
         self.objective_turret = dm6000b.ObjectiveTurret(self._message_manager)
 
-        # An object-oriented representation of the DM6000B and its sub-components
-        # ("function units") where each sub-component is represented by a separate
-        # object certainly involves more objects than cramming the entire
-        # implementation into the main Scope object would.  However, the DM6000B
-        # sub-components are truly discreet pieces of hardware and can be cleanly
-        # represented as separate objects without any coupling, greatly clarifying
-        # what would otherwise be an inscrutable hodgepodge.
-        #
-        # Nonetheless, users not familiar with every aspect of the DM6000B may
-        # have trouble determining which sub-component is responsible for certain
-        # things.  It is obvious enough that Scope.objective_turret must be used
-        # to select a new objective, but less obvious that the lamp function unit
-        # controls both the TL _and_ IL shutters, and less obvious still that the
-        # stand function unit is responsible for microscopy mode (FLUO, BF, etc).
-        # Therefore, to preserve implementation elegance and comprehensibility,
-        # confusing function units are hidden and their properties are forwarded
-        # from the Scope class.
-
-        self._lamp = dm6000b.Lamp(self._message_manager)
-        self.set_shutters_opened = self._lamp.set_shutters_opened
-        self.set_tl_shutter_opened = self._lamp.set_tl_shutter_opened
-        self.set_il_shutter_opened = self._lamp.set_il_shutter_opened
-        self.get_shutters_opened = self._lamp.get_shutters_opened
-        self.get_tl_shutter_opened = self._lamp.get_tl_shutter_opened
-        self.get_il_shutter_opened = self._lamp.get_il_shutter_opened
+        self.shutters = dm6000b.Shutters(self._message_manager)
 
         self._stand = dm6000b.Stand(self._message_manager)
         self.get_all_microscopy_methods = self._stand.get_all_microscopy_methods

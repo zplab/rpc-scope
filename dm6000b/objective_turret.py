@@ -54,6 +54,9 @@ class ObjectiveTurret(message_device.LeicaAsyncDevice):
             else:
                 self._mags_to_positions[mag].append(p)
 
+        # Ensure that halogen variable spectra correction filter is always set to maximum (least attenuation)
+        self.set_objectives_intensities(255)
+
     def set_position(self, position):
         if position is not None:
             response = self.send_message(POS_ABS_OBJ, position, intent="change objective turret position")

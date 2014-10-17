@@ -33,6 +33,9 @@ POS_ABS_Z = 71022
 GET_POS_X = 72023
 GET_POS_Y = 73023
 GET_POS_Z = 71023
+INIT_X = 72020
+INIT_Y = 73020
+INIT_Z = 71020
 
 class Stage(message_device.LeicaAsyncDevice):
     def _setup_device(self):
@@ -87,4 +90,20 @@ class Stage(message_device.LeicaAsyncDevice):
         """Get z-axis position in mm."""
         return self._get_pos(self._z_mm_per_count, GET_POS_Z)
         
-        
+    def reinit_x(self):
+        """From time to time, the stage may refuse to move away from 0 on the x axis.  Executing
+        this command may "unstick" the stage when it is in this condition.  Note that this command
+        always executes synchronously."""
+        self.send_message(INIT_X, async=False, intent="unstick stage x axis")
+
+    def reinit_y(self):
+        """From time to time, the stage may refuse to move away from 0 on the y axis.  Executing
+        this command may "unstick" the stage when it is in this condition.  Note that this command
+        always executes synchronously."""
+        self.send_message(INIT_Y, async=False, intent="unstick stage y axis")
+
+    def reinit_z(self):
+        """From time to time, the stage may refuse to move away from 0 on the z axis.  Executing
+        this command may "unstick" the stage when it is in this condition.  Note that this command
+        always executes synchronously."""
+        self.send_message(INIT_Z, async=False, intent="unstick stage z axis")

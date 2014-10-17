@@ -35,29 +35,18 @@ from rpc_acquisition import message_device
 SET_SHUTTER_LAMP = 77032
 GET_SHUTTER_LAMP = 77033
 
-class Lamp(message_device.LeicaAsyncDevice):
-    def set_shutters_opened(self, tl_il):
-        '''Set TL and IL opened states to respective elements of tl_il tuple/iterable.  Note that setting
+class Shutters(message_device.LeicaAsyncDevice):
+    '''Leica refers to this function unit (77) as 'Lamp'.  Function unit 77 is also provides direct control
+    of 'lamp intensity', which in the case of ZPLAB is always set to 255 (maximum) by setting all objective
+    intensity parameters to 255, such that when objective is changed, intensity reverts to 255.  This is done
+    because ZPLAB uses LED illumination and DM6000B lamp support is intended for halogen bulbs.  As such,
+    the DM6000B TL light path includes a variable filter intended to normalize halogen output, the spectra
+    of which vary with intensity.  The least attenuation of green LED TL illumination is seen with the
+    variable filter in the maximum intensity position.'''
+    def get_il_tl(self):
+        '''Open/close TL and IL shutters according to elements of tl_il tuple/iterable.  Note that setting
         this property is not entirely asynchronous - it always blocks until the requested TL shutter
         state change has occurred.'''
-        tl, il = tl_il
-        self._set_shutter_opened(0, tl, False)
-        self._set_shutter_opened(1, il, None)
-
-    def _set_shutter_opened(self, shutter_idx, opened, async):
-        if type(opened) is bool:
-            opened = int(opened)
-        response = self.send_message(SET_SHUTTER_LAMP, shutter_idx, opened, async=async, intent="set shutter openedness")
-
-    def set_tl_shutter_opened(self, opened):
-        '''Note that setting this property is always a synchronous operation.'''
-        self._set_shutter_opened(0, opened, False)
-
-    def set_il_shutter_opened(self, opened):
-        '''Note that setting this property is always a synchronous operation.'''
-        self._set_shutter_opened(1, opened, False)
-
-    def get_shutters_opened(self):
         opened = [int(s) for s in self.send_message(GET_SHUTTER_LAMP, async=False, intent="get shutter openedness").response.split(' ')]
 
         errors = []
@@ -71,8 +60,26 @@ class Lamp(message_device.LeicaAsyncDevice):
 
         return bool(opened[0]), bool(opened[1])
 
-    def get_tl_shutter_opened(self):
-        return self.get_shutters_opened()[0]
+    def get_tl(self):
+        '''True: TL shutter open, False: TL shutter closed.  Note that setting this property is always a synchronous operation.'''
+        return self.get_il_tl()[0]
 
-    def get_il_shutter_opened(self):
-        return self.get_shutters_opened()[1]
+    def get_il(self):
+        '''True: IL shutter open, False: IL shutter closed.  Note that setting this property is always a synchronous operation.'''
+        return self.get_il_tl()[1]
+
+    def set_tl_il(self, tl_il):
+        tl, il = tl_il
+        self._set_shutter_opened(0, tl, False)
+        self._set_shutter_opened(1, il, None)
+
+    def _set_shutter_opened(self, shutter_idx, opened, async):
+        if type(opened) is bool:
+            opened = int(opened)
+        response = self.send_message(SET_SHUTTER_LAMP, shutter_idx, opened, async=async, intent="set shutter openedness")
+
+    def set_tl(self, opened):
+        self._set_shutter_opened(0, opened, False)
+
+    def set_il(self, opened):
+        self._set_shutter_opened(1, opened, False)
