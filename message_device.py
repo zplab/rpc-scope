@@ -109,7 +109,7 @@ class AsyncDevice:
     in async mode."""
     
     def __init__(self, message_manager):
-        self._pending_responses = dict()
+        self._pending_responses = set()
         self._async = False
         self._message_manager = message_manager
     
