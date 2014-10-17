@@ -23,7 +23,7 @@
 # Authors: Erik Hvatum, Zach Pincus
 
 from rpc_acquisition import message_device
-from rpc_acquisition.dm6000b.microscopy_method_names import (MICROSCOPY_METHOD_NAMES, MICROSCOPY_METHOD_NAMES_TO_IDXS)
+from rpc_acquisition.dm6000b._microscopy_method_names import (MICROSCOPY_METHOD_NAMES, MICROSCOPY_METHOD_NAMES_TO_IDXS)
 
 POS_ABS_OBJ = 76022
 GET_POS_OBJ = 76023

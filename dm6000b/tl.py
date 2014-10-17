@@ -23,12 +23,12 @@
 # Authors: Erik Hvatum, Zach Pincus
 
 from rpc_acquisition import message_device
-from rpc_acquisition.dm6000b.shutter_commands import (SET_SHUTTER_LAMP, GET_SHUTTER_LAMP)
+from rpc_acquisition.dm6000b._shutters import _Shutters
 
 POS_ABS_KOND = 81022
 GET_POS_KOND = 81023
 
-class TL(message_device.LeicaAsyncDevice):
+class TL(message_device.LeicaAsyncDevice, _Shutters):
     '''TL represents an interface into elements of the scope primarily or exclusively
     used in Transmitted Light mode.  Like Stage and unlike ObjectiveTurret, the TL class
     does not represent a single function unit.'''
@@ -45,21 +45,9 @@ class TL(message_device.LeicaAsyncDevice):
         response = self.send_message(POS_ABS_KOND, deploy, intent="set flapping condenser position")
 
     def get_shutter(self):
-        '''True: TL shutter open, False: TL shutter closed.  Note that setting this property is always a synchronous operation.'''
-        is_open = [int(s) for s in self.send_message(GET_SHUTTER_LAMP, async=False, intent="get shutter openedness").response.split(' ')]
-
-        errors = []
-        if is_open[0] == -1:
-            errors.append('Scope reports that TL shutter is in a bad state.')
-        if is_open[1] == -1:
-            errors.append('Scope reports that IL shutter is in a bad state.')
-
-        if errors:
-            raise RuntimeError('  '.join(errors))
-
-        return bool(is_open[0])
+        '''True: TL shutter open, False: TL shutter closed.  Note that setting this
+        property is always a synchronous operation.'''
+        return self._get_shutters()[0]
 
     def set_shutter(self, is_open):
-        if type(is_open) is bool:
-            is_open = int(is_open)
-        response = self.send_message(SET_SHUTTER_LAMP, 0, is_open, async=False, intent="set TL shutter openedness")
+        self._set_shutter(0, is_open)

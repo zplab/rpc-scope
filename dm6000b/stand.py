@@ -23,7 +23,7 @@
 # Authors: Erik Hvatum, Zach Pincus
 
 from rpc_acquisition import message_device
-from rpc_acquisition.dm6000b.microscopy_method_names import (MICROSCOPY_METHOD_NAMES, MICROSCOPY_METHOD_NAMES_TO_IDXS)
+from rpc_acquisition.dm6000b._microscopy_method_names import (MICROSCOPY_METHOD_NAMES, MICROSCOPY_METHOD_NAMES_TO_IDXS)
 
 GET_ALL_METHODS = 70026
 GET_ACT_METHOD = 70028
