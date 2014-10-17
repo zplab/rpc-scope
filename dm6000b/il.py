@@ -23,17 +23,7 @@
 # Authors: Erik Hvatum, Zach Pincus
 
 from rpc_acquisition import message_device
-
-# 77032 is an unusual command in that two outstanding instances issued with
-# different values for their first parameter are answered separately.
-# Furthermore, the response does not include any parameters, making it difficult
-# (if responses are always received in order) or impossible (if they are not)
-# to match response to command without retaining state information and requested
-# changes to that state.  If such information were kept, a failure could then be
-# resolved to a specific request by comparing expected post-condition and actual
-# post-condition.
-SET_SHUTTER_LAMP = 77032
-GET_SHUTTER_LAMP = 77033
+from rpc_acquisition.dm6000b.shutter_commands import (SET_SHUTTER_LAMP, GET_SHUTTER_LAMP)
 
 class IL(message_device.LeicaAsyncDevice):
     '''IL represents an interface into elements of the scope primarily or exclusively

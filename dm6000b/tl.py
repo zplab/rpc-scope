@@ -23,17 +23,10 @@
 # Authors: Erik Hvatum, Zach Pincus
 
 from rpc_acquisition import message_device
+from rpc_acquisition.dm6000b.shutter_commands import (SET_SHUTTER_LAMP, GET_SHUTTER_LAMP)
 
-# 77032 is an unusual command in that two outstanding instances issued with
-# different values for their first parameter are answered separately.
-# Furthermore, the response does not include any parameters, making it difficult
-# (if responses are always received in order) or impossible (if they are not)
-# to match response to command without retaining state information and requested
-# changes to that state.  If such information were kept, a failure could then be
-# resolved to a specific request by comparing expected post-condition and actual
-# post-condition.
-SET_SHUTTER_LAMP = 77032
-GET_SHUTTER_LAMP = 77033
+POS_ABS_KOND = 81022
+GET_POS_KOND = 81023
 
 class TL(message_device.LeicaAsyncDevice):
     '''TL represents an interface into elements of the scope primarily or exclusively
@@ -41,7 +34,7 @@ class TL(message_device.LeicaAsyncDevice):
     does not represent a single function unit.'''
     def get_condenser_head(self):
         '''True: condenser head is deployed, False: condenser head is retracted.'''
-        deployed = int(self.send_message(FLAPPING_GET_POS_KOND, async=False, intent="get flapping condenser position").response)
+        deployed = int(self.send_message(GET_POS_KOND, async=False, intent="get flapping condenser position").response)
         if deployed == 2:
             raise RuntimeError('Scope reports that the condenser head, aka the flapping condenser, is in a bad state.')
         return bool(deployed)
@@ -49,7 +42,7 @@ class TL(message_device.LeicaAsyncDevice):
     def set_condenser_head(self, deploy):
         if type(deploy) is bool:
             deploy = int(deploy)
-        response = self.send_message(FLAPPING_POS_ABS_KOND, deploy, intent="set flapping condenser position")
+        response = self.send_message(POS_ABS_KOND, deploy, intent="set flapping condenser position")
 
     def get_shutter(self):
         '''True: TL shutter open, False: TL shutter closed.  Note that setting this property is always a synchronous operation.'''

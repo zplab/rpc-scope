@@ -12,6 +12,7 @@
 			<F N="dm6000b/il.py"/>
 			<F N="dm6000b/microscopy_method_names.py"/>
 			<F N="dm6000b/objective_turret.py"/>
+			<F N="dm6000b/shutter_commands.py"/>
 			<F N="dm6000b/stage.py"/>
 			<F N="dm6000b/stand.py"/>
 			<F N="dm6000b/tl.py"/>
