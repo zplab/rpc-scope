@@ -24,26 +24,38 @@
 
 from rpc_acquisition import message_device
 
+# 77032 is an unusual command in that two outstanding instances issued with
+# different values for their first parameter are answered separately.
+# Furthermore, the response does not include any parameters, making it difficult
+# (if responses are always received in order) or impossible (if they are not)
+# to match response to command without retaining state information and requested
+# changes to that state.  If such information were kept, a failure may then be
+# resolved to a specific request by comparing expected post-state and actual
+# post-state.
 SET_SHUTTER_LAMP = 77032
 GET_SHUTTER_LAMP = 77033
 
 class Lamp(message_device.LeicaAsyncDevice):
     def set_shutters_opened(self, tl_il):
-        '''Set TL and IL opened states to respective elements of tl_il tuple/iterable.'''
+        '''Set TL and IL opened states to respective elements of tl_il tuple/iterable.  Note that setting
+        this property is not entirely asynchronous - it always blocks until the requested TL shutter
+        state change has occurred.'''
         tl, il = tl_il
-        self.set_tl_shutter_opened(tl)
-        self.set_il_shutter_opened(il)
+        self._set_shutter_opened(0, tl, False)
+        self._set_shutter_opened(1, il, None)
 
-    def _set_shutter_opened(self, shutter_idx, opened):
+    def _set_shutter_opened(self, shutter_idx, opened, async):
         if type(opened) is bool:
             opened = int(opened)
-        response = self.send_message(SET_SHUTTER_LAMP, shutter_idx, opened, intent="set shutter openedness")
+        response = self.send_message(SET_SHUTTER_LAMP, shutter_idx, opened, async=async, intent="set shutter openedness")
 
     def set_tl_shutter_opened(self, opened):
-        self._set_shutter_opened(0, opened)
+        '''Note that setting this property is always a synchronous operation.'''
+        self._set_shutter_opened(0, opened, False)
 
     def set_il_shutter_opened(self, opened):
-        self._set_shutter_opened(1, opened)
+        '''Note that setting this property is always a synchronous operation.'''
+        self._set_shutter_opened(1, opened, False)
 
     def get_shutters_opened(self):
         opened = [int(s) for s in self.send_message(GET_SHUTTER_LAMP, async=False, intent="get shutter openedness").response.split(' ')]
