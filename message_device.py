@@ -39,25 +39,21 @@ class AsyncDeviceNamespace:
         scope.stage.set_position(10,10,10)
         scope.condensor.set_field(7)
         scope.wait()
-
-    Note that hidden children with async capability are identified by the
-    _h_ prefix.  Properties are typically forwarded from hidden children
-    by copying the associated getter and setter bound method references
-    from the hidden children to their parent object.  This copy operation
-    causes __setattr__ to be called in the same manner as storing a new
-    child in a member variable.  It is therefore necessary to distinguish
-    get_ and set_ attributes from actual child async devices.
     """
     def __init__(self):
         self._children = set()
+
+    @staticmethod
+    def _is_async_capable(value):
+        return all(map(lambda attr: hasattr(value, attr), ('wait', 'set_async', 'get_async')))
     
     def __setattr__(self, name, value):
-        if name.startswith('_h_') or not name.startswith(('_', 'set_', 'get_')):
+        if self._is_async_capable(value):
             self._children.add(name)
         super().__setattr__(name, value)
     
     def __delattr__(self, name):
-        if name.startswith('_h_') or not name.startswith(('_', 'set_', 'get_')):
+        if self._is_async_capable(value):
             self._children.remove(name)
         super().__delattr__(name)
     
@@ -113,7 +109,7 @@ class AsyncDevice:
     in async mode."""
     
     def __init__(self, message_manager):
-        self._pending_responses = set()
+        self._pending_responses = dict()
         self._async = False
         self._message_manager = message_manager
     

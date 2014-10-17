@@ -41,19 +41,19 @@ class Scope(message_device.AsyncDeviceNamespace):
         # confusing function units are hidden and their properties are forwarded
         # from the Scope class.
 
-        self._h_lamp = dm6000b.Lamp(self._message_manager)
-        self.set_shutters_opened = self._h_lamp.set_shutters_opened
-        self.set_tl_shutter_opened = self._h_lamp.set_tl_shutter_opened
-        self.set_il_shutter_opened = self._h_lamp.set_il_shutter_opened
-        self.get_shutters_opened = self._h_lamp.get_shutters_opened
-        self.get_tl_shutter_opened = self._h_lamp.get_tl_shutter_opened
-        self.get_il_shutter_opened = self._h_lamp.get_il_shutter_opened
+        self._lamp = dm6000b.Lamp(self._message_manager)
+        self.set_shutters_opened = self._lamp.set_shutters_opened
+        self.set_tl_shutter_opened = self._lamp.set_tl_shutter_opened
+        self.set_il_shutter_opened = self._lamp.set_il_shutter_opened
+        self.get_shutters_opened = self._lamp.get_shutters_opened
+        self.get_tl_shutter_opened = self._lamp.get_tl_shutter_opened
+        self.get_il_shutter_opened = self._lamp.get_il_shutter_opened
 
-        self._h_stand = dm6000b.Stand(self._message_manager)
-        self.get_all_microscopy_methods = self._h_stand.get_all_microscopy_methods
-        self.get_available_microscopy_methods = self._h_stand.get_available_microscopy_methods
-        self.get_active_microscopy_method = self._h_stand.get_active_microscopy_method
-        self.set_active_microscopy_method = self._h_stand.set_active_microscopy_method
+        self._stand = dm6000b.Stand(self._message_manager)
+        self.get_all_microscopy_methods = self._stand.get_all_microscopy_methods
+        self.get_available_microscopy_methods = self._stand.get_available_microscopy_methods
+        self.get_active_microscopy_method = self._stand.get_active_microscopy_method
+        self.set_active_microscopy_method = self._stand.set_active_microscopy_method
 
 def server_main(rpc_port=None, property_port=None, verbose=False, context=None):
     if rpc_port is None:
