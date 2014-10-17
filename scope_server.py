@@ -20,11 +20,10 @@ class Scope(message_device.AsyncDeviceNamespace):
         self._scope_serial = serial.Serial(SCOPE_PORT, baudrate=SCOPE_BAUD, timeout=5)
         self._message_manager = message_manager.LeicaMessageManager(self._scope_serial, verbose=verbose)
 
-        self.condensers = dm6000b.Condensers(self._message_manager)
-        self.stage = dm6000b.Stage(self._message_manager)
+        self.il = dm6000b.IL(self._message_manager)
+        self.tl = dm6000b.TL(self._message_manager)
         self.objective_turret = dm6000b.ObjectiveTurret(self._message_manager)
-
-        self.shutters = dm6000b.Shutters(self._message_manager)
+        self.stage = dm6000b.Stage(self._message_manager)
 
         self._stand = dm6000b.Stand(self._message_manager)
         self.get_all_microscopy_methods = self._stand.get_all_microscopy_methods
