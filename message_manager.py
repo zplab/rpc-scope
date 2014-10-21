@@ -23,7 +23,8 @@ class MessageManager(threading.Thread):
     
     def __init__(self, verbose=False, daemon=True):
         # pending_responses holds lists of callbacks to call for each response key
-        self.pending_responses = collections.defaultdict(list)
+        self.pending_grouped_responses = collections.defaultdict(list)
+        self.pending_standalone_responses = collections.defaultdict(list)
         self.verbose = verbose
         super().__init__(name=self.thread_name, daemon=daemon)
         self.start()
@@ -34,32 +35,68 @@ class MessageManager(threading.Thread):
         while self.running: # better than 'while True' because can alter self.running from another thread
             response = self._receive_message()
             response_key = self._generate_response_key(response)
-            if response_key in self.pending_responses:
-                callbacks = self.pending_responses.pop(response_key)
-                if self.verbose:
-                    print('received response: {} with response key: {} ({} callbacks)'.format(response, response_key, len(callbacks)))
+            if self.verbose:
+                print('received response: {} with response key: {}'.format(response, response_key))
+            
+            handled = False
+            if response_key in self.pending_grouped_responses:
+                callbacks = self.pending_grouped_responses.pop(response_key)
                 for callback, onetime in callbacks:
                     callback(response)
                     if not onetime:
                         self.pending_responses[response_key].append((callback, onetime))
-            else:
+                handled = True
+            
+            if response_key in self.pending_standalone_responses:
+                callback, *remaining_callbacks = self.pending_standalone_responses.pop(response_key)
+                callback(response)
+                if remaining_callbacks:
+                    self.pending_standalone_responses[response] = remaining_callbacks
+                handled = True
+            
+            if not handled:
                 self._handle_unexpected_response(response, response_key)
     
-    def send_message(self, message, response_key=None, response_callback=None, onetime=True):
+    def send_message(self, message, response_key=None, response_callback=None, onetime=True, coalesce=True):
         """Send a message from a foreground thread.
         (I.e. not the thread that the MessageManager is running.)
         
         Arguments
         message: message to send.
         response_key: if provided, any response with a matching response key will cause
-            the provided callback to be called with the full response value.
+            the provided response_callback to be called with the full response value.
+        onetime: if True, the callback will be called only the first time a matching
+            response is received. Otherwise, it will be called every time.
+        coalesce: if True, this callback may be called at the same time as a
+            previously queued callback, in response to a previously sent
+            message. (This makes sense if messages override each other and the
+            first response should be considered to retire both.) If False, this
+            callback will not be grouped with any other callbacks also queued
+            with 'coalesce=False'. Note that 'onetime' cannot be False if
+            'coalesce' is False. 
         """
-        # don't worry about thread synchronization between message-sending and -receiving
-        # threads. Dict getting and list appending are atomic.
+        # There is one thread-synchronization worry: if a pending response is
+        # queued right before a response to a previous message with the same  
+        # response key is handled, but before this current message is sent (which
+        # would otherwise override the previous message), then this callback will
+        # be called for the previous response (if coalesce=True), leaving the
+        # current message with no handler.
+        # Solution: do not queue and send messages while response-handling is
+        # in progress. The problem is that a previous-response could be in-flight
+        # over the wire, which cannot be detected, and so we can't 100% avoid
+        # these types of cases! This is a design flaw in the Leica system, for
+        # which this infrastructure is built. The best solution is to process
+        # things as quickly as possible on this side, so we will not use any
+        # locking primitives and just hope for the best.
+        
         if self.verbose:
             print('sending message: {!r} with response key: {!r}'.format(message, response_key))
         if response_key is not None and response_callback is not None:
-            self.pending_responses[response_key].append((response_callback, onetime))
+            assert(onetime or coalesce)
+            if coalesce:
+                self.pending_grouped_responses[response_key].append((response_callback, onetime))
+            else:
+                self.pending_standalone_responses[response_key].append(response_callback)
         self._send_message(message)
         
     def _send_message(self, message):

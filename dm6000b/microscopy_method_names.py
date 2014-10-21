@@ -20,19 +20,25 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-# Authors: Erik Hvatum, Zach Pincus
+# Authors: Erik Hvatum
 
-from rpc_acquisition import message_device
-from rpc_acquisition.dm6000b._shutters import _Shutters
+NAMES = [
+    'TL BF',
+    'TL PH',
+    'TL DF',
+    'TL DIC',
+    'TL POL',
+    'IL BF',
+    'IL OBL',
+    'IL DF',
+    'IL DIC',
+    'IL POL',
+    'FLUO',
+    'FLUO/PH',
+    'FLUO/DIC',
+    'BF/BF',
+    'method14',
+    'method15'
+]
 
-class IL(message_device.LeicaAsyncDevice, _Shutters):
-    '''IL represents an interface into elements of the scope primarily or exclusively
-    used in Incident Light mode.  Like Stage and unlike ObjectiveTurret, the IL class
-    does not represent a single function unit.'''
-    def get_shutter(self):
-        '''True: IL shutter open, False: IL shutter closed.  Note that setting this
-        property is always a synchronous operation.'''
-        return self._get_shutters()[1]
-
-    def set_shutter(self, is_open):
-        self._set_shutter(1, is_open)
+NAMES_TO_INDICES = {name : idx for idx, name in enumerate(NAMES)}

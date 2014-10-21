@@ -127,15 +127,21 @@ class AsyncDevice:
     def get_async(self):
         return self._async
     
-    def send_message(self, message, async=None, response=None):
+    def send_message(self, message, async=None, response=None, coalesce=True):
         """Send the given message through the MessageManager.
         If the parameter 'async' is not None, it will override the async mode
         set with set_async(). If parameter 'response' is provided, that will
-        be used as the response callback object."""
+        be used as the response callback object.
+        If 'coalesce' is False, then mutliple messages that generate the same 
+        response will be handled separately (good if the messages sent don't
+        cancel the previous ones). If 'coalesce' is True, then messages with
+        the same expected response will all be handled with the first response
+        (good if subsequent messages cancel the previous ones and only one
+        response is generated)."""
         response_key = self._generate_response_key(message)
         if response is None:
             response = Response()
-        self._message_manager.send_message(message, response_key, response)
+        self._message_manager.send_message(message, response_key, response, coalesce=coalesce)
         if async or (async is None and self._async):
             self._pending_responses.add(response)
         else:
@@ -213,20 +219,20 @@ class LeicaAsyncDevice(AsyncDevice):
         """Override in subclasses to perform device-specific setup."""
         pass
     
-    def send_message(self, command, *params, async=None, intent=None):
+    def send_message(self, command, *params, async=None, intent=None, coalesce=True):
         """Arguments:
         command: the command number for the Leica scope
         *params: a list of params to be coerced to strings and listed after command, separated by spaces
         async: if not None, override the async instance variable.
         intent: should be helpful text describing the intent of the command.
-        
+        coalesce: see AsyncDevice.send_message documentaiton.
         If  a nonzero error code is returned, a LeicaError will be raised with
         the intent text when the response's wait() method is called.
         
         """
         message = ' '.join([str(command)] + [str(param) for param in params]) + '\r'
         response = LeicaResponse(intent)
-        return super().send_message(message, async, response=response)
+        return super().send_message(message, async, response=response, coalesce=coalesce)
         
     
     def _generate_response_key(self, message):

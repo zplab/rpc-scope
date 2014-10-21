@@ -23,7 +23,7 @@
 # Authors: Erik Hvatum, Zach Pincus
 
 from rpc_acquisition import message_device
-from rpc_acquisition.dm6000b._microscopy_method_names import (MICROSCOPY_METHOD_NAMES, MICROSCOPY_METHOD_NAMES_TO_IDXS)
+from rpc_acquisition.dm6000b import microscopy_method_names
 
 GET_ALL_METHODS = 70026
 GET_ACT_METHOD = 70028
@@ -36,7 +36,7 @@ class Stand(message_device.LeicaAsyncDevice):
         method_mask = list(self.send_message(GET_ALL_METHODS, async=False, intent='get mask of available microscopy methods').response.strip())
         method_mask.reverse()
         method_dict = {}
-        for method, is_available in zip(MICROSCOPY_METHOD_NAMES, list(method_mask)):
+        for method, is_available in zip(microscopy_method_names.NAMES, list(method_mask)):
             method_dict[method] = bool(int(is_available))
         return method_dict
 
@@ -47,9 +47,9 @@ class Stand(message_device.LeicaAsyncDevice):
 
     def get_active_microscopy_method(self):
         method_idx = int(self.send_message(GET_ACT_METHOD, async=False, intent='get name of currently active microscopy method').response)
-        return MICROSCOPY_METHOD_NAMES[method_idx]
+        return microscopy_method_names.NAMES[method_idx]
 
     def set_active_microscopy_method(self, microscopy_method_name):
-        if microscopy_method_name not in MICROSCOPY_METHOD_NAMES_TO_IDXS:
+        if microscopy_method_name not in microscopy_method_names.NAMES_TO_INDICES:
             raise KeyError('Value specified for microscopy method name must be one of {}.'.format(self.get_available_microscopy_methods()))
-        response = self.send_message(SET_ACT_METHOD, MICROSCOPY_METHOD_NAMES_TO_IDXS[microscopy_method_name], intent='switch microscopy methods')
+        response = self.send_message(SET_ACT_METHOD, microscopy_method_names.NAMES_TO_INDICES[microscopy_method_name], intent='switch microscopy methods')

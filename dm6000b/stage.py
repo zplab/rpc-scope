@@ -91,19 +91,13 @@ class Stage(message_device.LeicaAsyncDevice):
         return self._get_pos(self._z_mm_per_count, GET_POS_Z)
         
     def reinit_x(self):
-        """From time to time, the stage may refuse to move away from 0 on the x axis.  Executing
-        this command may "unstick" the stage when it is in this condition.  Note that this command
-        always executes synchronously."""
-        self.send_message(INIT_X, async=False, intent="unstick stage x axis")
+        """Reinitialize x axis to correct for drift or "stuck" stage". Executes synchronously."""
+        self.send_message(INIT_X, async=False, intent="init stage x axis")
 
     def reinit_y(self):
-        """From time to time, the stage may refuse to move away from 0 on the y axis.  Executing
-        this command may "unstick" the stage when it is in this condition.  Note that this command
-        always executes synchronously."""
-        self.send_message(INIT_Y, async=False, intent="unstick stage y axis")
+        """Reinitialize y axis to correct for drift or "stuck" stage". Executes synchronously."""
+        self.send_message(INIT_Y, async=False, intent="init stage y axis")
 
     def reinit_z(self):
-        """From time to time, the stage may refuse to move away from 0 on the z axis.  Executing
-        this command may "unstick" the stage when it is in this condition.  Note that this command
-        always executes synchronously."""
-        self.send_message(INIT_Z, async=False, intent="unstick stage z axis")
+        """Reinitialize z axis to correct for drift or "stuck" stage". Executes synchronously."""
+        self.send_message(INIT_Z, async=False, intent="init stage z axis")
