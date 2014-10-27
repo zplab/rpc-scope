@@ -281,8 +281,8 @@ additional_defs = {
 
 default_wrapper = '''def {}({}):
     {}
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.{}(_at_internals._at_camera_handle, {})
+    if _at_camera_handle is not None:
+        return _at_core_lib.{}(_at_camera_handle, {})
     else:
         raise RuntimeError('Andor library not initialized')
 '''

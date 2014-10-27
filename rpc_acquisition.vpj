@@ -19,6 +19,7 @@
 			Name="andor"
 			Filters="">
 			<F N="andor/andor.py"/>
+			<F N="andor/camera.py"/>
 			<F N="andor/make_andor.py"/>
 			<F N="andor/output_ctypes.py"/>
 			<F N="andor/pyparsing.py"/>
@@ -27,6 +28,7 @@
 		<F N="message_device.py"/>
 		<F N="message_manager.py"/>
 		<F N="property_broadcast.py"/>
+		<F N="scope.py"/>
 		<F N="scope_server.py"/>
 		<F N="simple_rpc.py"/>
 		<F N="trie.py"/>

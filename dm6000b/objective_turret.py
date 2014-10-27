@@ -108,16 +108,16 @@ class ObjectiveTurret(message_device.LeicaAsyncDevice):
             return param[0]
         else:
             return param
-    
-    PER_METHOD_PROPERTIES = ((10, 'illumination field diaphragm value TL'),
-                             (11, 'aperture diaphragm value TL'),
-                             (12, 'illumination field diaphragm value IL'),
-                             (13, 'aperture diaphragm value IL'),
-                             (14, 'lamp intensity'),
-                             (15, 'condenser turret position'),
-                             (16, 'DIC turret position'),
-                             (17, 'DIC turret fine position'))
-    
+
+    _PER_METHOD_PROPERTIES = ((10, 'illumination field diaphragm value TL'),
+                              (11, 'aperture diaphragm value TL'),
+                              (12, 'illumination field diaphragm value IL'),
+                              (13, 'aperture diaphragm value IL'),
+                              (14, 'lamp intensity'),
+                              (15, 'condenser turret position'),
+                              (16, 'DIC turret position'),
+                              (17, 'DIC turret fine position'))
+
     def get_objectives_details(self):
         '''Returns a list of objective parameter dicts / None values.  List index corresponds to objective position.  None values
         in the list represent empty objective turret positions.  Querying this property causes internal scope components to audibly
@@ -139,7 +139,7 @@ class ObjectiveTurret(message_device.LeicaAsyncDevice):
                     'x paracentric correction': int(self._get_objpar(p, 20)),
                     'y paracentric correction': int(self._get_objpar(p, 21))
                 }
-                for objpar_idx, objpar_name in self.PER_METHOD_PROPERTIES:
+                for objpar_idx, objpar_name in self._PER_METHOD_PROPERTIES:
                     meth_objpars = reversed(self._get_objpar(p, objpar_idx))
                     details[objpar_name] = { microscopy_method_names.NAMES[meth_idx]: int(meth_objpar) 
                                                  for meth_idx, meth_objpar in enumerate(meth_objpars)}

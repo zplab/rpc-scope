@@ -214,8 +214,8 @@ def RegisterFeatureCallback(Feature, EvCallback, Context):
         Feature: str
         EvCallback: FeatureCallback
         Context: ctypes.c_void_p"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_RegisterFeatureCallback(_at_internals._at_camera_handle, Feature, EvCallback, Context)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_RegisterFeatureCallback(_at_camera_handle, Feature, EvCallback, Context)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -226,8 +226,8 @@ def UnregisterFeatureCallback(Feature, EvCallback, Context):
         Feature: str
         EvCallback: FeatureCallback
         Context: ctypes.c_void_p"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_UnregisterFeatureCallback(_at_internals._at_camera_handle, Feature, EvCallback, Context)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_UnregisterFeatureCallback(_at_camera_handle, Feature, EvCallback, Context)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -238,8 +238,8 @@ def IsImplemented(Feature):
         Feature: str
     Return value:
         Implemented: ctypes.c_int"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_IsImplemented(_at_internals._at_camera_handle, Feature)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_IsImplemented(_at_camera_handle, Feature)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -250,8 +250,8 @@ def IsReadable(Feature):
         Feature: str
     Return value:
         Readable: ctypes.c_int"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_IsReadable(_at_internals._at_camera_handle, Feature)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_IsReadable(_at_camera_handle, Feature)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -262,8 +262,8 @@ def IsWritable(Feature):
         Feature: str
     Return value:
         Writable: ctypes.c_int"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_IsWritable(_at_internals._at_camera_handle, Feature)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_IsWritable(_at_camera_handle, Feature)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -274,8 +274,8 @@ def IsReadOnly(Feature):
         Feature: str
     Return value:
         ReadOnly: ctypes.c_int"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_IsReadOnly(_at_internals._at_camera_handle, Feature)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_IsReadOnly(_at_camera_handle, Feature)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -285,8 +285,8 @@ def SetInt(Feature, Value):
     Parameters:
         Feature: str
         Value: ctypes.c_int64"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_SetInt(_at_internals._at_camera_handle, Feature, Value)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_SetInt(_at_camera_handle, Feature, Value)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -297,8 +297,8 @@ def GetInt(Feature):
         Feature: str
     Return value:
         Value: ctypes.c_int64"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_GetInt(_at_internals._at_camera_handle, Feature)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_GetInt(_at_camera_handle, Feature)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -309,8 +309,8 @@ def GetIntMax(Feature):
         Feature: str
     Return value:
         MaxValue: ctypes.c_int64"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_GetIntMax(_at_internals._at_camera_handle, Feature)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_GetIntMax(_at_camera_handle, Feature)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -321,8 +321,8 @@ def GetIntMin(Feature):
         Feature: str
     Return value:
         MinValue: ctypes.c_int64"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_GetIntMin(_at_internals._at_camera_handle, Feature)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_GetIntMin(_at_camera_handle, Feature)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -332,8 +332,8 @@ def SetFloat(Feature, Value):
     Parameters:
         Feature: str
         Value: ctypes.c_double"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_SetFloat(_at_internals._at_camera_handle, Feature, Value)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_SetFloat(_at_camera_handle, Feature, Value)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -344,8 +344,8 @@ def GetFloat(Feature):
         Feature: str
     Return value:
         Value: ctypes.c_double"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_GetFloat(_at_internals._at_camera_handle, Feature)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_GetFloat(_at_camera_handle, Feature)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -356,8 +356,8 @@ def GetFloatMax(Feature):
         Feature: str
     Return value:
         MaxValue: ctypes.c_double"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_GetFloatMax(_at_internals._at_camera_handle, Feature)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_GetFloatMax(_at_camera_handle, Feature)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -368,8 +368,8 @@ def GetFloatMin(Feature):
         Feature: str
     Return value:
         MinValue: ctypes.c_double"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_GetFloatMin(_at_internals._at_camera_handle, Feature)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_GetFloatMin(_at_camera_handle, Feature)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -379,8 +379,8 @@ def SetBool(Feature, Value):
     Parameters:
         Feature: str
         Value: ctypes.c_int"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_SetBool(_at_internals._at_camera_handle, Feature, Value)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_SetBool(_at_camera_handle, Feature, Value)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -391,8 +391,8 @@ def GetBool(Feature):
         Feature: str
     Return value:
         Value: ctypes.c_int"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_GetBool(_at_internals._at_camera_handle, Feature)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_GetBool(_at_camera_handle, Feature)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -402,8 +402,8 @@ def SetEnumIndex(Feature, Value):
     Parameters:
         Feature: str
         Value: ctypes.c_int"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_SetEnumIndex(_at_internals._at_camera_handle, Feature, Value)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_SetEnumIndex(_at_camera_handle, Feature, Value)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -413,8 +413,8 @@ def SetEnumString(Feature, String):
     Parameters:
         Feature: str
         String: str"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_SetEnumString(_at_internals._at_camera_handle, Feature, String)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_SetEnumString(_at_camera_handle, Feature, String)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -425,8 +425,8 @@ def GetEnumIndex(Feature):
         Feature: str
     Return value:
         Value: ctypes.c_int"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_GetEnumIndex(_at_internals._at_camera_handle, Feature)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_GetEnumIndex(_at_camera_handle, Feature)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -437,8 +437,8 @@ def GetEnumCount(Feature):
         Feature: str
     Return value:
         Count: ctypes.c_int"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_GetEnumCount(_at_internals._at_camera_handle, Feature)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_GetEnumCount(_at_camera_handle, Feature)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -450,8 +450,8 @@ def IsEnumIndexAvailable(Feature, Index):
         Index: ctypes.c_int
     Return value:
         Available: ctypes.c_int"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_IsEnumIndexAvailable(_at_internals._at_camera_handle, Feature, Index)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_IsEnumIndexAvailable(_at_camera_handle, Feature, Index)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -463,8 +463,8 @@ def IsEnumIndexImplemented(Feature, Index):
         Index: ctypes.c_int
     Return value:
         Implemented: ctypes.c_int"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_IsEnumIndexImplemented(_at_internals._at_camera_handle, Feature, Index)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_IsEnumIndexImplemented(_at_camera_handle, Feature, Index)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -487,8 +487,8 @@ def Command(Feature):
     
     Parameters:
         Feature: str"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_Command(_at_internals._at_camera_handle, Feature)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_Command(_at_camera_handle, Feature)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -498,8 +498,8 @@ def SetString(Feature, String):
     Parameters:
         Feature: str
         String: str"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_SetString(_at_internals._at_camera_handle, Feature, String)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_SetString(_at_camera_handle, Feature, String)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -523,8 +523,8 @@ def GetStringMaxLength(Feature):
         Feature: str
     Return value:
         MaxStringLength: ctypes.c_int"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_GetStringMaxLength(_at_internals._at_camera_handle, Feature)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_GetStringMaxLength(_at_camera_handle, Feature)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -534,8 +534,8 @@ def QueueBuffer(Ptr, PtrSize):
     Parameters:
         Ptr: ctypes.POINTER(ctypes.c_uint8)
         PtrSize: ctypes.c_int"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_QueueBuffer(_at_internals._at_camera_handle, Ptr, PtrSize)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_QueueBuffer(_at_camera_handle, Ptr, PtrSize)
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -547,15 +547,15 @@ def WaitBuffer(Timeout):
     Return values:
         Ptr: ctypes.POINTER(ctypes.c_uint8)
         PtrSize: ctypes.c_int"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_WaitBuffer(_at_internals._at_camera_handle, Timeout)
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_WaitBuffer(_at_camera_handle, Timeout)
     else:
         raise RuntimeError('Andor library not initialized')
 
 def Flush():
     """Flush()"""
-    if _at_internals._at_camera_handle is not None:
-        return _at_core_lib.AT_Flush(_at_internals._at_camera_handle, )
+    if _at_camera_handle is not None:
+        return _at_core_lib.AT_Flush(_at_camera_handle, )
     else:
         raise RuntimeError('Andor library not initialized')
 
