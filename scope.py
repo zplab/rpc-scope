@@ -35,3 +35,4 @@ class Scope(message_device.AsyncDeviceNamespace):
         
         andor.initialize(SCOPE_CAMERA)
         self.camera = camera.Camera()
+        self.camera._attach_property_server(property_server)

@@ -22,12 +22,28 @@
 #
 # Authors: Erik Hvatum, Zach Pincus
 
+import ctypes
 from rpc_acquisition.andor import andor
 
 class Camera:
     '''Note: rpc_acquisition.andor.andor.initialize(..) should be called before instantiating this class.'''
+    def __init__(self):
+        self._property_server = None
+        # TODO: enumerate andor enum names and make name to enum id dict or python enum
+
     def get_exposure_time(self):
         return andor.GetFloat('ExposureTime')
 
     def set_exposure_time(self, exposure_time):
         andor.SetFloat('ExposureTime', exposure_time)
+
+    def _attach_property_server(self, property_server):
+        if self._property_server is not None:
+            raise RuntimeError('Already attached to property_server.')
+        self._property_server = property_server
+
+    def _detach_property_server(self):
+        if self._property_server is not None:
+            pass
+
+#   def _property_change_callback(feature, ):
