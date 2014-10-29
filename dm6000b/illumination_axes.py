@@ -23,6 +23,7 @@
 # Authors: Erik Hvatum, Zach Pincus
 
 from rpc_acquisition import message_device
+from rpc_acquisition.enumerated_properties import DictProperty
 
 
 # 77032 is an unusual command in that two outstanding instances issued with
@@ -39,8 +40,42 @@ from rpc_acquisition import message_device
 SET_SHUTTER_LAMP = 77032
 GET_SHUTTER_LAMP = 77033
 
+POS_ABS_IL_TURRET = 78022
+GET_POS_IL_TURRET = 78023
+GET_CUBENAME = 78027
+GET_MIN_POS_IL_TURRET = 78031
+GET_MAX_POS_IL_TURRET = 78032
+
 POS_ABS_KOND = 81022
 GET_POS_KOND = 81023
+
+class FilterCube(DictProperty):
+    def __init__(self, il):
+        self._il = il
+        super().__init__()
+
+    def get_value(self):
+        hw_value = self._read()
+        return None if hw_value == 0 else self._hw_to_usr[hw_value]
+
+    def _get_hw_to_usr(self):
+        min_pos = int(self._il.send_message(GET_MIN_POS_IL_TURRET, async=False, intent="get IL turret minimum position").response)
+        max_pos = int(self._il.send_message(GET_MAX_POS_IL_TURRET, async=False, intent="get IL turret maximum position").response)
+        # NB: All positions in our filter cube turret are occupied and the manual does not describe the response to
+        # a name query for an empty position.  I assume that it is "-" or "", but this assumption may require correction
+        # if we ever do come to have an empty position.
+        d = {}
+        for idx in range(min_pos, max_pos+1):
+            name = self._il.send_message(GET_CUBENAME, idx, async=False, intent="get filter cube name").response[1:].strip()
+            if len(name) != 0 and name != '-':
+                d[idx] = name
+        return d
+
+    def _read(self):
+        return int(self._il.send_message(GET_POS_IL_TURRET, async=False, intent="get filter turret position").response.split(' ')[0])
+
+    def _write(self, value):
+        response = self._il.send_message(POS_ABS_IL_TURRET, value, intent="set filter turret position")
 
 class _ShutterDevice(message_device.LeicaAsyncDevice):
     def get_shutter_open(self):
@@ -62,6 +97,8 @@ class IL(_ShutterDevice):
     # and as one or two convenience functions exposed at this level -- probably something that like 
     # enable_lamps(uv=None, teal=None [...]), and lamp_power(uv=None [...]), where you can control
     # all lamps at once. ('None' would mean don't change the state of that lamp).
+    def _setup_device(self):
+        self.filter_cube = FilterCube(self)
 
 class TL(_ShutterDevice):
     '''IL represents an interface into elements used in Transmitted Light (Brighftield and DIC) mode.'''

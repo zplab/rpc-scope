@@ -6,6 +6,15 @@
 	WorkingDir=".">
 	<Files>
 		<Folder
+			Name="andor"
+			Filters="">
+			<F N="andor/andor.py"/>
+			<F N="andor/camera.py"/>
+			<F N="andor/make_andor.py"/>
+			<F N="andor/output_ctypes.py"/>
+			<F N="andor/pyparsing.py"/>
+		</Folder>
+		<Folder
 			Name="dm6000b"
 			Filters="">
 			<F N="dm6000b/__init__.py"/>
@@ -15,16 +24,8 @@
 			<F N="dm6000b/stage.py"/>
 			<F N="dm6000b/stand.py"/>
 		</Folder>
-		<Folder
-			Name="andor"
-			Filters="">
-			<F N="andor/andor.py"/>
-			<F N="andor/camera.py"/>
-			<F N="andor/make_andor.py"/>
-			<F N="andor/output_ctypes.py"/>
-			<F N="andor/pyparsing.py"/>
-		</Folder>
 		<F N="echo_device.py"/>
+		<F N="enumerated_properties.py"/>
 		<F N="message_device.py"/>
 		<F N="message_manager.py"/>
 		<F N="property_broadcast.py"/>
