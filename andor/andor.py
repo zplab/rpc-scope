@@ -146,13 +146,6 @@ _at_camera_handle = None
 _at_core_lib = None
 _at_util_lib = None
 
-if sys.platform == 'win32':
-    _libc = ctypes.libc
-elif sys.platform == 'darwin':
-    _libc = ctypes.CDLL('libc.dylib')
-else:
-    _libc = ctypes.CDLL('libc.so.6')
-
 FeatureCallback = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_int, ctypes.c_wchar_p, ctypes.c_void_p)
 
 _AT_HANDLE_SYSTEM = 1
@@ -478,7 +471,7 @@ def GetEnumStringByIndex(Feature, Index):
         String: str"""
     if _at_camera_handle is not None:
         _at_core_lib.AT_GetEnumStringByIndex(_at_camera_handle, Feature, Index, _at_wchar_scratch, _at_wchar_scratch._length_)
-        return _at_wchar_scratch[:_libc.wcslen(_at_wchar_scratch)]
+        return _at_wchar_scratch.value
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -512,7 +505,7 @@ def GetString(Feature):
         String: str"""
     if _at_camera_handle is not None:
         _at_core_lib.AT_GetString(_at_camera_handle, Feature, _at_wchar_scratch, _at_wchar_scratch._length_)
-        return _at_wchar_scratch[:_libc.wcslen(_at_wchar_scratch)]
+        return _at_wchar_scratch.value
     else:
         raise RuntimeError('Andor library not initialized')
 
