@@ -1,5 +1,6 @@
 import threading
 import collections
+import smart_serial
 
 class MessageManager(threading.Thread):
     """Base class for managing messages and responses sent to/from a 
@@ -118,29 +119,29 @@ class MessageManager(threading.Thread):
 
 class SerialMessageManager(MessageManager):
     """MessageManager subclass that sends and receives from a serial port."""
-    def __init__(self, serialport, response_terminator, verbose=False, daemon=True):
+    def __init__(self, serial_port, serial_baud, response_terminator, verbose=False, daemon=True):
         """Arguments:
-            serialport: initialized serial.Serial-like object
+            serial_port, serial_baud: information for connecting to serial device
             response_terminator: byte or bytes that terminate a response message
             daemon: quit running in the background automatically when the interpreter is exited
                     (otherwise must set self.running to False to quit)"""
-        self.serialport = serialport
+        # need a timeout on the serial port so that _receive_message can 
+        # occasionally check its 'running' attribute to decide if it needs to return.
+        self.serialport = smart_serial.Serial(serial_port, baudrate=serial_baud, timeout=5)        
         self.thread_name = 'SerialMessageManager({})'.format(serialport.port)
         self.response_terminator = response_terminator
         super().__init__(verbose, daemon)
     
     def _send_message(self, message):
         if type(message) != bytes:
-            message = bytes(message, encoding='ASCII')
+            message = bytes(message, encoding='ascii')
         self.serialport.write(message)
     
     def _receive_message(self):
-        tl = len(self.response_terminator)
-        response = bytearray()
-        while self.running: 
-            response += self.serialport.read(max(1, self.serialport.inWaiting()))
-            if len(response) >= tl and response[-tl:] == self.response_terminator:
-                return str(response[:-tl], encoding='ASCII')
+        while self.running:
+            response = self.serialport.read_until(self.response_terminator)
+            if response: # empty response = timeout
+                return str(response[:-len(self.response_terminator)], encoding='ascii')
 
 class EchoMessageManager(SerialMessageManager):
     """MessageManager subclass for debugging: the response key is the whole response"""
@@ -149,8 +150,8 @@ class EchoMessageManager(SerialMessageManager):
 
 class LeicaMessageManager(SerialMessageManager):
     """MessageManager subclass appropriate for routing messages from Leica API"""
-    def __init__(self, serialport, verbose=False, daemon=True):
-        super().__init__(serialport, response_terminator=b'\r', verbose=verbose, daemon=daemon)
+    def __init__(self, serial_port, serial_baud, verbose=False, daemon=True):
+        super().__init__(serial_port, serial_baud, response_terminator=b'\r', verbose=verbose, daemon=daemon)
         
     def _generate_response_key(self, response):
         if response[0] == '$':
