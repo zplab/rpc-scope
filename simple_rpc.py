@@ -2,6 +2,9 @@ import zmq
 import traceback
 import inspect
 import collections
+import threading
+import os
+import signal
 
 class Namespace:
     """Placeholder class to hold attribute values"""
@@ -16,6 +19,9 @@ class RPCServer:
     where 'namespace' is the top-level namespace provided to the server on initialization.
     Results from the calls are returned.
     
+    The 'interrupter' parameter must be an instance of Interrupter, which can be used
+    to simulate control-c interrupts during RPC calls.
+    
     Introspection can be used to provide clients a description of available commands.
     The special '__DESCRIBE__' command returns a list of command descriptions,
     which are triples of (command_name, command_doc, arg_info):
@@ -29,8 +35,9 @@ class RPCServer:
             kwonlyargs: list of keyword-only arguments
             kwonlydefaults: dict mapping keyword-only argument names to default values (if any)
     """
-    def __init__(self, namespace, verbose=False):
+    def __init__(self, namespace, interrupter, verbose=False):
         self.namespace = namespace
+        self.interrupter = interrupter
         self.verbose = verbose
 
     def run(self):
@@ -100,11 +107,13 @@ class RPCServer:
             self._reply(error='No such command: {}'.format(command))
             return
         try:
+            self.interrupter.armed = True
             response = py_command(*args, **kwargs)
+            self.interrupter.armed = False
             if self.verbose:
                 print("\t response: {}".format(response))
             
-        except Exception as e:
+        except (Exception, KeyboardInterrupt) as e:
             exception_str = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
             self._reply(error=exception_str)
         else:
@@ -131,14 +140,15 @@ class RPCServer:
         raise NotImplementedError()
 
 class ZMQServer(RPCServer):
-    def __init__(self, namespace, port, context=None, verbose=False):
+    def __init__(self, namespace, interrupter, port, context=None, verbose=False):
         """RPCServer subclass that uses ZeroMQ REQ/REP to communicate with clients.
         Arguments:
             namespace: contains a hierarchy of callable objects to expose to clients.
-            port: a string ZeroMQ port identifier, like ''tcp://127.0.0.1:5555''.
+            interrupter: Interrupter instance for simulating control-c on server
+            port: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
             context: a ZeroMQ context to share, if one already exists.
         """
-        super().__init__(namespace, verbose)
+        super().__init__(namespace, interrupter, verbose)
         self.context = context if context is not None else zmq.Context()
         self.socket = self.context.socket(zmq.REP)
         self.socket.bind(port)
@@ -180,12 +190,23 @@ class RPCClient:
     takes *args and **kwargs parameters.
     """
     def __call__(self, command, *args, **kwargs):
-        retval, error = self._send(command, args, kwargs)
+        self._send(command, args, kwargs)
+        try:
+            retval, error = self._receive_reply()
+        except KeyboardInterrupt:
+            self._send_interrupt('interrupt')
+            retval, error = self._receive_reply()
         if error is not None:
             raise RPCError(error)
         return retval
 
     def _send(self, command, args, kwargs):
+        raise NotImplementedError()
+    
+    def _receive_reply(self):
+        raise NotImplementedError()
+    
+    def _send_interrupt(self, message):
         raise NotImplementedError()
 
     def proxy_function(self, command):
@@ -223,8 +244,7 @@ class RPCClient:
             # create functions and gather property accessors
             accessors = collections.defaultdict(RPCClient._accessor_pair)
             for name, qualname, doc, argspec in function_descriptions:
-                rpc_func = self.proxy_function(qualname)
-                client_func = _rich_proxy_function(doc, argspec, name, rpc_func)
+                client_func = _rich_proxy_function(doc, argspec, name, self, qualname)
                 if name.startswith('get_'):
                     accessors[name[4:]].getter = client_func
                     name = '_'+name
@@ -266,23 +286,67 @@ class RPCClient:
         
 
 class ZMQClient(RPCClient):
+    def __init__(self, rpc_port, interrupt_port, context=None):
+        """RPCClient subclass that uses ZeroMQ REQ/REP to communicate.
+        Arguments:
+            rpc_port, interrupt_port: a string ZeroMQ port identifier, like ''tcp://127.0.0.1:5555''.
+            context: a ZeroMQ context to share, if one already exists.
+        """
+        self.context = context if context is not None else zmq.Context()
+        self.rpc_socket = self.context.socket(zmq.REQ)
+        self.rpc_socket.connect(rpc_port)
+        self.interrupt_socket = self.context.socket(zmq.PUSH)
+        self.interrupt_socket.connect(interrupt_port)
+
+    def _send(self, command, args, kwargs):
+        self.rpc_socket.send_json((command, args, kwargs))
+    
+    def _receive_reply(self):
+        reply_dict = self.rpc_socket.recv_json()
+        return reply_dict['retval'], reply_dict['error']
+
+    def _send_interrupt(self, message):
+        self.interrupt_socket.send(bytes(message, encoding='ascii'))
+
+class Interrupter(threading.Thread):
+    """Interrupter runs in a background thread and creates KeyboardInterrupt
+    events in the main thread when requested to do so."""
+    def __init__(self):
+        super().__init__(name='InterruptServer', daemon=True)
+        self.running = True
+        self.armed = False
+        self.start()
+    
+    def run(self):
+        while self.running:
+            message = self._receive()
+            print('interrupt received: {}, armed={}'.format(message, self.armed))
+            if message == 'interrupt' and self.armed:
+                os.kill(os.getpid(), signal.SIGINT)
+            elif message == 'halt':
+                self.running = False
+
+    def _receive(self):
+        raise NotImplementedError()
+        
+
+class ZMQInterrupter(Interrupter):
     def __init__(self, port, context=None):
-        """RPCClient subclass that uses ZeroMQ REQ/REP to communicate with clients.
+        """InterruptServer subclass that uses ZeroMQ PUSH/PULL to communicate with clients.
         Arguments:
             port: a string ZeroMQ port identifier, like ''tcp://127.0.0.1:5555''.
             context: a ZeroMQ context to share, if one already exists.
         """
-        self._context = context if context is not None else zmq.Context()
-        self._socket = self._context.socket(zmq.REQ)
-        self._socket.connect(port)
+        self.context = context if context is not None else zmq.Context()
+        self.socket = self.context.socket(zmq.PULL)
+        self.socket.bind(port)
+        super().__init__()
+    
+    def _receive(self):
+        return str(self.socket.recv(), encoding='ascii')
 
-    def _send(self, command, args, kwargs):
-        self._socket.send_json((command, args, kwargs))
-        reply_dict = self._socket.recv_json()
-        return reply_dict['retval'], reply_dict['error']
 
-
-def _rich_proxy_function(doc, argspec, name, to_proxy):
+def _rich_proxy_function(doc, argspec, name, rpc_client, rpc_function):
     """Using the docstring and argspec from the RPC __DESCRIBE__ command,
     generate a proxy function that looks just like the remote function, except
     wraps the function 'to_proxy' that is passed in."""
@@ -324,15 +388,15 @@ def _rich_proxy_function(doc, argspec, name, to_proxy):
     # function with 'to_proxy' stored inside a closure, as exec() doesn't know
     # to generate closures correctly.
     func_str = '''
-        def make_func(to_proxy):
+        def make_func(rpc_client, rpc_function):
             def {}({}):
                 """{}"""
-                return to_proxy({})
+                return rpc_client(rpc_function, {})
             return {}
     '''.format(name, ', '.join(arg_parts), doc, ', '.join(call_parts), name)
     fake_locals = {} # dict in which exec operates: locals() doesn't work here.
     exec(func_str.strip(), globals(), fake_locals)
-    func = fake_locals['make_func'](to_proxy) # call the factory function
+    func = fake_locals['make_func'](rpc_client, rpc_function) # call the factory function
     func.__qualname__ = func.__name__ = name # rename the proxy function
     return func
 
@@ -373,6 +437,5 @@ if __name__ == '__main__':
         root.am = am
         zs = ZMQServer(root, 'tcp://127.0.0.1:5555')
         zs.run()
-        
 
         

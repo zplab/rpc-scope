@@ -1,6 +1,3 @@
-import serial
-import zmq
-
 from rpc_acquisition import message_device
 from rpc_acquisition import message_manager
 from rpc_acquisition.dm6000b import illumination_axes
@@ -17,11 +14,7 @@ SCOPE_CAMERA = 'ZYLA-5.5-CL3'
 class Scope(message_device.AsyncDeviceNamespace):
     def __init__(self, property_server, verbose=False):
         super().__init__()
-
-        # need a timeout on the serial port so that the message manager thread can 
-        # occasionally check its 'running' attribute to decide if it needs to quit.
-        self._scope_serial = serial.Serial(SCOPE_PORT, baudrate=SCOPE_BAUD, timeout=5)
-        self._message_manager = message_manager.LeicaMessageManager(self._scope_serial, verbose=verbose)
+        self._message_manager = message_manager.LeicaMessageManager(SCOPE_PORT, SCOPE_BAUD, verbose=verbose)
 
         self.il = illumination_axes.IL(self._message_manager)
         self.tl = illumination_axes.TL(self._message_manager)
