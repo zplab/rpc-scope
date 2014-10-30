@@ -1,6 +1,6 @@
 import threading
 import collections
-import smart_serial
+from rpc_acquisition import smart_serial
 
 class MessageManager(threading.Thread):
     """Base class for managing messages and responses sent to/from a 
@@ -128,7 +128,7 @@ class SerialMessageManager(MessageManager):
         # need a timeout on the serial port so that _receive_message can 
         # occasionally check its 'running' attribute to decide if it needs to return.
         self.serialport = smart_serial.Serial(serial_port, baudrate=serial_baud, timeout=5)        
-        self.thread_name = 'SerialMessageManager({})'.format(serialport.port)
+        self.thread_name = 'SerialMessageManager({})'.format(self.serialport.port)
         self.response_terminator = response_terminator
         super().__init__(verbose, daemon)
     
