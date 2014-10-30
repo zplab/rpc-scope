@@ -26,12 +26,14 @@
 		</Folder>
 		<F N="echo_device.py"/>
 		<F N="enumerated_properties.py"/>
+		<F N="io_sequencer.py"/>
 		<F N="message_device.py"/>
 		<F N="message_manager.py"/>
 		<F N="property_broadcast.py"/>
 		<F N="scope.py"/>
 		<F N="scope_server.py"/>
 		<F N="simple_rpc.py"/>
+		<F N="smart_serial.py"/>
 		<F N="trie.py"/>
 	</Files>
 	<Config

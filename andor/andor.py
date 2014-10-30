@@ -146,10 +146,12 @@ _at_camera_handle = None
 _at_core_lib = None
 _at_util_lib = None
 
+# NB: Callbacks should return AT_CALLBACK_SUCCESS, or, equivalently, 0
 FeatureCallback = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_int, ctypes.c_wchar_p, ctypes.c_void_p)
 
 _AT_HANDLE_SYSTEM = 1
 ANDOR_INFINITE = 0xFFFFFFFF
+AT_CALLBACK_SUCCESS = 0
 
 def _init_core_lib(corepath):
     global _at_core_lib

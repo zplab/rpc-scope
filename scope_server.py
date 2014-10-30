@@ -39,6 +39,6 @@ def rpc_client_main(rpc_port=None, rpc_interrupt_port=None):
 
 def property_client_main(property_port=None):
     if property_port is None:
-        property_port = DEFAULT_PROPERTY_PORT
+        property_port = PROPERTY_PORT
     client = property_broadcast.ZMQClient(property_port)
     return client

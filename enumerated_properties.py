@@ -39,15 +39,20 @@ class SetProperty:
     def __init__(self):
         self._valid_set = self._get_valid_set()
 
-    def get_supported_values(self):
+    def get_recognized_values(self):
+        '''The list of recognized values that may be assumed by .value, and in the case
+        of a read/write attribute, assigned to .value.  Assigning anything not appearing
+        in this list to a writeable attribute's .value causes a ValueError exception to
+        be raised.'''
         return sorted(list(self._valid_set))
 
     def get_value(self):
+        '''The current value.'''
         return self._read()
 
     def set_value(self, value):
         if value not in self._valid_set:
-            raise ValueError('value must be one of {}.'.format(self.get_supported_values()))
+            raise ValueError('value must be one of {}.'.format(self.get_recognized_values()))
         self._write(value)
 
     def _get_valid_set(self):
@@ -68,7 +73,7 @@ class DictProperty:
     serial interface protocol permitting reading of the names of the filters in the magazine
     as an ordered list.  The 0-based index of each element is used in the filter change
     request command to identify the filter that should be deployed and is contained in the
-    reply to the currently deployed filter query.  The strings by which the user identifies
+    reply to a currently deployed filter query.  The strings by which the user identifies
     filters are translated to/from integer values recognized by the mirror controller
     hardware.'''
 
@@ -76,15 +81,20 @@ class DictProperty:
         self._hw_to_usr = self._get_hw_to_usr()
         self._usr_to_hw = {usr : hw for hw, usr in self._hw_to_usr.items()}
 
-    def get_supported_values(self):
+    def get_recognized_values(self):
+        '''The list of recognized values that may be assumed by .value, and in the case
+        of a read/write attribute, assigned to .value.  Assigning anything not appearing
+        in this list to a writeable attribute's .value causes a ValueError exception to
+        be raised.'''
         return sorted(list(self._usr_to_hw.keys()))
 
     def get_value(self):
+        '''The current value.'''
         return self._hw_to_usr[self._read()]
 
     def set_value(self, value):
         if value not in self._usr_to_hw:
-            raise ValueError('value must be one of {}.'.format(self.get_supported_values()))
+            raise ValueError('value must be one of {}.'.format(self.get_recognized_values()))
         self._write(self._usr_to_hw[value])
 
     def _get_hw_to_usr(self):
