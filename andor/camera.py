@@ -150,16 +150,21 @@ class Camera:
         # to (even temporarily) specify an illegal AOI.
         #
         # Consider that {'aoi_left' : 2001, 'aoi_width' : 500} specifies horizontal AOI parameters that
-        # are valid together.  However, if aoi_left is greater than 2061 before the change, aoi_width
-        # must be updated before aoi_left.
+        # are valid together.  However, if aoi_left is greater than 2061 before the change, aoi_left
+        # must be updated before aoi_width.
         # 
         # Performing AOI updates in ascending order of signed parameter value change ensures that setting
         # a collection of AOI parameters that are together legal does not require transitioning through
-        # an illegal state.  Although processing of vertical and horizontal parameters via this algorithm
-        # is separable, applying a sort to both together will never fail when separate processing would 
-        # succeed, and vice versa.*
+        # an illegal state.*
         # 
-        # * Proof: the validity of a horizontal parameter depends only on the other horizontal
+        # Although processing of vertical and horizontal parameters via this algorithm
+        # is separable, applying a sort to both together will never fail when separate processing would 
+        # succeed, and vice versa.**
+        #
+        # * Proof: a too-fat mouse will not fit through a too-occluded portal.  However, the mouse may fit
+        # _after_ decreasing the size of the occlusion.
+        # 
+        # ** Proof: the validity of a horizontal parameter depends only on the other horizontal
         # parameter and never either vertical parameter, as does the validity of a vertical
         # parameter, mutatis mutandis.  Therefore, only ordering of subset elements relative to other
         # subset elements matters, and sorting the combined set preserves subset ordering such that
