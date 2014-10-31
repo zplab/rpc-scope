@@ -40,11 +40,14 @@ class PropertyServer:
         Returns a callback to call when the property's value has changed."""
         self.properties[property_name] = value
         def change_callback(value):
-            self._publish_update(property_name, value)
+            self.update_property(property_name, value)
         return change_callback
 
     def update_property(self, property_name, value):
         """Inform the server that the property has a new value"""
+        self.properties[property_name] = value
+        if self.verbose:
+            print('updating property: {} to {}'.format(property_name, value))
         self._publish_update(property_name, value)
 
     def property_decorator(self, property_name):
@@ -55,14 +58,11 @@ class PropertyServer:
         class serverproperty(property):
             def __set__(self, obj, value):
                 super().__set__(obj, value)
-                propertyserver._publish_update(property_name, value)
+                propertyserver.update_property(property_name, value)
         return serverproperty
 
     def _publish_update(self, property_name, value):
-        """Send out an update to the clients"""
-        self.properties[property_name] = value
-        if self.verbose:
-            print('updating property: {} to {}'.format(property_name, value))
+        raise NotImplementedError()
 
 class ZMQServer(PropertyServer):
     def __init__(self, port, context=None, verbose=False):
@@ -77,7 +77,6 @@ class ZMQServer(PropertyServer):
         self.socket.bind(port)
 
     def _publish_update(self, property_name, value):
-        super()._publish_update(property_name, value)
         # dump json first to catch "not serializable" errors before sending the first part of a two-part message
         json = zmq.utils.jsonapi.dumps(value)
         self.socket.send_string(property_name, flags=zmq.SNDMORE)

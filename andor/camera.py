@@ -22,7 +22,6 @@
 #
 # Authors: Erik Hvatum, Zach Pincus
 
-import weakref
 from rpc_acquisition.andor import andor
 from rpc_acquisition.enumerated_properties import DictProperty
 
@@ -42,43 +41,6 @@ class AT_Enum(ReadOnly_AT_Enum):
     def _write(self, value):
         andor.SetEnumIndex(self._feature, value)
 
-class CameraCallbackContainer:
-    @classmethod
-    def register(cls, camera, property_name, feature):
-        if hasattr(camera, property_name):
-            # Property is enumerated
-            getter = camera.__getattribute__(property_name).get_value
-        else:
-            # Property is a simple getter function
-            getter = camera.__getattribute__('get_' + property_name)
-        property_server = camera._property_server
-        publish_update = property_server.add_property('scope.camera.' + property_name, getter())
-        callback_container = cls(getter, publish_update)
-        c_callback = andor.FeatureCallback(callback_container._callback)
-        andor.RegisterFeatureCallback(feature, c_callback, 0)
-        # NB: Retain this return value; it represents a ctypes wrapper to the bound method callback_container._callback.
-        # The bound method descriptor stored by the wrapper will contain the only extant strong reference to callback_container
-        # once this function returns.  Allowing the wrapper's reference count to drop to zero will cause its associated
-        # CameraCallbackContainer (callback_container in this function's name space) to be deleted.
-        return c_callback
-
-    def __init__(self, getter, publish_update):
-        self._pre_called = False
-        self._getter = weakref.WeakMethod(getter)
-        self._publish_update = publish_update
-        self._c_callback = None
-
-    def __del__(self):
-        print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~DEL~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
-
-    def _callback(self, camera_handle, feature, context):
-        if self._pre_called:
-            self._publish_update(self._getter()())
-        else:
-            # Ignore the call that occurs immediately upon registering callback
-            self._pre_called = True
-        return andor.AT_CALLBACK_SUCCESS
-
 class Camera:
     '''This class provides an abstraction of the raw Andor API ctypes shim found in
     rpc_acquisition.andor.andor.
@@ -87,50 +49,54 @@ class Camera:
     instantiating this class.'''
 
     def __init__(self, property_server=None):
-        self._property_server = None
-        self._c_callbacks = []
-        if property_server is not None:
-            self._attach_property_server(property_server)
-        self.auxiliary_out_source = AT_Enum('AuxiliaryOutSource')
-        self.binning = AT_Enum('AOIBinning')
-        self.cycle_mode = AT_Enum('CycleMode')
-        self.exposure_mode = AT_Enum('ElectronicShutteringMode')
-        self.fan = AT_Enum('FanSpeed')
-        self.io_selector = AT_Enum('IOSelector')
-        self.sensor_selection = AT_Enum('SimplePreAmpGainControl')
-        # NB: The only available TemperatureControl setting on the Zyla is 0.00, so there's not much reason to
-        # expose this property
-        # self.temperature_control = AT_Enum('TemperatureControl')
-        self.temperature_status = ReadOnly_AT_Enum('TemperatureStatus')
-        self.trigger_mode = AT_Enum('TriggerMode')
+        self._callback_properties = {}
+        
+        self._add_enum('AuxiliaryOutSource', 'auxiliary_out_source')
+        self._add_enum('AOIBinning', 'binning')
+        self._add_enum('CycleMode', 'cycle_mode')
+        self._add_enum('FanSpeed', 'fan')
+        self._add_enum('IOSelector', 'io_selector')
+        self._add_enum('SimplePreAmpGainControl', 'sensor_gain')
+        self._add_enum('TriggerMode', 'trigger_mode')
+        self._add_enum('TemperatureStatus', 'temperature_status', readonly=True)
+        
+        self._add_property('ExposureTime', 'exposure_time', 'Float')
+
+        self._property_server = property_server
+        if property_server:
+            self._c_callback = andor.FeatureCallback(self._andor_callback)
+            self._serve_properties = False
+            for at_feature in self._callback_properties.keys():
+                andor.RegisterFeatureCallback(at_feature, self._c_callback, 0)
+            self._serve_properties = True
+
+    def _add_enum(self, at_feature, py_name, readonly=False):
+        if readonly:
+            enum = ReadOnly_AT_Enum(at_feature)
+        else:
+            enum = AT_Enum(at_feature)
+        self._callback_properties[at_feature] = (enum.get_value, py_name)
+        setattr(self, py_name, enum)
+
+    def _add_property(self, at_feature, py_name, at_type, readonly=False):
+        andor_getter = getattr(andor, 'Get'+at_type)
+        def getter():
+            return andor_getter(at_feature)
+        setattr(self, 'get_'+py_name, getter)
+        self._callback_properties[at_feature] = (getter, py_name)
+        if not readonly:
+            andor_setter = getattr(andor, 'Set'+at_type)
+            def setter(value):
+                andor_setter(at_feature, value)
+            setattr(self, 'set_'+py_name, setter)
+            
+    def _andor_callback(self, camera_handle, at_feature, context):
+        if self._serve_properties:
+            getter, py_name = self._callback_properties(at_feature)
+            self._property_server.update_property(py_name, getter())
+        return andor.AT_CALLBACK_SUCCESS
 
     def __del__(self):
-        self._detach_property_server()
-
-    def _attach_property_server(self, property_server):
-        if self._property_server is not None:
-            raise RuntimeError('Already attached to property_server.')
-        self._property_server = property_server
-        register_for = [
-            ('exposure_time', 'ExposureTime'),
-            ('auxiliary_out_source', 'AuxiliaryOutSource'),
-            ('binning', 'AOIBinning'),
-            ('cycle_mode', 'CycleMode')]
-        for property_name, feature in register_for:
-            self._c_callbacks.append((feature, CameraCallbackContainer.register(self, property_name, feature)))
-
-    def _detach_property_server(self):
-        if self._property_server is None:
-            return
-        for feature, c_callback in self._c_callbacks:
-            andor.UnregisterFeatureCallback(feature, c_callback, 0)
-            print('~~~~~~~~~~~~~~unregistered ' + feature)
-        # TODO: Remove the associated unregistered properties from property_server?
-        self._c_callbacks = []
-        self._property_server = None
-
-    def get_exposure_time(self):
-        return andor.GetFloat('ExposureTime')
-
-    def set_exposure_time(self, exposure_time):
-        andor.SetFloat('ExposureTime', exposure_time)
+        if self._property_server:
+            for at_feature in self._callback_properties.keys():
+                andor.UnregisterFeatureCallback(at_feature, self._c_callback, 0)
