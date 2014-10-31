@@ -123,3 +123,51 @@ class Camera:
         if self._property_server:
             for at_feature in self._callback_properties.keys():
                 andor.UnregisterFeatureCallback(at_feature, self._c_callback, 0)
+
+    def get_aoi(self):
+        '''Convenience wrapper around the aoi_left, aoi_top, aoi_width, aoi_height
+        properties.  When setting this property, None elements and omitted entries
+        cause the corresponding aoi_* property to be left unmodified.'''
+        return {
+            'aoi_left' : self.get_aoi_left(),
+            'aoi_top' : self.get_aoi_top(),
+            'aoi_width' : self.get_aoi_width(),
+            'aoi_height' : self.get_aoi_height()
+        }
+
+    def set_aoi(self, aoi_dict):
+        valid_keys = ['aoi_left', 'aoi_top', 'aoi_width', 'aoi_height']
+        extraneous = set(aoi_dict.keys()) - set(('aoi_left', 'aoi_top', 'aoi_width', 'aoi_height'))
+        if extraneous:
+            e = 'Invalid AOI dict key{} {} supplied.  '
+            if len(extraneous) == 1:
+                e = e.format('', "'{}'".format(extraneous.pop()))
+            else:
+                e = e.format('s', sorted(list(extraneous)))
+            raise KeyError(e + 'AOI dict keys must be one of {}.'.format(valid_keys))
+        # Although this property gives the appearence of setting multiple AOI parameters simultaneously,
+        # each parameter is actually sent to the layer beneath us one at a time, and it is never permitted
+        # to (even temporarily) specify an illegal AOI.
+        #
+        # Consider that {'aoi_left' : 2001, 'aoi_width' : 500} specifies horizontal AOI parameters that
+        # are valid together.  However, if aoi_left is greater than 2061 before the change, aoi_width
+        # must be updated before aoi_left.
+        # 
+        # Performing AOI updates in ascending order of signed parameter value change ensures that setting
+        # a collection of AOI parameters that are together legal does not require transitioning through
+        # an illegal state.  Although processing of vertical and horizontal parameters via this algorithm
+        # is separable, applying a sort to both together will never fail when separate processing would 
+        # succeed, and vice versa.*
+        # 
+        # * Proof: the validity of a horizontal parameter depends only on the other horizontal
+        # parameter and never either vertical parameter, as does the validity of a vertical
+        # parameter, mutatis mutandis.  Therefore, only ordering of subset elements relative to other
+        # subset elements matters, and sorting the combined set preserves subset ordering such that
+        # separating the sets after sorting yields identical results to sorting each separately.
+        deltas = []
+        for key, value in aoi_dict.items():
+            if value is not None:
+                deltas.append((key, value, value - getattr(self, 'get_' + key)()))
+        deltas.sort(key=lambda kv: kv[2])
+        for key, value, delta in deltas:
+            getattr(self, 'set_' + key)(value)
