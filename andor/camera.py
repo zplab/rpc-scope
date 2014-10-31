@@ -108,7 +108,6 @@ class Camera:
         return andor.AT_CALLBACK_SUCCESS
 
     def __del__(self):
-        print('~~del~~')
         if self._property_server:
             for at_feature in self._callback_properties.keys():
                 andor.UnregisterFeatureCallback(at_feature, self._c_callback, 0)
