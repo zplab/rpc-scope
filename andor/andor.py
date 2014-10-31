@@ -151,6 +151,7 @@ FeatureCallback = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_int, ctypes.c_wchar_p,
 
 _AT_HANDLE_SYSTEM = 1
 ANDOR_INFINITE = 0xFFFFFFFF
+AT_FALSE = 0
 AT_CALLBACK_SUCCESS = 0
 
 def _init_core_lib(corepath):
@@ -234,7 +235,7 @@ def IsImplemented(Feature):
     Return value:
         Implemented: ctypes.c_int"""
     if _at_camera_handle is not None:
-        return _at_core_lib.AT_IsImplemented(_at_camera_handle, Feature)
+        return _at_core_lib.AT_IsImplemented(_at_camera_handle, Feature) != AT_FALSE
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -246,7 +247,7 @@ def IsReadable(Feature):
     Return value:
         Readable: ctypes.c_int"""
     if _at_camera_handle is not None:
-        return _at_core_lib.AT_IsReadable(_at_camera_handle, Feature)
+        return _at_core_lib.AT_IsReadable(_at_camera_handle, Feature) != AT_FALSE
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -258,7 +259,7 @@ def IsWritable(Feature):
     Return value:
         Writable: ctypes.c_int"""
     if _at_camera_handle is not None:
-        return _at_core_lib.AT_IsWritable(_at_camera_handle, Feature)
+        return _at_core_lib.AT_IsWritable(_at_camera_handle, Feature) != AT_FALSE
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -270,7 +271,7 @@ def IsReadOnly(Feature):
     Return value:
         ReadOnly: ctypes.c_int"""
     if _at_camera_handle is not None:
-        return _at_core_lib.AT_IsReadOnly(_at_camera_handle, Feature)
+        return _at_core_lib.AT_IsReadOnly(_at_camera_handle, Feature) != AT_FALSE
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -368,26 +369,26 @@ def GetFloatMin(Feature):
     else:
         raise RuntimeError('Andor library not initialized')
 
-def SetBool(Feature, Value):
-    """SetBool(Feature, Value)
+def SetBool(Feature, Bool):
+    """SetBool(Feature, Bool)
     
     Parameters:
         Feature: str
-        Value: ctypes.c_int"""
+        Bool: ctypes.c_int"""
     if _at_camera_handle is not None:
-        return _at_core_lib.AT_SetBool(_at_camera_handle, Feature, Value)
+        return _at_core_lib.AT_SetBool(_at_camera_handle, Feature, Bool)
     else:
         raise RuntimeError('Andor library not initialized')
 
 def GetBool(Feature):
-    """GetBool(Feature) -> Value
+    """GetBool(Feature) -> Bool
     
     Parameters:
         Feature: str
     Return value:
-        Value: ctypes.c_int"""
+        Bool: ctypes.c_int"""
     if _at_camera_handle is not None:
-        return _at_core_lib.AT_GetBool(_at_camera_handle, Feature)
+        return _at_core_lib.AT_GetBool(_at_camera_handle, Feature) != AT_FALSE
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -446,7 +447,7 @@ def IsEnumIndexAvailable(Feature, Index):
     Return value:
         Available: ctypes.c_int"""
     if _at_camera_handle is not None:
-        return _at_core_lib.AT_IsEnumIndexAvailable(_at_camera_handle, Feature, Index)
+        return _at_core_lib.AT_IsEnumIndexAvailable(_at_camera_handle, Feature, Index) != AT_FALSE
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -459,7 +460,7 @@ def IsEnumIndexImplemented(Feature, Index):
     Return value:
         Implemented: ctypes.c_int"""
     if _at_camera_handle is not None:
-        return _at_core_lib.AT_IsEnumIndexImplemented(_at_camera_handle, Feature, Index)
+        return _at_core_lib.AT_IsEnumIndexImplemented(_at_camera_handle, Feature, Index) != AT_FALSE
     else:
         raise RuntimeError('Andor library not initialized')
 
@@ -639,11 +640,11 @@ def _setup_core_functions(lib):
     lib.AT_GetFloatMin.errcheck = _at_errcheck
     
     _prototype_AT_SetBool = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_int, ctypes.c_wchar_p, ctypes.c_int)
-    lib.AT_SetBool = _prototype_AT_SetBool(("AT_SetBool", lib), ((1, 'Hndl'), (1, 'Feature'), (1, 'Value')))
+    lib.AT_SetBool = _prototype_AT_SetBool(("AT_SetBool", lib), ((1, 'Hndl'), (1, 'Feature'), (1, 'Bool')))
     lib.AT_SetBool.errcheck = _at_errcheck
     
     _prototype_AT_GetBool = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_int, ctypes.c_wchar_p, ctypes.POINTER(ctypes.c_int))
-    lib.AT_GetBool = _prototype_AT_GetBool(("AT_GetBool", lib), ((1, 'Hndl'), (1, 'Feature'), (2, 'Value')))
+    lib.AT_GetBool = _prototype_AT_GetBool(("AT_GetBool", lib), ((1, 'Hndl'), (1, 'Feature'), (2, 'Bool')))
     lib.AT_GetBool.errcheck = _at_errcheck
     
     _prototype_AT_SetEnumIndex = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_int, ctypes.c_wchar_p, ctypes.c_int)

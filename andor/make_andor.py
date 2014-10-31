@@ -148,10 +148,13 @@ _at_camera_handle = None
 _at_core_lib = None
 _at_util_lib = None
 
+# NB: Callbacks should return AT_CALLBACK_SUCCESS, or, equivalently, 0
 FeatureCallback = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_int, ctypes.c_wchar_p, ctypes.c_void_p)
 
 _AT_HANDLE_SYSTEM = 1
 ANDOR_INFINITE = 0xFFFFFFFF
+AT_FALSE = 0
+AT_CALLBACK_SUCCESS = 0
 
 def _init_core_lib(corepath):
     global _at_core_lib
@@ -240,8 +243,8 @@ int [_at_errcheck] AT_SetFloat(AT_H Hndl, const AT_WC* Feature, double Value);
 int [_at_errcheck] AT_GetFloat(AT_H Hndl, const AT_WC* Feature, double* Value [output]);
 int [_at_errcheck] AT_GetFloatMax(AT_H Hndl, const AT_WC* Feature, double* MaxValue [output]);
 int [_at_errcheck] AT_GetFloatMin(AT_H Hndl, const AT_WC* Feature, double* MinValue [output]);
-int [_at_errcheck] AT_SetBool(AT_H Hndl, const AT_WC* Feature, AT_BOOL Value);
-int [_at_errcheck] AT_GetBool(AT_H Hndl, const AT_WC* Feature, AT_BOOL* Value [output]);
+int [_at_errcheck] AT_SetBool(AT_H Hndl, const AT_WC* Feature, AT_BOOL Bool);
+int [_at_errcheck] AT_GetBool(AT_H Hndl, const AT_WC* Feature, AT_BOOL* Bool [output]);
 int [_at_errcheck] AT_SetEnumIndex(AT_H Hndl, const AT_WC* Feature, int Value);
 int [_at_errcheck] AT_SetEnumString(AT_H Hndl, const AT_WC* Feature, const AT_WC* String);
 int [_at_errcheck] AT_GetEnumIndex(AT_H Hndl, const AT_WC* Feature, int* Value [output]);
@@ -280,6 +283,14 @@ default_wrapper = '''def {}({}):
         raise RuntimeError('Andor library not initialized')
 '''
 
+bool_wrapper = '''def {}({}):
+    {}
+    if _at_camera_handle is not None:
+        return _at_core_lib.{}(_at_camera_handle, {}) != AT_FALSE
+    else:
+        raise RuntimeError('Andor library not initialized')
+'''
+
 string_wrapper = '''def {}({}):
     {}
     if _at_camera_handle is not None:
@@ -303,7 +314,9 @@ def generate_code(outfile='andor.py'):
         if in_args and in_args[0][0] == 'Hndl' and function_name != 'AT_Close':
             # wrap the function in a helpful wrapper
             in_args = in_args[1:]
-            if len(in_args) > 1 and in_args[-2][0] == 'String' and in_args[-1][0] == 'StringLength':
+            if len(out_args) == 1 and out_args[0][0] in ('Bool', 'Readable', 'Writable', 'ReadOnly', 'Available', 'Implemented'):
+                wrapper_text = bool_wrapper
+            elif len(in_args) > 1 and in_args[-2][0] == 'String' and in_args[-1][0] == 'StringLength':
                 wrapper_text = string_wrapper
                 in_args = in_args[:-2]
                 out_args.append(('String', 'str'))

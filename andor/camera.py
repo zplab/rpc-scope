@@ -60,6 +60,7 @@ class Camera:
         
         self._add_enum('AuxiliaryOutSource', 'auxiliary_out_source')
         self._add_enum('AOIBinning', 'binning')
+        self._add_enum('BitDepth', 'bit_depth', readonly=True)
         self._add_enum('CycleMode', 'cycle_mode')
         self._add_enum('FanSpeed', 'fan')
         self._add_enum('IOSelector', 'io_selector')
@@ -67,7 +68,18 @@ class Camera:
         self._add_enum('TriggerMode', 'trigger_mode')
         self._add_enum('TemperatureStatus', 'temperature_status', readonly=True)
         
+        self._add_property('AccumulateCount', 'accumulate_count', 'Int')
+        self._add_property('AOIHeight', 'aoi_height', 'Int')
+        self._add_property('AOILeft', 'aoi_left', 'Int')
+        self._add_property('AOIStride', 'aoi_stride', 'Int', readonly=True)
+        self._add_property('AOITop', 'aoi_top', 'Int')
+        self._add_property('AOIWidth', 'aoi_width', 'Int')
+        self._add_property('BaselineLevel', 'baseline_level', 'Int', readonly=True)
+        self._add_property('BytesPerPixel', 'bytes_per_pixel', 'Float', readonly=True)
+        self._add_property('CameraAcquiring', 'is_acquiring', 'Bool', readonly=True)
+        self._add_property('CameraModel', 'model_name', 'String', readonly=True)
         self._add_property('ExposureTime', 'exposure_time', 'Float')
+#       self._add_property('', '', '')
 
         self._property_server = property_server
         if property_server:
