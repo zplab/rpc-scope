@@ -84,6 +84,7 @@ class Camera:
             return andor_getter(at_feature)
         setattr(self, 'get_'+py_name, getter)
         self._callback_properties[at_feature] = (getter, py_name)
+        
         if not readonly:
             andor_setter = getattr(andor, 'Set'+at_type)
             def setter(value):
@@ -92,7 +93,7 @@ class Camera:
             
     def _andor_callback(self, camera_handle, at_feature, context):
         if self._serve_properties:
-            getter, py_name = self._callback_properties(at_feature)
+            getter, py_name = self._callback_properties[at_feature]
             self._property_server.update_property(py_name, getter())
         return andor.AT_CALLBACK_SUCCESS
 
