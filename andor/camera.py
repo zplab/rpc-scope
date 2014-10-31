@@ -161,14 +161,14 @@ class Camera:
         # is separable, applying a sort to both together will never fail when separate processing would 
         # succeed, and vice versa.**
         #
-        # * Proof: a too-fat mouse will not fit through a too-occluded portal.  However, the mouse may fit
+        # * A too-fat mouse will not fit through a too-occluded portal.  However, the mouse may fit
         # _after_ decreasing the size of the occlusion.
         # 
         # ** Proof: the validity of a horizontal parameter depends only on the other horizontal
         # parameter and never either vertical parameter, as does the validity of a vertical
         # parameter, mutatis mutandis.  Therefore, only ordering of subset elements relative to other
-        # subset elements matters, and sorting the combined set preserves subset ordering such that
-        # separating the sets after sorting yields identical results to sorting each separately.
+        # elements of the same subset matters, and sorting the combined set preserves subset ordering
+        # such that separating the sets after sorting yields identical results to sorting each separately.
         deltas = []
         for key, value in aoi_dict.items():
             if value is not None:
