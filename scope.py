@@ -27,5 +27,4 @@ class Scope(message_device.AsyncDeviceNamespace):
         # The lumencor and LED controls will be stuffed into IL and TL.
         
         andor.initialize(SCOPE_CAMERA)
-        self.camera = camera.Camera()
-        self.camera._attach_property_server(property_server)
+        self.camera = camera.Camera(property_server)

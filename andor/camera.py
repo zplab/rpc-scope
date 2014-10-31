@@ -38,6 +38,12 @@ class ReadOnly_AT_Enum(DictProperty):
         return andor.GetEnumIndex(self._feature)
 
 class AT_Enum(ReadOnly_AT_Enum):
+    def get_available_values(self):
+        '''The currently accepted values.  This is the subset of recognized_values
+        that may be assigned without raising a NOTIMPLEMENTED AndorError, given the
+        camera model and its current state.'''
+        return sorted((feature for idx, feature in self._hw_to_usr.items() if andor.IsEnumIndexAvailable(self._feature, idx)))
+
     def _write(self, value):
         andor.SetEnumIndex(self._feature, value)
 
@@ -47,6 +53,7 @@ class Camera:
 
     Note that rpc_acquisition.andor.andor.initialize(..) should be called once before
     instantiating this class.'''
+    _prefix = 'scope.camera.'
 
     def __init__(self, property_server=None):
         self._callback_properties = {}
@@ -71,6 +78,8 @@ class Camera:
             self._serve_properties = True
 
     def _add_enum(self, at_feature, py_name, readonly=False):
+        '''Expose a camera setting presented by the Andor API via GetEnumIndex, 
+        SetEnumIndex, and GetEnumStringByIndex as an enumerated property.'''
         if readonly:
             enum = ReadOnly_AT_Enum(at_feature)
         else:
@@ -79,6 +88,7 @@ class Camera:
         setattr(self, py_name, enum)
 
     def _add_property(self, at_feature, py_name, at_type, readonly=False):
+        '''Directly expose numeric or string camera setting.'''
         andor_getter = getattr(andor, 'Get'+at_type)
         def getter():
             return andor_getter(at_feature)
@@ -94,10 +104,11 @@ class Camera:
     def _andor_callback(self, camera_handle, at_feature, context):
         if self._serve_properties:
             getter, py_name = self._callback_properties[at_feature]
-            self._property_server.update_property(py_name, getter())
+            self._property_server.update_property(self._prefix + py_name, getter())
         return andor.AT_CALLBACK_SUCCESS
 
     def __del__(self):
+        print('~~del~~')
         if self._property_server:
             for at_feature in self._callback_properties.keys():
                 andor.UnregisterFeatureCallback(at_feature, self._c_callback, 0)
