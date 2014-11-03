@@ -1,4 +1,4 @@
-import smart_serial
+from rpc_acquisition import smart_serial
 import time
 
 LUMENCOR_PINS = {
@@ -7,7 +7,7 @@ LUMENCOR_PINS = {
     'Cyan': 'D3',
     'Teal': 'D4',
     'GreenYellow': 'D2',
-    'Red', 'D1'
+    'Red': 'D1'
 }
 
 CAMERA_PINS = {
@@ -22,80 +22,80 @@ TL_PWM_PIN = 'D7'
 TL_PWM_MAX = 255
 
 class Command:
-    @staticmethod
-    def _make_command(*elements):
+    @classmethod
+    def _make_command(cls, *elements):
         return ' '.join(map(str, elements))
     
-    @staticmethod
-    def wait_high(self, pin):
-        return self._make_command('wh', pin)
+    @classmethod
+    def wait_high(cls, pin):
+        return cls._make_command('wh', pin)
 
-    @staticmethod
-    def wait_low(self, pin):
-        return self._make_command('wl', pin)
+    @classmethod
+    def wait_low(cls, pin):
+        return cls._make_command('wl', pin)
         
-    @staticmethod
-    def wait_change(self, pin):
-        return self._make_command('wc', pin)
+    @classmethod
+    def wait_change(cls, pin):
+        return cls._make_command('wc', pin)
 
-    @staticmethod
-    def wait_time(self, time):
-        return self._make_command('wt', time)
+    @classmethod
+    def wait_time(cls, time):
+        return cls._make_command('wt', time)
 
-    @staticmethod
-    def raw_wait_high(self, pin):
-        return self._make_command('rh', pin)
+    @classmethod
+    def raw_wait_high(cls, pin):
+        return cls._make_command('rh', pin)
 
-    @staticmethod
-    def raw_wait_low(self, pin):
-        return self._make_command('rl', pin)
+    @classmethod
+    def raw_wait_low(cls, pin):
+        return cls._make_command('rl', pin)
         
-    @staticmethod
-    def raw_wait_change(self, pin):
-        return self._make_command('rc', pin)
+    @classmethod
+    def raw_wait_change(cls, pin):
+        return cls._make_command('rc', pin)
 
-    @staticmethod
-    def delay_ms(self, delay):
-        return self._make_command('dm', delay)
+    @classmethod
+    def delay_ms(cls, delay):
+        return cls._make_command('dm', delay)
 
-    @staticmethod
-    def delay_us(self, delay):
-        return self._make_command('du', delay)
+    @classmethod
+    def delay_us(cls, delay):
+        return cls._make_command('du', delay)
     
-    @staticmethod
-    def pwm(self, pin, value):
-        return self._make_command('pm', pin, value)
+    @classmethod
+    def pwm(cls, pin, value):
+        return cls._make_command('pm', pin, value)
 
-    @staticmethod
-    def set_high(self, pin):
-        return self._make_command('sh', pin)
+    @classmethod
+    def set_high(cls, pin):
+        return cls._make_command('sh', pin)
 
-    @staticmethod
-    def set_low(self, pin):
-        return self._make_command('sl', pin)
+    @classmethod
+    def set_low(cls, pin):
+        return cls._make_command('sl', pin)
         
-    @staticmethod
-    def set_tristate(self, pin):
-        return self._make_command('st', pin)
+    @classmethod
+    def set_tristate(cls, pin):
+        return cls._make_command('st', pin)
     
-    @staticmethod
-    def char_transmit(self, byte):
-        return self._make_command('ct', byte)
+    @classmethod
+    def char_transmit(cls, byte):
+        return cls._make_command('ct', byte)
     
-    @staticmethod
-    def char_receive(self):
-        return self._make_command('cr')
+    @classmethod
+    def char_receive(cls):
+        return cls._make_command('cr')
 
-    @staticmethod
-    def loop(self, index, count):
-        return self._make_command('lo', index, count)
+    @classmethod
+    def loop(cls, index, count):
+        return cls._make_command('lo', index, count)
     
-    @staticmethod
-    def goto(self, index):
-        return self._make_command('go', index)
+    @classmethod
+    def goto(cls, index):
+        return cls._make_command('go', index)
 
-    @staticmethod
-    def lumencor_lamps(self, **lamps):
+    @classmethod
+    def lumencor_lamps(cls, **lamps):
         """Input keyword arguments must be lamp names specified in LUMENCOR_PINS
         keys. The values are either True to enable that lamp, False to disable,
         or None to do nothing (unspecified lamps are also not altered)."""
@@ -105,25 +105,25 @@ class Command:
                 continue
             pin = LUMENCOR_PINS[lamp]
             if enable:
-                command.append(self.set_high(pin))
+                command.append(cls.set_high(pin))
             else:
-                command.append(self.set_low(pin))
+                command.append(cls.set_low(pin))
         return '\n'.join(command)
 
-    @staticmethod
-    def transmitted_lamp(self, enable=None, intensity=None):
+    @classmethod
+    def transmitted_lamp(cls, enable=None, intensity=None):
         """enable: True (lamp on), False (lamp off), or None (no change).
         intensity: None (no change) or value in the range [0, 1] for min to max.
         """
         command = []
         if pwm is not None:
             pwm_value = int(round(value*TL_PWM_MAX))
-            command.append(self.pwm(TL_PWM_PIN, pwm_value))
+            command.append(cls.pwm(TL_PWM_PIN, pwm_value))
         if enable is not None:
             if enable:
-                command.append(self.set_high(TL_ENABLE_PIN))
+                command.append(cls.set_high(TL_ENABLE_PIN))
             else:
-                command.append(self.set_low(TL_ENABLE_PIN))
+                command.append(cls.set_low(TL_ENABLE_PIN))
         return '\n'.join(command)
 
 
@@ -133,7 +133,7 @@ class PedalWaiter:
         self.last_wait = None
         self.iotool = iotool
         self.bounce_time = bounce_time
-        self.delay = Command.delay_ms(int(self.bounce_time * 1000)
+        self.delay = Command.delay_ms(int(self.bounce_time * 1000))
         if pressed_is_high:
             self.depress = Command.wait_high(pin)
             self.release = Command.wait_low(pin)
@@ -163,28 +163,28 @@ class PedalWaiter:
 
 class IOTool:
     def __init__(self, serial_port, serial_baud):
-        self.serialport = smart_serial.Serial(serial_port, baudrate=serial_baud)
-        self.serialport.write(b'\x80\xFF\n') # disable echo
-        self.serialport.read(2) # read back echo of above (no other echoes will come)
+        self._serialport = smart_serial.Serial(serial_port, baudrate=serial_baud)
+        self._serialport.write(b'\x80\xFF\n') # disable echo
+        self._serialport.read(2) # read back echo of above (no other echoes will come)
 
     def _send(self, commands):
         command_bytes = bytes('\n'.join(commands) + '\n', encoding='ascii')
-        self.serialport.write(command_bytes)
+        self._serialport.write(command_bytes)
     
     def execute(self, *commands):
         self._send(commands)
 
     def assert_empty_buffer(self):
-        buffered = self.serialport.read_all_buffered()
+        buffered = self._serialport.read_all_buffered()
         if buffered:
-            raise RuntimeError('Unexpected IOTool output: {}'.format(str(buffered, encoding='ascii'))
+            raise RuntimeError('Unexpected IOTool output: {}'.format(str(buffered, encoding='ascii')))
     
     def store_program(self, *commands):
         self.assert_empty_buffer()
-        self._send(['program'] + commands + ['end'])
+        self._send(['program'] + list(commands) + ['end'])
         response = self._serialport.read_until(b'OK\r\n')[:-4] # see if there was any output before the 'OK'
         if response:
-            raise RuntimeError('Program error: {}'.format(str(response, encoding='ascii'))
+            raise RuntimeError('Program error: {}'.format(str(response, encoding='ascii')))
     
     def start_program(self, *commands, iters=1):
         if commands:
