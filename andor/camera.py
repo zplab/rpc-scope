@@ -64,6 +64,7 @@ class Camera:
         self._add_enum('CycleMode', 'cycle_mode')
         self._add_enum('IOSelector', 'io_selector')
         self._add_enum('PixelReadoutRate', 'pixel_readout_rate')
+        self._add_enum('ElectronicShutteringMode', 'shutter_mode')
         self._add_enum('SimplePreAmpGainControl', 'sensor_gain')
         self._add_enum('TriggerMode', 'trigger_mode')
         self._add_enum('TemperatureStatus', 'temperature_status', readonly=True)
@@ -85,8 +86,6 @@ class Camera:
         self._add_property('MetadataTimestamp', 'include_timestamp_in_metadata', 'Bool')
         self._add_property('Overlap', 'overlap_enabled', 'Bool')
         self._add_property('ReadoutTime', 'readout_time', 'Float', readonly=True)
-        # RollingShutterGlobalClear is not yet available on Linux
-#       self._add_property('RollingShutterGlobalClear', 'rolling_shutter_global_clear_enabled', 'Bool')
         self._add_property('SerialNumber', 'serial_number', 'String', readonly=True)
         self._add_property('SpuriousNoiseFilter', 'spurious_noise_filter_enabled', 'Bool')
         self._add_property('TimestampClock', 'current_timestamp', 'Int', readonly=True)
