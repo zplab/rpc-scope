@@ -62,8 +62,8 @@ class Camera:
         self._add_enum('AOIBinning', 'binning')
         self._add_enum('BitDepth', 'bit_depth', readonly=True)
         self._add_enum('CycleMode', 'cycle_mode')
-        self._add_enum('FanSpeed', 'fan')
         self._add_enum('IOSelector', 'io_selector')
+        self._add_enum('PixelReadoutRate', 'pixel_readout_rate')
         self._add_enum('SimplePreAmpGainControl', 'sensor_gain')
         self._add_enum('TriggerMode', 'trigger_mode')
         self._add_enum('TemperatureStatus', 'temperature_status', readonly=True)
@@ -79,7 +79,39 @@ class Camera:
         self._add_property('CameraAcquiring', 'is_acquiring', 'Bool', readonly=True)
         self._add_property('CameraModel', 'model_name', 'String', readonly=True)
         self._add_property('ExposureTime', 'exposure_time', 'Float')
+        self._add_property('InterfaceType', 'interface_type', 'String', readonly=True)
+        self._add_property('IOInvert', 'selected_io_pin_inverted', 'Bool')
+        self._add_property('MetadataEnable', 'metadata_enabled', 'Bool')
+        self._add_property('MetadataTimestamp', 'include_timestamp_in_metadata', 'Bool')
+        self._add_property('Overlap', 'overlap_enabled', 'Bool')
+        self._add_property('ReadoutTime', 'readout_time', 'Float', readonly=True)
+        # RollingShutterGlobalClear is not yet available on Linux
+#       self._add_property('RollingShutterGlobalClear', 'rolling_shutter_global_clear_enabled', 'Bool')
+        self._add_property('SerialNumber', 'serial_number', 'String', readonly=True)
+        self._add_property('SpuriousNoiseFilter', 'spurious_noise_filter_enabled', 'Bool')
+        self._add_property('TimestampClock', 'current_timestamp', 'Int', readonly=True)
+        self._add_property('TimestampClockFrequency', 'timestamp_ticks_per_second', 'Int', readonly=True)
 #       self._add_property('', '', '')
+
+        # Sensor cooling reduces image noise, improving the quality of results, at the cost of
+        # supplying power to the Peltier junction unit within the camera that serves to cool the
+        # sensor.  Sensor cooling is always off when a camera is opened via the Andor API, even
+        # if the camera has not been power cycled in the time since a previous Andor API session
+        # activated sensor cooling.
+        #
+        # The cost of failing to activate sensor cooling in terms of insiduous reduction of result
+        # quality far outweighs the extra power usage required to maintain sensor cooling while
+        # the camera is opened.  Therefore, our first order of business after setting up properties
+        # is to enable sensor cooling and ensure that the camera cooling fan is also enabled (the
+        # fan defaults to being enabled, but it is critically important that it is enabled if
+        # sensor cooling is enabled, as the Peltier unit generates waste heat that would damage
+        # the camera if allowed to accumulate - so we set and verify this).
+        #
+        # FanSpeed and SensorCooling are presented as read-only to make it harder to accidentally
+        # or ill-advisedly disable either.  Removing or supplying False to the readonly arguments
+        # of the two calling calls disabled this protection.
+        self._add_enum('FanSpeed', 'fan', readonly=True)
+        self._add_property('SensorCooling', 'sensor_cooling_enabled', 'Bool', readonly=True)
 
         self._property_server = property_server
         if property_server:
@@ -88,6 +120,13 @@ class Camera:
             for at_feature in self._callback_properties.keys():
                 andor.RegisterFeatureCallback(at_feature, self._c_callback, 0)
             self._serve_properties = True
+
+        andor.SetEnumString('FanSpeed', 'On')
+        if andor.GetEnumStringByIndex('FanSpeed', andor.GetEnumIndex('FanSpeed')) != 'On':
+            raise RuntimeError('Failed to turn on camera fan!')
+        andor.SetBool('SensorCooling', True)
+        if not andor.GetBool('SensorCooling'):
+            raise RuntimeError('Failed to enable sensor cooling!')
 
     def _add_enum(self, at_feature, py_name, readonly=False):
         '''Expose a camera setting presented by the Andor API via GetEnumIndex, 
@@ -176,3 +215,13 @@ class Camera:
         deltas.sort(key=lambda kv: kv[2])
         for key, value, delta in deltas:
             getattr(self, 'set_' + key)(value)
+
+    def emit_software_trigger(self):
+        '''Send software trigger.  Causes an exposure to be acquired and eventually
+        written to a queued buffer when an acquisition sequence is in progress and
+        trigger_mode is 'Software'.'''
+        andor.Command('SoftwareTrigger')
+
+    def reset_timestamp(self):
+        '''Reset current_timestamp to 0.'''
+        andor.Command('TimestampClockReset')
