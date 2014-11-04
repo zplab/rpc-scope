@@ -22,40 +22,40 @@
 #
 # Authors: Erik Hvatum, Zach Pincus
 
-from rpc_acquisition.andor import andor
-from rpc_acquisition.enumerated_properties import DictProperty
+from . import lowlevel
+from .. import enumerated_properties
 
-class ReadOnly_AT_Enum(DictProperty):
+class ReadOnly_AT_Enum(enumerated_properties.DictProperty):
     def __init__(self, feature):
         self._feature = feature
         super().__init__()
 
     def _get_hw_to_usr(self):
-        str_count = andor.GetEnumCount(self._feature)
-        return {idx : andor.GetEnumStringByIndex(self._feature, idx) for idx in range(str_count)}
+        str_count = lowlevel.GetEnumCount(self._feature)
+        return {idx : lowlevel.GetEnumStringByIndex(self._feature, idx) for idx in range(str_count)}
 
     def _read(self):
-        return andor.GetEnumIndex(self._feature)
+        return lowlevel.GetEnumIndex(self._feature)
 
 class AT_Enum(ReadOnly_AT_Enum):
     def get_available_values(self):
         '''The currently accepted values.  This is the subset of recognized_values
         that may be assigned without raising a NOTIMPLEMENTED AndorError, given the
         camera model and its current state.'''
-        return sorted((feature for idx, feature in self._hw_to_usr.items() if andor.IsEnumIndexAvailable(self._feature, idx)))
+        return sorted((feature for idx, feature in self._hw_to_usr.items() if lowlevel.IsEnumIndexAvailable(self._feature, idx)))
 
     def _write(self, value):
-        andor.SetEnumIndex(self._feature, value)
+        lowlevel.SetEnumIndex(self._feature, value)
 
 class Camera:
     '''This class provides an abstraction of the raw Andor API ctypes shim found in
-    rpc_acquisition.andor.andor.
+    rpc_acquisition.lowlevel.lowlevel.
 
-    Note that rpc_acquisition.andor.andor.initialize(..) should be called once before
+    Note that rpc_acquisition.lowlevel.lowlevel.initialize(..) should be called once before
     instantiating this class.'''
-    _prefix = 'scope.camera.'
-
-    def __init__(self, property_server=None):
+    def __init__(self, property_server=None, property_prefix=''):
+        lowlevel.initialize() # safe to call this multiple times
+        
         self._callback_properties = {}
         
         self._add_enum('AuxiliaryOutSource', 'auxiliary_out_source')
@@ -113,18 +113,19 @@ class Camera:
         self._add_property('SensorCooling', 'sensor_cooling_enabled', 'Bool', readonly=True)
 
         self._property_server = property_server
+        self._property_prefix = property_prefix
         if property_server:
-            self._c_callback = andor.FeatureCallback(self._andor_callback)
+            self._c_callback = lowlevel.FeatureCallback(self._andor_callback)
             self._serve_properties = False
             for at_feature in self._callback_properties.keys():
-                andor.RegisterFeatureCallback(at_feature, self._c_callback, 0)
+                lowlevel.RegisterFeatureCallback(at_feature, self._c_callback, 0)
             self._serve_properties = True
 
-        andor.SetEnumString('FanSpeed', 'On')
-        if andor.GetEnumStringByIndex('FanSpeed', andor.GetEnumIndex('FanSpeed')) != 'On':
+        lowlevel.SetEnumString('FanSpeed', 'On')
+        if lowlevel.GetEnumStringByIndex('FanSpeed', lowlevel.GetEnumIndex('FanSpeed')) != 'On':
             raise RuntimeError('Failed to turn on camera fan!')
-        andor.SetBool('SensorCooling', True)
-        if not andor.GetBool('SensorCooling'):
+        lowlevel.SetBool('SensorCooling', True)
+        if not lowlevel.GetBool('SensorCooling'):
             raise RuntimeError('Failed to enable sensor cooling!')
 
     def _add_enum(self, at_feature, py_name, readonly=False):
@@ -154,13 +155,13 @@ class Camera:
     def _andor_callback(self, camera_handle, at_feature, context):
         if self._serve_properties:
             getter, py_name = self._callback_properties[at_feature]
-            self._property_server.update_property(self._prefix + py_name, getter())
-        return andor.AT_CALLBACK_SUCCESS
+            self._property_server.update_property(self._property_prefix + py_name, getter())
+        return lowlevel.AT_CALLBACK_SUCCESS
 
     def __del__(self):
         if self._property_server:
             for at_feature in self._callback_properties.keys():
-                andor.UnregisterFeatureCallback(at_feature, self._c_callback, 0)
+                lowlevel.UnregisterFeatureCallback(at_feature, self._c_callback, 0)
 
     def get_aoi(self):
         '''Convenience wrapper around the aoi_left, aoi_top, aoi_width, aoi_height
@@ -219,8 +220,8 @@ class Camera:
         '''Send software trigger.  Causes an exposure to be acquired and eventually
         written to a queued buffer when an acquisition sequence is in progress and
         trigger_mode is 'Software'.'''
-        andor.Command('SoftwareTrigger')
+        lowlevel.Command('SoftwareTrigger')
 
     def reset_timestamp(self):
         '''Reset current_timestamp to 0.'''
-        andor.Command('TimestampClockReset')
+        lowlevel.Command('TimestampClockReset')

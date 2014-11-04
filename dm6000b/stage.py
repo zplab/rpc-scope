@@ -22,7 +22,7 @@
 #
 # Authors: Zach Pincus, Erik Hvatum
 
-from rpc_acquisition import message_device
+from . import stand
 
 GET_CONVERSION_FACTOR_X = 72034
 GET_CONVERSION_FACTOR_Y = 73034
@@ -37,7 +37,7 @@ INIT_X = 72020
 INIT_Y = 73020
 INIT_Z = 71020
 
-class Stage(message_device.LeicaAsyncDevice):
+class Stage(stand.DM6000Device):
     def _setup_device(self):
         self._x_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_X).response) / 1000
         self._y_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_Y).response) / 1000
@@ -59,14 +59,17 @@ class Stage(message_device.LeicaAsyncDevice):
     def set_x(self, x):
         "Set x-axis position in mm"
         self._set_pos(x, self._x_mm_per_count, POS_ABS_X)
+        self._update_property('x', x)
     
     def set_y(self, y):
         "Set y-axis position in mm"
         self._set_pos(y, self._y_mm_per_count, POS_ABS_Y)
+        self._update_property('y', y)
     
     def set_z(self, z):
         "Set z-axis position in mm"
         self._set_pos(z, self._z_mm_per_count, POS_ABS_Z)
+        self._update_property('z', z)
     
 
     def get_position(self):

@@ -73,7 +73,7 @@ Could add syntax for default value handling.
 """
 
 import ctypes
-import pyparsing
+from . import pyparsing
 
 # Crappy BNF grammar for annotated C prototypes
 # <identifier> ::= _a-zA-Z[_a-zA-Z0-9]*   -- variable or type name

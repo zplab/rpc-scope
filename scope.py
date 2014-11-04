@@ -1,30 +1,28 @@
-from rpc_acquisition import message_device
-from rpc_acquisition import message_manager
-from rpc_acquisition.dm6000b import illumination_axes
-from rpc_acquisition.dm6000b import objective_turret
-from rpc_acquisition.dm6000b import stand
-from rpc_acquisition.dm6000b import stage
-from rpc_acquisition.andor import (andor, camera)
+from . import messaging
+from . import dm6000b
+from . import andor
+from . import io_tool
+from . import spectra_x
+from . import tl_lamp
 
+from . import scope_configuration as config
 
-SCOPE_PORT = '/dev/ttyScope'
-SCOPE_BAUD = 115200
-SCOPE_CAMERA = 'ZYLA-5.5-CL3'
-
-class Scope(message_device.AsyncDeviceNamespace):
+class Scope(messaging.message_device.AsyncDeviceNamespace):
     def __init__(self, property_server, verbose=False):
         super().__init__()
-        self._message_manager = message_manager.LeicaMessageManager(SCOPE_PORT, SCOPE_BAUD, verbose=verbose)
-
-        self.il = illumination_axes.IL(self._message_manager)
-        self.tl = illumination_axes.TL(self._message_manager)
-        self.nosepiece = objective_turret.ObjectiveTurret(self._message_manager)
-        self.stage = stage.Stage(self._message_manager)
-        self.stand = stand.Stand(self._message_manager)
-
-        # TODO: add camera object (non-async) and whatever else we have 
-        # plugged into the scope. IOTool box, maybe.
-        # The lumencor and LED controls will be stuffed into IL and TL.
+        message_manager = messaging.message_manager.LeicaMessageManager(config.Stand.SERIAL_PORT, config.Stand.SERIAL_BAUD, verbose=verbose)
         
-        andor.initialize(SCOPE_CAMERA)
-        self.camera = camera.Camera(property_server)
+        self.iotool = io_tool.IOTool(config.IOTool.SERIAL_PORT)
+        
+        self.il = dm6000b.illumination_axes.IL(message_manager, property_server, property_prefix='scope.il.')
+        self.il.spectra_x = spectra_x.SpectraX(config.SpectraX.SERIAL_PORT, config.SpectraX.SERIAL_BAUD, 
+            iotool, property_server, property_prefix='scope.il.spectra_x.')
+        
+        self.tl = dm6000b.illumination_axes.TL(message_manager, property_server, property_prefix='scope.tl.')
+        self.tl.lamp = tl_lamp.TL_Lamp(iotool, property_server, property_prefix='scope.tl.lamp.')
+        
+        self.nosepiece = dm6000b.objective_turret.ObjectiveTurret(self._message_manager, property_server, property_prefix='scope.nosepiece.')
+        self.stage = dm6000b.stage.Stage(message_manager, property_server, property_prefix='scope.stage.')
+        self.stand = dm6000b.stand.Stand(message_manager, property_server, property_prefix='scope.stand.')
+
+        self.camera = andor.camera.Camera(property_server, property_prefix='scope.camera.')

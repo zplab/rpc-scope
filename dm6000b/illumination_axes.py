@@ -22,8 +22,8 @@
 #
 # Authors: Erik Hvatum, Zach Pincus
 
-from rpc_acquisition import message_device
-from rpc_acquisition.enumerated_properties import DictProperty
+from . import stand
+from .. import enumerated_properties
 
 
 # 77032 is an unusual command in that two outstanding instances issued with
@@ -49,7 +49,7 @@ GET_MAX_POS_IL_TURRET = 78032
 POS_ABS_KOND = 81022
 GET_POS_KOND = 81023
 
-class FilterCube(DictProperty):
+class FilterCube(enumerated_properties.DictProperty):
     def __init__(self, il):
         self._il = il
         super().__init__()
@@ -77,7 +77,7 @@ class FilterCube(DictProperty):
     def _write(self, value):
         response = self._il.send_message(POS_ABS_IL_TURRET, value, intent="set filter turret position")
 
-class _ShutterDevice(message_device.LeicaAsyncDevice):
+class _ShutterDevice(stand.DM6000Device):
     def get_shutter_open(self):
         '''True: shutter open, False: shutter closed.'''
         shutter_open = self.send_message(GET_SHUTTER_LAMP, async=False, intent="get shutter openedness").response.split(' ')[self._shutter_idx]
@@ -92,11 +92,7 @@ class _ShutterDevice(message_device.LeicaAsyncDevice):
 class IL(_ShutterDevice):
     '''IL represents an interface into elements used in Incident Light (Fluorescence) mode.'''
     _shutter_idx = 1
-    # TODO: add filter cube position control, DIC fine shearing, IL aperture control (size 0-6 or whatever / circle vs. square),
-    # and lumencor control, both as a 'lumencor' instance variable of a lumencor-controlling class,
-    # and as one or two convenience functions exposed at this level -- probably something that like 
-    # enable_lamps(uv=None, teal=None [...]), and lamp_power(uv=None [...]), where you can control
-    # all lamps at once. ('None' would mean don't change the state of that lamp).
+    # TODO: add filter cube position control, DIC fine shearing, IL aperture control (size 0-6 or whatever / circle vs. square)
     def _setup_device(self):
         self.filter_cube = FilterCube(self)
 
@@ -113,4 +109,4 @@ class TL(_ShutterDevice):
     def set_condenser_retracted(self, retracted):
         response = self.send_message(POS_ABS_KOND, int(not retracted), intent="set condenser position")
 
-    # TODO: add control over field and aperture diaphragms and transmitted LED enable and power.
+    # TODO: add control over field and aperture diaphragms.

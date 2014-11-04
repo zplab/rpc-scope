@@ -22,14 +22,24 @@
 #
 # Authors: Erik Hvatum, Zach Pincus
 
-from rpc_acquisition import message_device
-from rpc_acquisition.dm6000b import microscopy_method_names
+from .. import messaging
+from . import microscopy_method_names
 
 GET_ALL_METHODS = 70026
 GET_ACT_METHOD = 70028
 SET_ACT_METHOD = 70029
 
-class Stand(message_device.LeicaAsyncDevice):
+class DM6000Device(messaging.message_device.LeicaAsyncDevice):
+    def __init__(message_manager, property_server=None, property_prefix=''):
+        super().__init__(message_manager)
+        self._property_server = property_server
+        self._property_prefix = property_prefix    
+
+    def _update_property(self, name, value):
+        if self.property_server:
+            self._property_server.update_property(self._property_prefix+name, value)
+            
+class Stand(DM6000Device):
     def get_all_microscopy_methods(self):
         '''Returns a dict of microscopy method names to bool values indicating whether the associated
         microscopy method is available.'''

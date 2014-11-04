@@ -1,6 +1,6 @@
 import threading
 import collections
-from rpc_acquisition import smart_serial
+from . import smart_serial
 
 class MessageManager(threading.Thread):
     """Base class for managing messages and responses sent to/from a 
@@ -127,26 +127,21 @@ class SerialMessageManager(MessageManager):
                     (otherwise must set self.running to False to quit)"""
         # need a timeout on the serial port so that _receive_message can 
         # occasionally check its 'running' attribute to decide if it needs to return.
-        self.serialport = smart_serial.Serial(serial_port, baudrate=serial_baud, timeout=5)        
-        self.thread_name = 'SerialMessageManager({})'.format(self.serialport.port)
+        self.serial_port = smart_serial.Serial(serial_port, baudrate=serial_baud, timeout=5)        
+        self.thread_name = 'SerialMessageManager({})'.format(self.serial_port.port)
         self.response_terminator = response_terminator
         super().__init__(verbose, daemon)
     
     def _send_message(self, message):
         if type(message) != bytes:
             message = bytes(message, encoding='ascii')
-        self.serialport.write(message)
+        self.serial_port.write(message)
     
     def _receive_message(self):
         while self.running:
-            response = self.serialport.read_until(self.response_terminator)
+            response = self.serial_port.read_until(self.response_terminator)
             if response: # empty response = timeout
                 return str(response[:-len(self.response_terminator)], encoding='ascii')
-
-class EchoMessageManager(SerialMessageManager):
-    """MessageManager subclass for debugging: the response key is the whole response"""
-    def _generate_response_key(self, response):
-        return response
 
 class LeicaMessageManager(SerialMessageManager):
     """MessageManager subclass appropriate for routing messages from Leica API"""
