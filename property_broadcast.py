@@ -34,7 +34,7 @@ class PropertyServer:
     def __init__(self, verbose=False):
         self.properties = {}
         self.verbose = verbose
-        
+
     def add_property(self, property_name, value):
         """Add a named property and provide an initial value.
         Returns a callback to call when the property's value has changed."""

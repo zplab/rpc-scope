@@ -22,8 +22,123 @@
 #
 # Authors: Erik Hvatum, Zach Pincus
 
+import codecs
+from ism_blob import ISMBlob
+import pickle
+import platform
 from rpc_acquisition.andor import andor
+from rpc_acquisition.andor.andor_image import AndorImage
 from rpc_acquisition.enumerated_properties import DictProperty
+import sys
+import threading
+import zmq
+
+ANDOR_IMAGE_SERVER_PORT = 'tcp://127.0.0.1:6003'
+ANDOR_IMAGE_SERVER_NOTIFICATION_PORT  = 'tcp://127.0.0.1:6004'
+
+class AndorImageServer:
+    def __init__(self, camera):
+        self.camera = camera
+
+class LocalAndorImageServer(AndorImageServer):
+    def __init__(self, camera):
+        AndorImageServer.__init__(self, camera)
+
+class ZMQAndorImageServer(threading.Thread):
+    def __init__(self, camera, context):
+        self.camera = camera
+        self.context = context
+        self._rep_socket = self.context.socket(zmq.REP)
+        self._rep_socket.bind(ANDOR_IMAGE_SERVER_PORT)
+        self._pub_socket = self.context.socket(zmq.PUB)
+        self._pub_socket.set_hwm(1)
+        self._pub_socket.bind(ANDOR_IMAGE_SERVER_NOTIFICATION_PORT)
+        self._pub_lock = threading.Lock()
+        AndorImageServer.__init__(self, camera)
+        threading.Thread.__init__(self, name='ZMQAndorImageServer', daemon=True)
+        self._msg_handlers = {
+            'stop' : self._on_stop,
+            'get newest' : self._on_get_newest,
+            'got' : self._on_got
+        }
+        self._newest = None
+        self._newest_lock = threading.Lock()
+        self._on_wire = {}
+        self.start()
+
+    def run(self):
+        continue_running = True
+        print('run')
+        while continue_running:
+            msg = self._rep_socket.recv_json()
+            print(msg)
+            req = msg['req']
+            handler = self._msg_handlers.get(req, self._unknown_req)
+            continue_running = handler(msg)
+        print('ZMQAndorImageServer.run exiting')
+
+    def notify_of_new_image(self, andor_image):
+        with self._newest_lock:
+            self._newest = andor_image
+        with self._pub_lock:
+            self._pub_socket.send_string('new image')
+
+    def _unknown_req(self, msg):
+        sys.stderr.write('Received unknown request string "{}".'.format(msg['req']))
+        sys.stderr.flush()
+        rmsg = {
+            'rep' : 'ERROR',
+            'error' : 'Unknown request string',
+            'req' : msg['req']
+        }
+        self._rep_socket.send_json(rmsg)
+        return True
+
+    def _on_stop(self, _):
+        with self._pub_lock:
+            self._pub_socket.send_string('stopping')
+        self.rep_socket.send_json({'rep' : 'stopping'})
+        return False
+
+    def _on_get_newest(self, msg):
+        with self._newest_lock:
+            newest = self._newest
+        if newest is None:
+            self._rep_socket.send_json({'rep' : 'none available'})
+        else:
+            if False and msg['node'] != '' and msg['node'] == platform.node():
+                print("msg['node'] != '' and msg['node'] == platform.node()")
+                rmsg = {
+                    'rep' : 'ismb image',
+                    'ismb_name' : newest.ismb.name,
+                    'shape' : newest.im.shape
+                    }
+                self._rep_socket.send_json(rmsg)
+                if newest.ismb.name in self._on_wire:
+                    self._on_wire[newest.ismb.name][1] += 1
+                else:
+                    self._on_wire[newest.ismb.name] = [newest, 1]
+                print(self._on_wire)
+            else:
+                rmsg = {
+                    'rep' : 'pickled image',
+                    'pickled image' : codecs.encode(pickle.dumps(newest.im), 'base64').decode('ascii')
+                }
+                self._rep_socket.send_json(rmsg)
+        return True
+
+    def _on_got(self, msg):
+        ismb_name = msg['ismb_name']
+        if ismb_name in self._on_wire:
+            onwire = self._on_wire[ismb_name]
+            onwire[1] -= 1
+            if onwire[1] == 0:
+                del self._on_wire[ismb_name]
+        else:
+            sys.stderr.write('ismb_name "{}" in got request absent from _on_wire dict.'.format(ismb_name))
+            sys.stderr.flush()
+        self._rep_socket.send_json({'rep' : 'ok'})
+        return True
 
 class ReadOnly_AT_Enum(DictProperty):
     def __init__(self, feature):
@@ -57,7 +172,10 @@ class Camera:
 
     def __init__(self, property_server=None):
         self._callback_properties = {}
-        
+
+        # Expose some certain camera properties presented by the Andor API more or less directly,
+        # the only transformation being translation of enumeration indexes to descriptive strings
+        # for convenience
         self._add_enum('AuxiliaryOutSource', 'auxiliary_out_source')
         self._add_enum('AOIBinning', 'binning')
         self._add_enum('BitDepth', 'bit_depth', readonly=True)
@@ -69,6 +187,7 @@ class Camera:
         self._add_enum('TriggerMode', 'trigger_mode')
         self._add_enum('TemperatureStatus', 'temperature_status', readonly=True)
         
+        # Directly expose certain plain camera properties from Andor API
         self._add_property('AccumulateCount', 'accumulate_count', 'Int')
         self._add_property('AOIHeight', 'aoi_height', 'Int')
         self._add_property('AOILeft', 'aoi_left', 'Int')
@@ -80,6 +199,7 @@ class Camera:
         self._add_property('CameraAcquiring', 'is_acquiring', 'Bool', readonly=True)
         self._add_property('CameraModel', 'model_name', 'String', readonly=True)
         self._add_property('ExposureTime', 'exposure_time', 'Float')
+        self._add_property('ImageSizeBytes', 'image_byte_count', 'Int')
         self._add_property('InterfaceType', 'interface_type', 'String', readonly=True)
         self._add_property('IOInvert', 'selected_io_pin_inverted', 'Bool')
         self._add_property('MetadataEnable', 'metadata_enabled', 'Bool')
@@ -90,7 +210,10 @@ class Camera:
         self._add_property('SpuriousNoiseFilter', 'spurious_noise_filter_enabled', 'Bool')
         self._add_property('TimestampClock', 'current_timestamp', 'Int', readonly=True)
         self._add_property('TimestampClockFrequency', 'timestamp_ticks_per_second', 'Int', readonly=True)
-#       self._add_property('', '', '')
+
+        # Andor API commands and also abstractions not corresponding directly to any one Andor API
+        # camera property are implemented as member functions without a leading _.
+
 
         # Sensor cooling reduces image noise, improving the quality of results, at the cost of
         # supplying power to the Peltier junction unit within the camera that serves to cool the
@@ -112,6 +235,8 @@ class Camera:
         self._add_enum('FanSpeed', 'fan', readonly=True)
         self._add_property('SensorCooling', 'sensor_cooling_enabled', 'Bool', readonly=True)
 
+        self._live_mode_enabled = False
+
         self._property_server = property_server
         if property_server:
             self._c_callback = andor.FeatureCallback(self._andor_callback)
@@ -119,6 +244,11 @@ class Camera:
             for at_feature in self._callback_properties.keys():
                 andor.RegisterFeatureCallback(at_feature, self._c_callback, 0)
             self._serve_properties = True
+
+            self._publish_live_mode_enabled = self._property_server.add_property(self._prefix + 'live_mode_enabled',
+                                                                                 self._live_mode_enabled)
+        else:
+            self._publish_live_mode_enabled = None
 
         andor.SetEnumString('FanSpeed', 'On')
         if andor.GetEnumStringByIndex('FanSpeed', andor.GetEnumIndex('FanSpeed')) != 'On':
@@ -150,7 +280,7 @@ class Camera:
             def setter(value):
                 andor_setter(at_feature, value)
             setattr(self, 'set_'+py_name, setter)
-            
+
     def _andor_callback(self, camera_handle, at_feature, context):
         if self._serve_properties:
             getter, py_name = self._callback_properties[at_feature]
@@ -161,6 +291,10 @@ class Camera:
         if self._property_server:
             for at_feature in self._callback_properties.keys():
                 andor.UnregisterFeatureCallback(at_feature, self._c_callback, 0)
+            self._andor_image_server_req.send_string('stop')
+            if self._andor_image_server_req.recv_string() != 'stopping':
+                raise RuntimeError('ZMQAndorImageServer rejected stop command.')
+            self._andor_image_server.join()
 
     def get_aoi(self):
         '''Convenience wrapper around the aoi_left, aoi_top, aoi_width, aoi_height
@@ -215,7 +349,7 @@ class Camera:
         for key, value, delta in deltas:
             getattr(self, 'set_' + key)(value)
 
-    def emit_software_trigger(self):
+    def software_trigger(self):
         '''Send software trigger.  Causes an exposure to be acquired and eventually
         written to a queued buffer when an acquisition sequence is in progress and
         trigger_mode is 'Software'.'''
@@ -224,3 +358,12 @@ class Camera:
     def reset_timestamp(self):
         '''Reset current_timestamp to 0.'''
         andor.Command('TimestampClockReset')
+
+    def get_live_mode_enabled(self):
+        return self._live_mode_enabled
+
+    def set_live_mode_enabled(self, live_mode_enabled):
+        if live_mode_enabled != self._live_mode_enabled:
+            self._live_mode_enabled = live_mode_enabled
+            if self._publish_live_mode_enabled is not None:
+                self._publish_live_mode_enabled(self._live_mode_enabled)

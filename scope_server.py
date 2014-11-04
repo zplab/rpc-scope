@@ -2,11 +2,13 @@ from rpc_acquisition import simple_rpc
 from rpc_acquisition import property_broadcast
 import zmq
 
-from rpc_acquisition.scope import Scope
-
 RPC_PORT = 'tcp://127.0.0.1:6000'
 RPC_INTERRUPT_PORT = 'tcp://127.0.0.1:6001'
 PROPERTY_PORT = 'tcp://127.0.0.1:6002'
+ANDOR_IMAGE_SERVER_PORT = 'tcp://127.0.0.1:6003'
+ANDOR_IMAGE_SERVER_NOTIFICATION_PORT  = 'tcp://127.0.0.1:6004'
+
+from rpc_acquisition.scope import Scope
 
 def server_main(rpc_port=None, rpc_interrupt_port=None, property_port=None, verbose=False, context=None):
     if rpc_port is None:

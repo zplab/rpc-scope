@@ -9,6 +9,7 @@
 			Name="andor"
 			Filters="">
 			<F N="andor/andor.py"/>
+			<F N="andor/andor_image.py"/>
 			<F N="andor/camera.py"/>
 			<F N="andor/make_andor.py"/>
 			<F N="andor/output_ctypes.py"/>
@@ -24,6 +25,7 @@
 			<F N="dm6000b/stage.py"/>
 			<F N="dm6000b/stand.py"/>
 		</Folder>
+		<F N="andor/client.py"/>
 		<F N="echo_device.py"/>
 		<F N="enumerated_properties.py"/>
 		<F N="io_sequencer.py"/>
