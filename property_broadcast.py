@@ -2,7 +2,7 @@ import zmq
 import threading
 import collections
 import traceback
-from rpc_acquisition import trie
+from . import trie
 
 class PropertyServer:
     """Server for publishing changes to properties (i.e. (key, value) pairs) to
