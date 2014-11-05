@@ -57,13 +57,11 @@ from ism_blob import ISMBlob
 import pickle
 import platform
 from PyQt5 import Qt
-from rpc_acquisition.andor.andor_image import AndorImage
 import sys
 import threading
 import zmq
-
-ANDOR_IMAGE_SERVER_PORT = 'tcp://127.0.0.1:6003'
-ANDOR_IMAGE_SERVER_NOTIFICATION_PORT  = 'tcp://127.0.0.1:6004'
+from .. import scope_configuration as config
+from .andor_image import AndorImage
 
 class ZMQAndorImageClient(Qt.QObject):
     new_andor_image_received = Qt.pyqtSignal(object)
@@ -92,10 +90,10 @@ class ZMQAndorImageClient_worker(Qt.QObject):
         super().__init__()
         self._context = context
         self._req = self._context.socket(zmq.REQ)
-        self._req.connect(ANDOR_IMAGE_SERVER_PORT)
+        self._req.connect(config.Camera.IMAGE_SERVER_PORT)
         self._sub = self._context.socket(zmq.SUB)
         self._sub.set_hwm(1)
-        self._sub.connect(ANDOR_IMAGE_SERVER_NOTIFICATION_PORT)
+        self._sub.connect(config.Camera.IMAGE_SERVER_NOTIFICATION_PORT)
         self._sub.setsockopt(zmq.SUBSCRIBE, b'')
         self._exit_requested_lock = threading.Lock()
         self._exit_requested = False

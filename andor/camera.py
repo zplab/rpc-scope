@@ -33,7 +33,7 @@ import zmq
 from .. import enumerated_properties
 from . import lowlevel
 from .. import scope_configuration as config
-from rpc_acquisition.andor.andor_image import AndorImage
+from .andor_image import AndorImage
 
 class AndorImageServer:
     def __init__(self, camera):
