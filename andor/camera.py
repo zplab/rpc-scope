@@ -23,6 +23,7 @@
 # Authors: Erik Hvatum, Zach Pincus
 
 import codecs
+import ctypes
 from ism_blob import ISMBlob
 import pickle
 import platform
@@ -35,9 +36,19 @@ from . import lowlevel
 from .. import scope_configuration as config
 from .andor_image import AndorImage
 
+def _async_raise(tid, excobj):
+    res = ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_long(tid), ctypes.py_object(excobj))
+    if res == 0:
+        raise ValueError("nonexistent thread id")
+    elif res > 1:
+        # """if it returns a number greater than one, you're in trouble, 
+        # and you should call it again with exc=NULL to revert the effect"""
+        ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_long(tid), None)
+        raise SystemError("PyThreadState_SetAsyncExc failed")
+
 class AndorImageServer:
     def __init__(self, camera):
-        self.camera = camera
+        self.camera = weakref.proxy(camera)
 
 class LocalAndorImageServer(AndorImageServer):
     def __init__(self, camera):
@@ -45,7 +56,6 @@ class LocalAndorImageServer(AndorImageServer):
 
 class ZMQAndorImageServer(threading.Thread):
     def __init__(self, camera, context):
-        self.camera = weakref.proxy(camera)
         self.context = context
         self._rep_socket = self.context.socket(zmq.REP)
         self._rep_socket.bind(config.Camera.IMAGE_SERVER_PORT)
@@ -54,7 +64,7 @@ class ZMQAndorImageServer(threading.Thread):
         self._pub_socket.bind(config.Camera.IMAGE_SERVER_NOTIFICATION_PORT)
         self._pub_lock = threading.Lock()
         AndorImageServer.__init__(self, camera)
-        threading.Thread.__init__(self, name='ZMQAndorImageServer', daemon=True)
+        threading.Thread.__init__(self, name='ZMQAndorImageServer', daemon=False)
         self._msg_handlers = {
             'stop' : self._on_stop,
             'get newest' : self._on_get_newest,
@@ -62,27 +72,19 @@ class ZMQAndorImageServer(threading.Thread):
         }
         self._newest = None
         self._newest_lock = threading.Lock()
-        self._on_wire = {}
-        self._stop_requested_lock = threading.Lock()
-        self._stop_requested = False
+        self._stop_requested = threading.Event()
         self.start()
 
     def run(self):
         continue_running = True
-        print('run')
         while continue_running:
-            print('loop')
-            with self._stop_requested_lock:
-                if self._stop_requested:
-                    print('stop requested')
-                    break
+            if self._stop_requested.is_set():
+                break
             if self._rep_socket.poll(1000):
                 msg = self._rep_socket.recv_json(zmq.NOBLOCK)
-                print(msg)
                 req = msg['req']
                 handler = self._msg_handlers.get(req, self._unknown_req)
                 continue_running = handler(msg)
-        print('ZMQAndorImageServer.run exiting')
 
     def notify_of_new_image(self, andor_image):
         with self._newest_lock:
@@ -91,11 +93,10 @@ class ZMQAndorImageServer(threading.Thread):
             self._pub_socket.send_string('new image')
 
     def stop(self):
-        with self._stop_requested_lock:
-            self._stop_requested = True
+        self._stop_requested.set()
 
     def _unknown_req(self, msg):
-        sys.stderr.write('Received unknown request string "{}".'.format(msg['req']))
+        sys.stderr.write('Warning: Received unknown request string "{}".'.format(msg['req']))
         sys.stderr.flush()
         rmsg = {
             'rep' : 'ERROR',
@@ -118,7 +119,6 @@ class ZMQAndorImageServer(threading.Thread):
             self._rep_socket.send_json({'rep' : 'none available'})
         else:
             if msg['node'] != '' and msg['node'] == platform.node():
-                print("msg['node'] != '' and msg['node'] == platform.node()")
                 rmsg = {
                     'rep' : 'ismb image',
                     'ismb_name' : newest.ismb.name,
@@ -129,7 +129,6 @@ class ZMQAndorImageServer(threading.Thread):
                     self._on_wire[newest.ismb.name][1] += 1
                 else:
                     self._on_wire[newest.ismb.name] = [newest, 1]
-                print(self._on_wire)
             else:
                 rmsg = {
                     'rep' : 'pickled image',
@@ -146,10 +145,26 @@ class ZMQAndorImageServer(threading.Thread):
             if onwire[1] == 0:
                 del self._on_wire[ismb_name]
         else:
-            sys.stderr.write('ismb_name "{}" in got request absent from _on_wire dict.'.format(ismb_name))
+            sys.stderr.write('Warning: ismb_name "{}" in got request absent from _on_wire dict.'.format(ismb_name))
             sys.stderr.flush()
         self._rep_socket.send_json({'rep' : 'ok'})
         return True
+
+    def raise_exc(self, excobj):
+        assert self.isAlive(), "thread must be started"
+        for tid, tobj in threading._active.items():
+            if tobj is self:
+                _async_raise(tid, excobj)
+                return
+
+        # the thread was alive when we entered the loop, but was not found 
+        # in the dict, hence it must have been already terminated. should we raise
+        # an exception here? silently ignore?
+
+    def terminate(self):
+        # must raise the SystemExit type, instead of a SystemExit() instance
+        # due to a bug in PyThreadState_SetAsyncExc
+        self.raise_exc(SystemExit)
 
 class ReadOnly_AT_Enum(enumerated_properties.DictProperty):
     def __init__(self, feature):
@@ -301,8 +316,18 @@ class Camera:
         if self._property_server:
             for at_feature in self._callback_properties.keys():
                 lowlevel.UnregisterFeatureCallback(at_feature, self._c_callback, 0)
-            self._andor_image_server.stop()
-            self._andor_image_server.join()
+            if self._andor_image_server.is_alive():
+                self._andor_image_server.stop()
+                self._andor_image_server.join(1)
+                if self._andor_image_server.is_alive():
+                    # self.andor_image_server's thread appears to be unstoppable, so self.andor_image_server's
+                    # reference count will probably never drop to zero, meaning that its member variables will
+                    # also not have their destructors called.  This is a problem if self.andor_image_server has
+                    # any ISMBlobs, which will leak shared memory regions unless properly destroyed.  The
+                    # following line clears any of self.andor_image_server's ISMBlob references that are not
+                    # also held in the call stack of the doomed thread.
+                    sys.stderr.write('Warning: ZMQAndorImageServer thread did not respond to stop request.')
+                    self._andor_image_server._on_wire = {}
 
     def get_aoi(self):
         '''Convenience wrapper around the aoi_left, aoi_top, aoi_width, aoi_height

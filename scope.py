@@ -56,6 +56,6 @@ class Scope(messaging.message_device.AsyncDeviceNamespace):
         
         try:
             self.camera = andor.camera.Camera(property_server, property_prefix='scope.camera.')
-        except AndorException as e:
+        except andor.lowlevel.AndorException as e:
             _print_exception('Could not connect to camera:', e)
             
