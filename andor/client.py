@@ -40,7 +40,10 @@
 #from ism_blob import ISMBlob
 #context=zmq.Context()
 #from rpc_acquisition.andor.camera import ZMQAndorImageServer
-#zais = ZMQAndorImageServer(None, context)
+#class CCCCCCCCCCCCCCCCCCCC:
+#    pass
+#ccccccccccccccccccc = CCCCCCCCCCCCCCCCCCCC()
+#zais = ZMQAndorImageServer(ccccccccccccccccccc, context)
 #from rpc_acquisition.andor.andor_image import AndorImage
 #ismb, im = ISMBlob.create_with_numpy_view('foo', (16,16), numpy.uint16)
 #im[:,:]= numpy.linspace(0, 255, 256).astype(numpy.uint16).reshape((16,16))

@@ -31,6 +31,7 @@ from rpc_acquisition.andor.andor_image import AndorImage
 from rpc_acquisition.enumerated_properties import DictProperty
 import sys
 import threading
+import weakref
 import zmq
 
 ANDOR_IMAGE_SERVER_PORT = 'tcp://127.0.0.1:6003'
@@ -46,7 +47,7 @@ class LocalAndorImageServer(AndorImageServer):
 
 class ZMQAndorImageServer(threading.Thread):
     def __init__(self, camera, context):
-        self.camera = camera
+        self.camera = weakref.proxy(camera)
         self.context = context
         self._rep_socket = self.context.socket(zmq.REP)
         self._rep_socket.bind(ANDOR_IMAGE_SERVER_PORT)
@@ -64,17 +65,25 @@ class ZMQAndorImageServer(threading.Thread):
         self._newest = None
         self._newest_lock = threading.Lock()
         self._on_wire = {}
+        self._stop_requested_lock = threading.Lock()
+        self._stop_requested = False
         self.start()
 
     def run(self):
         continue_running = True
         print('run')
         while continue_running:
-            msg = self._rep_socket.recv_json()
-            print(msg)
-            req = msg['req']
-            handler = self._msg_handlers.get(req, self._unknown_req)
-            continue_running = handler(msg)
+            print('loop')
+            with self._stop_requested_lock:
+                if self._stop_requested:
+                    print('stop requested')
+                    break
+            if self._rep_socket.poll(1000):
+                msg = self._rep_socket.recv_json(zmq.NOBLOCK)
+                print(msg)
+                req = msg['req']
+                handler = self._msg_handlers.get(req, self._unknown_req)
+                continue_running = handler(msg)
         print('ZMQAndorImageServer.run exiting')
 
     def notify_of_new_image(self, andor_image):
@@ -82,6 +91,10 @@ class ZMQAndorImageServer(threading.Thread):
             self._newest = andor_image
         with self._pub_lock:
             self._pub_socket.send_string('new image')
+
+    def stop(self):
+        with self._stop_requested_lock:
+            self._stop_requested = True
 
     def _unknown_req(self, msg):
         sys.stderr.write('Received unknown request string "{}".'.format(msg['req']))
@@ -97,7 +110,7 @@ class ZMQAndorImageServer(threading.Thread):
     def _on_stop(self, _):
         with self._pub_lock:
             self._pub_socket.send_string('stopping')
-        self.rep_socket.send_json({'rep' : 'stopping'})
+        self._rep_socket.send_json({'rep' : 'stopping'})
         return False
 
     def _on_get_newest(self, msg):
@@ -106,7 +119,7 @@ class ZMQAndorImageServer(threading.Thread):
         if newest is None:
             self._rep_socket.send_json({'rep' : 'none available'})
         else:
-            if False and msg['node'] != '' and msg['node'] == platform.node():
+            if msg['node'] != '' and msg['node'] == platform.node():
                 print("msg['node'] != '' and msg['node'] == platform.node()")
                 rmsg = {
                     'rep' : 'ismb image',
@@ -247,6 +260,7 @@ class Camera:
 
             self._publish_live_mode_enabled = self._property_server.add_property(self._prefix + 'live_mode_enabled',
                                                                                  self._live_mode_enabled)
+            self._andor_image_server = ZMQAndorImageServer(self, self._property_server.context)
         else:
             self._publish_live_mode_enabled = None
 
@@ -291,9 +305,7 @@ class Camera:
         if self._property_server:
             for at_feature in self._callback_properties.keys():
                 andor.UnregisterFeatureCallback(at_feature, self._c_callback, 0)
-            self._andor_image_server_req.send_string('stop')
-            if self._andor_image_server_req.recv_string() != 'stopping':
-                raise RuntimeError('ZMQAndorImageServer rejected stop command.')
+            self._andor_image_server.stop()
             self._andor_image_server.join()
 
     def get_aoi(self):
