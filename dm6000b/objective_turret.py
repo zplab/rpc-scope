@@ -22,8 +22,8 @@
 #
 # Authors: Erik Hvatum, Zach Pincus
 
-from rpc_acquisition import message_device
-from rpc_acquisition.dm6000b import microscopy_method_names
+from . import stand
+from . import microscopy_method_names
 
 POS_ABS_OBJ = 76022
 GET_POS_OBJ = 76023
@@ -34,7 +34,7 @@ GET_OBJPAR = 76033
 GET_MIN_POS_OBJ = 76038
 GET_MAX_POS_OBJ = 76039
 
-class ObjectiveTurret(message_device.LeicaAsyncDevice):
+class ObjectiveTurret(stand.DM6000Device):
     '''Note that objective position is reported as 0 when the objective turret is between positions.  The objective
     turret is between positions when it is in the process of responding to a position change request and also when
     manually placed there by physical intervention.'''

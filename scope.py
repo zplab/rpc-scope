@@ -1,30 +1,61 @@
-from rpc_acquisition import message_device
-from rpc_acquisition import message_manager
-from rpc_acquisition.dm6000b import illumination_axes
-from rpc_acquisition.dm6000b import objective_turret
-from rpc_acquisition.dm6000b import stand
-from rpc_acquisition.dm6000b import stage
-from rpc_acquisition.andor import (andor, camera)
+from serial import SerialException
+import traceback
 
+from . import messaging
+from . import dm6000b
+from . import andor
+from . import io_tool
+from . import spectra_x
+from . import tl_lamp
 
-SCOPE_PORT = '/dev/ttyScope'
-SCOPE_BAUD = 115200
-SCOPE_CAMERA = 'ZYLA-5.5-CL3'
+from . import scope_configuration as config
 
-class Scope(message_device.AsyncDeviceNamespace):
+def _print_exception(preamble, e):
+    exception_str = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
+    print(preamble + '\n' + exception_str)
+
+class Namespace:
+    pass
+
+class Scope(messaging.message_device.AsyncDeviceNamespace):
     def __init__(self, property_server, verbose=False):
         super().__init__()
-        self._message_manager = message_manager.LeicaMessageManager(SCOPE_PORT, SCOPE_BAUD, verbose=verbose)
-
-        self.il = illumination_axes.IL(self._message_manager)
-        self.tl = illumination_axes.TL(self._message_manager)
-        self.nosepiece = objective_turret.ObjectiveTurret(self._message_manager)
-        self.stage = stage.Stage(self._message_manager)
-        self.stand = stand.Stand(self._message_manager)
-
-        # TODO: add camera object (non-async) and whatever else we have 
-        # plugged into the scope. IOTool box, maybe.
-        # The lumencor and LED controls will be stuffed into IL and TL.
         
-        andor.initialize(SCOPE_CAMERA)
-        self.camera = camera.Camera(property_server)
+        if property_server:
+            self.rebroadcast_properties = property_server.rebroadcast_properties
+        
+        try:
+            message_manager = messaging.message_manager.LeicaMessageManager(config.Stand.SERIAL_PORT, config.Stand.SERIAL_BAUD, verbose=verbose)
+        except SerialException as e:
+            message_manager = None
+            _print_exception('Could not connect to microscope:', e)
+        
+        if message_manager:
+            self.nosepiece = dm6000b.objective_turret.ObjectiveTurret(message_manager, property_server, property_prefix='scope.nosepiece.')
+            self.stage = dm6000b.stage.Stage(message_manager, property_server, property_prefix='scope.stage.')
+            self.stand = dm6000b.stand.Stand(message_manager, property_server, property_prefix='scope.stand.')
+            self.il = dm6000b.illumination_axes.IL(message_manager, property_server, property_prefix='scope.il.')
+            self.tl = dm6000b.illumination_axes.TL(message_manager, property_server, property_prefix='scope.tl.')
+
+        try:
+            print('doing self.iotool = io_tool.IOTool(config.IOTool.SERIAL_PORT)')
+            self.iotool = io_tool.IOTool(config.IOTool.SERIAL_PORT)
+            has_iotool = True
+        except SerialException as e:
+            has_iotool = False
+            _print_exception('Could not connect to IOTool box:', e)
+        finally:
+            print('did self.iotool = io_tool.IOTool(config.IOTool.SERIAL_PORT)')
+        
+        if not message_manager and has_iotool:
+            self.il = Namespace()
+            self.il.spectra_x = spectra_x.SpectraX(config.SpectraX.SERIAL_PORT, config.SpectraX.SERIAL_BAUD, 
+                iotool, property_server, property_prefix='scope.il.spectra_x.')
+            self.tl = Namespace()
+            self.tl.lamp = tl_lamp.TL_Lamp(iotool, property_server, property_prefix='scope.tl.lamp.')
+        
+        try:
+            self.camera = andor.camera.Camera(property_server, property_prefix='scope.camera.')
+        except AndorException as e:
+            _print_exception('Could not connect to camera:', e)
+            

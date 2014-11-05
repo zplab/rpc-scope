@@ -1,46 +1,39 @@
-from rpc_acquisition import simple_rpc
-from rpc_acquisition import property_broadcast
 import zmq
-
-RPC_PORT = 'tcp://127.0.0.1:6000'
-RPC_INTERRUPT_PORT = 'tcp://127.0.0.1:6001'
-PROPERTY_PORT = 'tcp://127.0.0.1:6002'
-ANDOR_IMAGE_SERVER_PORT = 'tcp://127.0.0.1:6003'
-ANDOR_IMAGE_SERVER_NOTIFICATION_PORT  = 'tcp://127.0.0.1:6004'
-
-from rpc_acquisition.scope import Scope
+from . import simple_rpc
+from . import scope
+from . import scope_configuration as config
 
 def server_main(rpc_port=None, rpc_interrupt_port=None, property_port=None, verbose=False, context=None):
     if rpc_port is None:
-        rpc_port = RPC_PORT
+        rpc_port = config.Server.RPC_PORT
     if rpc_interrupt_port is None:
-        rpc_interrupt_port = RPC_INTERRUPT_PORT
+        rpc_interrupt_port = config.Server.RPC_INTERRUPT_PORT
     if property_port is None:
-        property_port = PROPERTY_PORT
+        property_port = config.Server.PROPERTY_PORT
 
     if context is None:
         context = zmq.Context()
 
-    property_server = property_broadcast.ZMQServer(property_port, context=context, verbose=verbose)
+    property_server = simple_rpc.property_server.ZMQServer(property_port, context=context, verbose=verbose)
 
-    scope = Scope(property_server, verbose=verbose)
+    scope_ = scope.Scope(property_server, verbose=verbose)
 
-    interrupter = simple_rpc.ZMQInterrupter(rpc_interrupt_port, context=context)
-    rpc_server = simple_rpc.ZMQServer(scope, interrupter, rpc_port, context=context, verbose=verbose)
+    interrupter = simple_rpc.rpc_server.ZMQInterrupter(rpc_interrupt_port, context=context)
+    rpc_server = simple_rpc.rpc_server.ZMQServer(scope_, interrupter, rpc_port, context=context, verbose=verbose)
     rpc_server.run()
 
 def rpc_client_main(rpc_port=None, rpc_interrupt_port=None):
     if rpc_port is None:
-        rpc_port = RPC_PORT
+        rpc_port = config.Server.RPC_PORT
     if rpc_interrupt_port is None:
-        rpc_interrupt_port = RPC_INTERRUPT_PORT
+        rpc_interrupt_port = config.Server.RPC_INTERRUPT_PORT
         
-    client = simple_rpc.ZMQClient(rpc_port, rpc_interrupt_port)
+    client = simple_rpc.rpc_client.ZMQClient(rpc_port, rpc_interrupt_port)
     scope = client.proxy_namespace()
     return client, scope
 
 def property_client_main(property_port=None):
     if property_port is None:
-        property_port = PROPERTY_PORT
-    client = property_broadcast.ZMQClient(property_port)
+        property_port = config.Server.PROPERTY_PORT
+    client = simple_rpc.property_client.ZMQClient(property_port)
     return client

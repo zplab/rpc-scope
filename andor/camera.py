@@ -26,16 +26,14 @@ import codecs
 from ism_blob import ISMBlob
 import pickle
 import platform
-from . import lowlevel
-from rpc_acquisition.andor.andor_image import AndorImage
-from .. import enumerated_properties
 import sys
 import threading
 import weakref
 import zmq
-
-ANDOR_IMAGE_SERVER_PORT = 'tcp://127.0.0.1:6003'
-ANDOR_IMAGE_SERVER_NOTIFICATION_PORT  = 'tcp://127.0.0.1:6004'
+from .. import enumerated_properties
+from . import lowlevel
+from .. import scope_configuration as config
+from rpc_acquisition.andor.andor_image import AndorImage
 
 class AndorImageServer:
     def __init__(self, camera):
@@ -50,10 +48,10 @@ class ZMQAndorImageServer(threading.Thread):
         self.camera = weakref.proxy(camera)
         self.context = context
         self._rep_socket = self.context.socket(zmq.REP)
-        self._rep_socket.bind(ANDOR_IMAGE_SERVER_PORT)
+        self._rep_socket.bind(config.Camera.IMAGE_SERVER_PORT)
         self._pub_socket = self.context.socket(zmq.PUB)
         self._pub_socket.set_hwm(1)
-        self._pub_socket.bind(ANDOR_IMAGE_SERVER_NOTIFICATION_PORT)
+        self._pub_socket.bind(config.Camera.IMAGE_SERVER_NOTIFICATION_PORT)
         self._pub_lock = threading.Lock()
         AndorImageServer.__init__(self, camera)
         threading.Thread.__init__(self, name='ZMQAndorImageServer', daemon=True)
@@ -177,11 +175,7 @@ class AT_Enum(ReadOnly_AT_Enum):
 
 class Camera:
     '''This class provides an abstraction of the raw Andor API ctypes shim found in
-    rpc_acquisition.andor.lowlevel.
-
-    Note that rpc_acquisition.andor.lowlevel.initialize(..) should be called once before
-    instantiating this class.'''
-    _prefix = 'scope.camera.'
+    rpc_acquisition.andor.lowlevel.'''
 
     def __init__(self, property_server=None, property_prefix=''):
         lowlevel.initialize() # safe to call this multiple times
@@ -260,7 +254,7 @@ class Camera:
                 lowlevel.RegisterFeatureCallback(at_feature, self._c_callback, 0)
             self._serve_properties = True
 
-            self._publish_live_mode_enabled = self._property_server.add_property(self._prefix + 'live_mode_enabled',
+            self._publish_live_mode_enabled = self._property_server.add_property(self._property_prefix + 'live_mode_enabled',
                                                                                  self._live_mode_enabled)
             self._andor_image_server = ZMQAndorImageServer(self, self._property_server.context)
         else:
@@ -285,14 +279,14 @@ class Camera:
 
     def _add_property(self, at_feature, py_name, at_type, readonly=False):
         '''Directly expose numeric or string camera setting.'''
-        andor_getter = getattr(andor, 'Get'+at_type)
+        andor_getter = getattr(lowlevel, 'Get'+at_type)
         def getter():
             return andor_getter(at_feature)
         setattr(self, 'get_'+py_name, getter)
         self._callback_properties[at_feature] = (getter, py_name)
         
         if not readonly:
-            andor_setter = getattr(andor, 'Set'+at_type)
+            andor_setter = getattr(lowlevel, 'Set'+at_type)
             def setter(value):
                 andor_setter(at_feature, value)
             setattr(self, 'set_'+py_name, setter)

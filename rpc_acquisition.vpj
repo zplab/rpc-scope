@@ -8,12 +8,20 @@
 		<Folder
 			Name="andor"
 			Filters="">
-			<F N="andor/andor.py"/>
+			<Folder
+				Name="generate_wrappers"
+				Filters="">
+				<F N="andor/generate_wrappers/make_andor.py"/>
+				<F N="andor/generate_wrappers/output_ctypes.py"/>
+				<F N="andor/generate_wrappers/pyparsing.py"/>
+			</Folder>
+			<F N="andor/__init__.py"/>
 			<F N="andor/andor_image.py"/>
 			<F N="andor/camera.py"/>
-			<F N="andor/make_andor.py"/>
-			<F N="andor/output_ctypes.py"/>
-			<F N="andor/pyparsing.py"/>
+			<F N="andor/client.py"/>
+			<F N="andor/common.py"/>
+			<F N="andor/lowlevel.py"/>
+			<F N="andor/wrapper.py"/>
 		</Folder>
 		<Folder
 			Name="dm6000b"
@@ -25,18 +33,38 @@
 			<F N="dm6000b/stage.py"/>
 			<F N="dm6000b/stand.py"/>
 		</Folder>
-		<F N="andor/client.py"/>
-		<F N="echo_device.py"/>
+		<Folder
+			Name="io_tool"
+			Filters="">
+			<F N="io_tool/__init__.py"/>
+			<F N="io_tool/commands.py"/>
+			<F N="io_tool/io_tool.py"/>
+			<F N="io_tool/pedal_waiter.py"/>
+		</Folder>
+		<Folder
+			Name="messaging"
+			Filters="">
+			<F N="messaging/__init__.py"/>
+			<F N="messaging/message_device.py"/>
+			<F N="messaging/message_manager.py"/>
+			<F N="messaging/smart_serial.py"/>
+		</Folder>
+		<Folder
+			Name="simple_rpc"
+			Filters="">
+			<F N="simple_rpc/__init__.py"/>
+			<F N="simple_rpc/property_client.py"/>
+			<F N="simple_rpc/property_server.py"/>
+			<F N="simple_rpc/rpc_client.py"/>
+			<F N="simple_rpc/rpc_server.py"/>
+			<F N="simple_rpc/trie.py"/>
+		</Folder>
 		<F N="enumerated_properties.py"/>
-		<F N="io_sequencer.py"/>
-		<F N="message_device.py"/>
-		<F N="message_manager.py"/>
-		<F N="property_broadcast.py"/>
 		<F N="scope.py"/>
+		<F N="scope_configuration.py"/>
 		<F N="scope_server.py"/>
-		<F N="simple_rpc.py"/>
-		<F N="smart_serial.py"/>
-		<F N="trie.py"/>
+		<F N="spectra_x.py"/>
+		<F N="tl_lamp.py"/>
 	</Files>
 	<Config
 		Name="Debug"
