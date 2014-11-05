@@ -20,11 +20,11 @@ def server_main(rpc_port=None, rpc_interrupt_port=None, property_port=None, verb
 
     interrupter = simple_rpc.rpc_server.ZMQInterrupter(rpc_interrupt_port, context=context)
     rpc_server = simple_rpc.rpc_server.ZMQServer(scope_, interrupter, rpc_port, context=context, verbose=verbose)
+
     try:
         rpc_server.run()
     except KeyboardInterrupt:
-        print('Exiting gracefully in response to ctrl-c...')
-    scope_.camera._andor_image_server.stop()
+        print('\nExiting gracefully in response to ctrl-c ...')
 
 def rpc_client_main(rpc_port=None, rpc_interrupt_port=None):
     if rpc_port is None:

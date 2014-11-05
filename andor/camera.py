@@ -23,7 +23,6 @@
 # Authors: Erik Hvatum, Zach Pincus
 
 import codecs
-import ctypes
 from ism_blob import ISMBlob
 import pickle
 import platform
@@ -36,25 +35,15 @@ from . import lowlevel
 from .. import scope_configuration as config
 from .andor_image import AndorImage
 
-def _async_raise(tid, excobj):
-    res = ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_long(tid), ctypes.py_object(excobj))
-    if res == 0:
-        raise ValueError("nonexistent thread id")
-    elif res > 1:
-        # """if it returns a number greater than one, you're in trouble, 
-        # and you should call it again with exc=NULL to revert the effect"""
-        ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_long(tid), None)
-        raise SystemError("PyThreadState_SetAsyncExc failed")
-
 class AndorImageServer:
     def __init__(self, camera):
         self.camera = weakref.proxy(camera)
 
 class LocalAndorImageServer(AndorImageServer):
     def __init__(self, camera):
-        AndorImageServer.__init__(self, camera)
+        super().__init__(camera)
 
-class ZMQAndorImageServer(threading.Thread):
+class ZMQAndorImageServer(AndorImageServer):
     def __init__(self, camera, context):
         self.context = context
         self._rep_socket = self.context.socket(zmq.REP)
@@ -63,8 +52,8 @@ class ZMQAndorImageServer(threading.Thread):
         self._pub_socket.set_hwm(1)
         self._pub_socket.bind(config.Camera.IMAGE_SERVER_NOTIFICATION_PORT)
         self._pub_lock = threading.Lock()
-        AndorImageServer.__init__(self, camera)
-        threading.Thread.__init__(self, name='ZMQAndorImageServer', daemon=False)
+        super().__init__(camera)
+        threading.Thread.__init__(self, name='ZMQAndorImageServer', daemon=True)
         self._msg_handlers = {
             'stop' : self._on_stop,
             'get newest' : self._on_get_newest,
@@ -73,27 +62,37 @@ class ZMQAndorImageServer(threading.Thread):
         self._newest = None
         self._newest_lock = threading.Lock()
         self._stop_requested = threading.Event()
-        self.start()
+        self._req_handler_thread = threading.Thread(target=ZMQAndorImageServer._req_handler_threadproc,
+                                                    args=(weakref.proxy(self),),
+                                                    name='ZMQAndorImageServer req handler',
+                                                    daemon=True)
+        self._req_handler_thread = threading.Thread(target=ZMQAndorImageServer._req_handler_threadproc,
+                                                    args=(weakref.proxy(self),),
+                                                    name='ZMQAndorImageServer live acquisition',
+                                                    daemon=True)
 
-    def run(self):
+    def __del__(self):
+        print('~~~~~~~~~~~~~~~~~~~~~~~~~~~ZMQAndorImageServer.__del__~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+
+    def _req_handler_threadproc(self):
         continue_running = True
         while continue_running:
             if self._stop_requested.is_set():
                 break
-            if self._rep_socket.poll(1000):
+            if self._rep_socket.poll(500):
                 msg = self._rep_socket.recv_json(zmq.NOBLOCK)
                 req = msg['req']
                 handler = self._msg_handlers.get(req, self._unknown_req)
                 continue_running = handler(msg)
+
+    def _live_acquisition_threadproc(self):
+        pass
 
     def notify_of_new_image(self, andor_image):
         with self._newest_lock:
             self._newest = andor_image
         with self._pub_lock:
             self._pub_socket.send_string('new image')
-
-    def stop(self):
-        self._stop_requested.set()
 
     def _unknown_req(self, msg):
         sys.stderr.write('Warning: Received unknown request string "{}".'.format(msg['req']))
@@ -149,22 +148,6 @@ class ZMQAndorImageServer(threading.Thread):
             sys.stderr.flush()
         self._rep_socket.send_json({'rep' : 'ok'})
         return True
-
-    def raise_exc(self, excobj):
-        assert self.isAlive(), "thread must be started"
-        for tid, tobj in threading._active.items():
-            if tobj is self:
-                _async_raise(tid, excobj)
-                return
-
-        # the thread was alive when we entered the loop, but was not found 
-        # in the dict, hence it must have been already terminated. should we raise
-        # an exception here? silently ignore?
-
-    def terminate(self):
-        # must raise the SystemExit type, instead of a SystemExit() instance
-        # due to a bug in PyThreadState_SetAsyncExc
-        self.raise_exc(SystemExit)
 
 class ReadOnly_AT_Enum(enumerated_properties.DictProperty):
     def __init__(self, feature):
@@ -313,22 +296,11 @@ class Camera:
         return lowlevel.AT_CALLBACK_SUCCESS
 
     def __del__(self):
+        print('~~~~~~~~~~~~~~~~~~~~~~~~~~~Camera.__del__~~~~~~~~~~~~~~~~~~~~~~~~~~~')
         if self._property_server:
             for at_feature in self._callback_properties.keys():
                 lowlevel.UnregisterFeatureCallback(at_feature, self._c_callback, 0)
-            if self._andor_image_server.is_alive():
-                self._andor_image_server.stop()
-                self._andor_image_server.join(1)
-                if self._andor_image_server.is_alive():
-                    # self.andor_image_server's thread appears to be unstoppable, so self.andor_image_server's
-                    # reference count will probably never drop to zero, meaning that its member variables will
-                    # also not have their destructors called.  This is a problem if self.andor_image_server has
-                    # any ISMBlobs, which will leak shared memory regions unless properly destroyed.  The
-                    # following line clears any of self.andor_image_server's ISMBlob references that are not
-                    # also held in the call stack of the doomed thread.
-                    sys.stderr.write('Warning: ZMQAndorImageServer thread did not respond to stop request.')
-                    self._andor_image_server._on_wire = {}
-
+                    
     def get_aoi(self):
         '''Convenience wrapper around the aoi_left, aoi_top, aoi_width, aoi_height
         properties.  When setting this property, None elements and omitted entries
