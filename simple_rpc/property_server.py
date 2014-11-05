@@ -30,7 +30,14 @@ class PropertyServer:
     def __init__(self, verbose=False):
         self.properties = {}
         self.verbose = verbose
-        
+    
+    def rebroadcast_properties(self):
+        """Re-send an update about all known property values. Useful for 
+        clients that have just connected and want to learn about the current
+        state."""
+        for property_name, value in self.properties:
+            self._publish_update(property_name, value)
+    
     def add_property(self, property_name, value):
         """Add a named property and provide an initial value.
         Returns a callback to call when the property's value has changed."""

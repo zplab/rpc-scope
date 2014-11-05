@@ -123,10 +123,10 @@ class Camera:
 
         lowlevel.SetEnumString('FanSpeed', 'On')
         if lowlevel.GetEnumStringByIndex('FanSpeed', lowlevel.GetEnumIndex('FanSpeed')) != 'On':
-            raise RuntimeError('Failed to turn on camera fan!')
+            raise lowlevel.AndorError('Failed to turn on camera fan!')
         lowlevel.SetBool('SensorCooling', True)
         if not lowlevel.GetBool('SensorCooling'):
-            raise RuntimeError('Failed to enable sensor cooling!')
+            raise lowlevel.AndorError('Failed to enable sensor cooling!')
 
     def _add_enum(self, at_feature, py_name, readonly=False):
         '''Expose a camera setting presented by the Andor API via GetEnumIndex, 

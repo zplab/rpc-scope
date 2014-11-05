@@ -3,7 +3,7 @@ class TL_Lamp:
         self._iotool = iotool
         self._property_server = property_server
         self._property_prefix = property_prefix
-    
+        self.lamp(enable=False, intensity=255)
     
     def lamp(self, enable=None, intensity=None):
         """Set lamp on/off and brightness values

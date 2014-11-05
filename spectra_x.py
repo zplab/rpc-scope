@@ -37,6 +37,9 @@ class SpectraX:
         self._iotool = iotool
         self._property_server = property_server
         self._property_prefix = property_prefix
+        self.lamp_enable(**{lamp:False for lamp in LAMP_NAMES})
+        self.lamp_intensity(**{lamp:255 for lamp in LAMP_NAMES})
+            
     
     def _lamp_intensity(self, lamp, value):
         assert 0 <= value <= 255
