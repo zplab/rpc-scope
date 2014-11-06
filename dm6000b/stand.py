@@ -36,7 +36,7 @@ class DM6000Device(messaging.message_device.LeicaAsyncDevice):
         self._property_prefix = property_prefix    
 
     def _update_property(self, name, value):
-        if self.property_server:
+        if self._property_server:
             self._property_server.update_property(self._property_prefix+name, value)
             
 class Stand(DM6000Device):
