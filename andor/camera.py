@@ -23,7 +23,9 @@
 # Authors: Erik Hvatum, Zach Pincus
 
 import codecs
+import ctypes
 from ism_blob import ISMBlob
+import numpy
 import pickle
 import platform
 import sys
@@ -35,9 +37,25 @@ from . import lowlevel
 from .. import scope_configuration as config
 from .andor_image import AndorImage
 
+_c_uint8_p = ctypes.POINTER(ctypes.c_uint8)
+
 class AndorImageServer:
     def __init__(self, camera):
         self.camera = weakref.proxy(camera)
+
+    @property
+    def in_live_mode(self):
+        return self._get_in_live_mode()
+
+    @in_live_mode.setter
+    def in_live_mode(self, in_live_mode):
+        self._set_in_live_mode(in_live_mode)
+
+    def _get_in_live_mode(self):
+        raise NotImplementedError()
+
+    def _set_in_live_mode(self, in_live_mode):
+        raise NotImplementedError()
 
 class LocalAndorImageServer(AndorImageServer):
     def __init__(self, camera):
@@ -53,7 +71,6 @@ class ZMQAndorImageServer(AndorImageServer):
         self._pub_socket.bind(config.Camera.IMAGE_SERVER_NOTIFICATION_PORT)
         self._pub_lock = threading.Lock()
         super().__init__(camera)
-        threading.Thread.__init__(self, name='ZMQAndorImageServer', daemon=True)
         self._msg_handlers = {
             'stop' : self._on_stop,
             'get newest' : self._on_get_newest,
@@ -62,33 +79,97 @@ class ZMQAndorImageServer(AndorImageServer):
         self._newest = None
         self._newest_lock = threading.Lock()
         self._stop_requested = threading.Event()
+        self._in_live_mode = False
+        self._in_live_mode_cv = threading.Condition()
+        self._stop_requested = threading.Event()
+        self._im_sequence_number = -1
         self._req_handler_thread = threading.Thread(target=ZMQAndorImageServer._req_handler_threadproc,
                                                     args=(weakref.proxy(self),),
                                                     name='ZMQAndorImageServer req handler',
                                                     daemon=True)
-        self._req_handler_thread = threading.Thread(target=ZMQAndorImageServer._req_handler_threadproc,
-                                                    args=(weakref.proxy(self),),
-                                                    name='ZMQAndorImageServer live acquisition',
-                                                    daemon=True)
+        self._live_acquisition_thread = threading.Thread(target=ZMQAndorImageServer._live_acquisition_threadproc,
+                                                         args=(weakref.proxy(self),),
+                                                         name='ZMQAndorImageServer live acquisition',
+                                                         daemon=True)
+        self._live_acquisition_thread.start()
+        self._req_handler_thread.start()
 
     def __del__(self):
         print('~~~~~~~~~~~~~~~~~~~~~~~~~~~ZMQAndorImageServer.__del__~~~~~~~~~~~~~~~~~~~~~~~~~~~')
 
+    def _get_in_live_mode(self):
+        with self._in_live_mode_cv:
+            return self._in_live_mode
+
+    def _set_in_live_mode(self, in_live_mode):
+        with self._in_live_mode_cv:
+            if in_live_mode != self._in_live_mode:
+                self._in_live_mode = in_live_mode
+                if self._in_live_mode:
+                    self.camera.trigger_mode.set_value('Software')
+                    self.camera.cycle_mode.set_value('Continuous')
+                    lowlevel.Flush()
+                    lowlevel.Command('AcquisitionStart')
+                    self._in_live_mode_cv.notify()
+                else:
+                    lowlevel.Command('AcquisitionStop')
+                    lowlevel.Flush()
+
+    def _live_acquisition_threadproc(self):
+        while not self._stop_requested.is_set():
+            with self._in_live_mode_cv:
+                if not self._in_live_mode:
+                    print('********waiting')
+                    self._in_live_mode_cv.wait()
+                    print('********done waiting')
+                    if not self._in_live_mode:
+                        # Either the user toggled live mode faster than we could respond or a stop
+                        # request has been received.
+                        continue
+            try:
+                # We are in live mode.  Acquire an image.
+                im_bytecount = self.camera.get_image_byte_count()
+                im_bytes_per_pixel = self.camera.get_bytes_per_pixel()
+                im_width = self.camera.get_aoi_width()
+                im_height = self.camera.get_aoi_height()
+                im_row_stride = self.camera.get_aoi_stride()
+                self._im_sequence_number += 1
+                # TODO: parse image metadata if present and trim metadata section & stride alignment buffering
+                aim = AndorImage()
+                print('acquiring {}'.format(self._im_sequence_number))
+                aim.ismb, aim.im = ISMBlob.create_with_numpy_view('ZMQAndorImageServer_{:012}.ismb'.format(self._im_sequence_number),
+                                                                  (int(im_bytecount / im_row_stride), int(im_row_stride / im_bytes_per_pixel)),
+                                                                  numpy.uint16)
+                if im_bytes_per_pixel == 2:
+                    lowlevel.QueueBuffer(ctypes.cast(aim.ismb.data, _c_uint8_p), im_bytecount)
+                    lowlevel.Command('SoftwareTrigger')
+                    # TODO: limit wait based on exposure time
+                    # TODO: verify that pointer returned matches queued buffer
+                    print('waiting {}'.format(self._im_sequence_number))
+                    lowlevel.WaitBuffer(999999)
+                elif im_bytes_per_pixel == 1.5:
+                    pass
+                else:
+                    raise lowlevel.AndorError('Unsupported bytes per pixel ({}).'.format(im_bytes_per_pixel))
+                print('notifying {}'.format(self._im_sequence_number))
+                self._notify_of_new_image(aim)
+                print('notified {}'.format(self._im_sequence_number))
+            except lowlevel.AndorError as e:
+                # TODO: inform clients of the details of the error.  Currently, the client knows
+                # that live mode exited spontaneously but not why.
+                sys.stderr.write('Exiting live mode due to {}\n'.format(str(e)))
+                sys.stderr.flush()
+                self.camera.set_live_mode_enabled(False)
+
     def _req_handler_threadproc(self):
-        continue_running = True
-        while continue_running:
-            if self._stop_requested.is_set():
-                break
+        while not self._stop_requested.is_set():
             if self._rep_socket.poll(500):
                 msg = self._rep_socket.recv_json(zmq.NOBLOCK)
                 req = msg['req']
                 handler = self._msg_handlers.get(req, self._unknown_req)
-                continue_running = handler(msg)
+                handler(msg)
 
-    def _live_acquisition_threadproc(self):
-        pass
-
-    def notify_of_new_image(self, andor_image):
+    def _notify_of_new_image(self, andor_image):
         with self._newest_lock:
             self._newest = andor_image
         with self._pub_lock:
@@ -103,13 +184,16 @@ class ZMQAndorImageServer(AndorImageServer):
             'req' : msg['req']
         }
         self._rep_socket.send_json(rmsg)
-        return True
 
     def _on_stop(self, _):
         with self._pub_lock:
             self._pub_socket.send_string('stopping')
         self._rep_socket.send_json({'rep' : 'stopping'})
-        return False
+        self._stop_requested.set()
+        # Prod live thread if it's asleep (waiting forever for a request to enter live mode)
+        with self._in_live_mode_cv:
+            if self._in_live_mode:
+                self._in_live_mode_cv.notify()
 
     def _on_get_newest(self, msg):
         with self._newest_lock:
@@ -134,7 +218,6 @@ class ZMQAndorImageServer(AndorImageServer):
                     'pickled image' : codecs.encode(pickle.dumps(newest.im), 'base64').decode('ascii')
                 }
                 self._rep_socket.send_json(rmsg)
-        return True
 
     def _on_got(self, msg):
         ismb_name = msg['ismb_name']
@@ -147,7 +230,6 @@ class ZMQAndorImageServer(AndorImageServer):
             sys.stderr.write('Warning: ismb_name "{}" in got request absent from _on_wire dict.'.format(ismb_name))
             sys.stderr.flush()
         self._rep_socket.send_json({'rep' : 'ok'})
-        return True
 
 class ReadOnly_AT_Enum(enumerated_properties.DictProperty):
     def __init__(self, feature):
@@ -205,9 +287,12 @@ class Camera:
         self._add_property('CameraAcquiring', 'is_acquiring', 'Bool', readonly=True)
         self._add_property('CameraModel', 'model_name', 'String', readonly=True)
         self._add_property('ExposureTime', 'exposure_time', 'Float')
-        self._add_property('ImageSizeBytes', 'image_byte_count', 'Int')
+        self._add_property('FrameCount', 'frame_count', 'Float')
+        self._add_property('FrameRate', 'frame_rate', 'Float')
+        self._add_property('ImageSizeBytes', 'image_byte_count', 'Int', readonly=True)
         self._add_property('InterfaceType', 'interface_type', 'String', readonly=True)
         self._add_property('IOInvert', 'selected_io_pin_inverted', 'Bool')
+        self._add_property('MaxInterfaceTransferRate', 'max_interface_fps', 'Float', readonly=True)
         self._add_property('MetadataEnable', 'metadata_enabled', 'Bool')
         self._add_property('MetadataTimestamp', 'include_timestamp_in_metadata', 'Bool')
         self._add_property('Overlap', 'overlap_enabled', 'Bool')
@@ -241,19 +326,17 @@ class Camera:
         self._add_enum('FanSpeed', 'fan', readonly=True)
         self._add_property('SensorCooling', 'sensor_cooling_enabled', 'Bool', readonly=True)
 
-        self._live_mode_enabled = False
-
         self._property_server = property_server
         self._property_prefix = property_prefix
         if property_server:
             self._c_callback = lowlevel.FeatureCallback(self._andor_callback)
             self._serve_properties = False
-            for at_feature in self._callback_properties.keys():
-                lowlevel.RegisterFeatureCallback(at_feature, self._c_callback, 0)
+            # TODO: figure out which property causes NOTIMPLEMENTED barf in live mode
+#           for at_feature in self._callback_properties.keys():
+#               lowlevel.RegisterFeatureCallback(at_feature, self._c_callback, 0)
             self._serve_properties = True
 
-            self._publish_live_mode_enabled = self._property_server.add_property(self._property_prefix + 'live_mode_enabled',
-                                                                                 self._live_mode_enabled)
+            self._publish_live_mode_enabled = self._property_server.add_property(self._property_prefix + 'live_mode_enabled', False)
             self._andor_image_server = ZMQAndorImageServer(self, self._property_server.context)
         else:
             self._publish_live_mode_enabled = None
@@ -365,10 +448,9 @@ class Camera:
         lowlevel.Command('TimestampClockReset')
 
     def get_live_mode_enabled(self):
-        return self._live_mode_enabled
+        return self._andor_image_server.in_live_mode
 
     def set_live_mode_enabled(self, live_mode_enabled):
-        if live_mode_enabled != self._live_mode_enabled:
-            self._live_mode_enabled = live_mode_enabled
-            if self._publish_live_mode_enabled is not None:
-                self._publish_live_mode_enabled(self._live_mode_enabled)
+        self._andor_image_server.in_live_mode = live_mode_enabled
+        if self._publish_live_mode_enabled is not None:
+            self._publish_live_mode_enabled(live_mode_enabled)

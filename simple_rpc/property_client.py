@@ -1,6 +1,7 @@
-import threading
 import collections
+import threading
 import traceback
+import zmq
 from . import trie
 
 class PropertyClient(threading.Thread):
