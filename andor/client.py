@@ -63,8 +63,11 @@ class ZMQAndorImageClient(Qt.QObject):
         self._listen_for_new_image.connect(self._worker._listen_for_new_image, Qt.Qt.QueuedConnection)
         self._worker_thread.start()
 
+    def __del__(self):
+        print('~~~~~~~~~~~~~~ZMQAndorImageClient')
+
     def stop(self):
-        self._worker.quit()
+        self._worker.request_worker_exit()
 
     def listen_for_new_image(self):
         self._listen_for_new_image.emit()
@@ -81,19 +84,19 @@ class ZMQAndorImageClient_worker(Qt.QObject):
         self._sub.set_hwm(1)
         self._sub.connect(config.Camera.IMAGE_SERVER_NOTIFICATION_PORT)
         self._sub.setsockopt(zmq.SUBSCRIBE, b'')
-        self._exit_requested_lock = threading.Lock()
-        self._exit_requested = False
+        self._exit_requested = threading.Event()
+
+    def __del__(self):
+        print('~~~~~~~~~~~~~~~ZMQAndorImageClient_worker')
 
     def request_worker_exit(self):
-        with self._exit_requested_lock:
-            self._exit_requested = True
+        self._exit_requested.set()
 
     def _listen_for_new_image(self):
         while True:
 #           print('_listen_for_new_image')
-            with self._exit_requested_lock:
-                if self._exit_requested:
-                    break
+            if self._exit_requested.is_set():
+                break
             if self._sub.poll(1000):
                 s = self._sub.recv_string(zmq.NOBLOCK)
 #               print(s)

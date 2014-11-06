@@ -87,16 +87,23 @@ class ZMQAndorImageServer(AndorImageServer):
         self._req_handler_thread = threading.Thread(target=ZMQAndorImageServer._req_handler_threadproc,
                                                     args=(weakref.proxy(self),),
                                                     name='ZMQAndorImageServer req handler',
-                                                    daemon=True)
+                                                    daemon=False)
         self._live_acquisition_thread = threading.Thread(target=ZMQAndorImageServer._live_acquisition_threadproc,
                                                          args=(weakref.proxy(self),),
                                                          name='ZMQAndorImageServer live acquisition',
-                                                         daemon=True)
+                                                         daemon=False)
         self._live_acquisition_thread.start()
         self._req_handler_thread.start()
 
 #   def __del__(self):
 #       print('~~~~~~~~~~~~~~~~~~~~~~~~~~~ZMQAndorImageServer.__del__~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+
+    def stop(self):
+        self._stop_requested.set()
+        # Prod live thread if it's asleep (waiting forever for a request to enter live mode)
+        with self._in_live_mode_cv:
+            if not self._in_live_mode:
+                self._in_live_mode_cv.notify()
 
     def _get_in_live_mode(self):
         with self._in_live_mode_cv:
@@ -124,7 +131,7 @@ class ZMQAndorImageServer(AndorImageServer):
                     self._in_live_mode_cv.wait()
 #                   print('********done waiting')
                     if not self._in_live_mode:
-                        # Either the user toggled live mode faster than we could respond or a stop
+                        # Either the user toggled live mode faster than we could respond, or a stop
                         # request has been received.
                         continue
             try:
@@ -206,11 +213,7 @@ class ZMQAndorImageServer(AndorImageServer):
         with self._pub_lock:
             self._pub_socket.send_string('stopping')
         self._rep_socket.send_json({'rep' : 'stopping'})
-        self._stop_requested.set()
-        # Prod live thread if it's asleep (waiting forever for a request to enter live mode)
-        with self._in_live_mode_cv:
-            if self._in_live_mode:
-                self._in_live_mode_cv.notify()
+        self.stop()
 
     def _on_get_newest(self, msg):
         with self._newest_lock:

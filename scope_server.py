@@ -25,6 +25,8 @@ def server_main(rpc_port=None, rpc_interrupt_port=None, property_port=None, verb
         rpc_server.run()
     except KeyboardInterrupt:
         print('\nExiting gracefully in response to ctrl-c ...')
+    if hasattr(scope_, 'camera'):
+        scope_.camera._andor_image_server.stop()
 
 def rpc_client_main(rpc_port=None, rpc_interrupt_port=None, context=None):
     if rpc_port is None:
