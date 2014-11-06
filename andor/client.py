@@ -23,33 +23,18 @@
 # Authors: Erik Hvatum, Zach Pincus
 
 
-#import zmq
-#context=zmq.Context()
+#from ris_widget._ris_widget import RisWidget;rw=RisWidget();rw.show()
 #from rpc_acquisition.andor.client import ZMQAndorImageClient
 #zaic = ZMQAndorImageClient(context)
-#latest_andor_image = None
+#newest_andor_image = None
 #def new_andor_image_received(andor_image):
-#    global latest_andor_image
-#    latest_andor_image = andor_image
-#    print('new_andor_image_received')
+#    global newest_andor_image
+#    newest_andor_image = andor_image
+#    rw.showImage(andor_image.im)
+#    zaic.listen_for_new_image()
 #zaic.new_andor_image_received.connect(new_andor_image_received)
 #zaic.listen_for_new_image()
-#
-#
-#import zmq
-#from ism_blob import ISMBlob
-#context=zmq.Context()
-#from rpc_acquisition.andor.camera import ZMQAndorImageServer
-#class CCCCCCCCCCCCCCCCCCCC:
-#    pass
-#ccccccccccccccccccc = CCCCCCCCCCCCCCCCCCCC()
-#zais = ZMQAndorImageServer(ccccccccccccccccccc, context)
-#from rpc_acquisition.andor.andor_image import AndorImage
-#ismb, im = ISMBlob.create_with_numpy_view('foo', (16,16), numpy.uint16)
-#im[:,:]= numpy.linspace(0, 255, 256).astype(numpy.uint16).reshape((16,16))
-#andor_image = AndorImage()
-#andor_image.ismb = ismb
-#andor_image.im = im
+#scope.camera.live_mode_enabled = True
 
 
 import codecs

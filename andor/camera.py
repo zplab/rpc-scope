@@ -83,6 +83,7 @@ class ZMQAndorImageServer(AndorImageServer):
         self._in_live_mode_cv = threading.Condition()
         self._stop_requested = threading.Event()
         self._im_sequence_number = -1
+        self._on_wire = {}
         self._req_handler_thread = threading.Thread(target=ZMQAndorImageServer._req_handler_threadproc,
                                                     args=(weakref.proxy(self),),
                                                     name='ZMQAndorImageServer req handler',
@@ -151,7 +152,7 @@ class ZMQAndorImageServer(AndorImageServer):
                     pass
                 else:
                     raise lowlevel.AndorError('Unsupported bytes per pixel ({}).'.format(im_bytes_per_pixel))
-                print('notifying {}'.format(self._im_sequence_number))
+                print('notifying {} ({}) ({})'.format(self._im_sequence_number, aim.im, aim.ismb.name))
                 self._notify_of_new_image(aim)
                 print('notified {}'.format(self._im_sequence_number))
             except lowlevel.AndorError as e:
