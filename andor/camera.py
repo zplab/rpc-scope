@@ -131,6 +131,7 @@ class ZMQAndorImageServer(AndorImageServer):
                 # We are in live mode.  Acquire an image.
                 im_bytecount = self.camera.get_image_byte_count()
                 im_bytes_per_pixel = self.camera.get_bytes_per_pixel()
+                im_encoding = self.camera.pixel_encoding.get_value()
                 im_width = self.camera.get_aoi_width()
                 im_height = self.camera.get_aoi_height()
                 im_row_stride = self.camera.get_aoi_stride()
@@ -141,17 +142,32 @@ class ZMQAndorImageServer(AndorImageServer):
                 aim.ismb, aim.im = ISMBlob.create_with_numpy_view('ZMQAndorImageServer_{:012}.ismb'.format(self._im_sequence_number),
                                                                   (int(im_bytecount / im_row_stride), int(im_row_stride / im_bytes_per_pixel)),
                                                                   numpy.uint16)
-                if im_bytes_per_pixel == 2:
+                if im_encoding in ('Mono16', 'Mono12'):
                     lowlevel.QueueBuffer(ctypes.cast(aim.ismb.data, _c_uint8_p), im_bytecount)
                     lowlevel.Command('SoftwareTrigger')
                     # TODO: limit wait based on exposure time
                     # TODO: verify that pointer returned matches queued buffer
 #                   print('waiting {}'.format(self._im_sequence_number))
                     lowlevel.WaitBuffer(999999)
-                elif im_bytes_per_pixel == 1.5:
-                    pass
+                elif im_encoding == 'Mono12Packed':
+                    # NB: The following line is about 311x faster than im_12 = bytearray(im_bytecount),
+                    # requiring 900ns to make a 5.86 megabyte buffer (280us for bytearray)
+                    im12 = numpy.empty((im_bytecount), numpy.uint8)
+                    c_im12 = im12.ctypes.data_as(_c_uint8_p)
+                    lowlevel.QueueBuffer(c_im12, im_bytecount)
+                    lowlevel.Command('SoftwareTrigger')
+                    # TODO: limit wait based on exposure time
+                    # TODO: verify that pointer returned matches queued buffer
+                    lowlevel.WaitBuffer(999999)
+                    lowlevel.ConvertBuffer(c_im12,
+                                           ctypes.cast(aim.ismb.data, _c_uint8_p),
+                                           im_width,
+                                           im_height,
+                                           im_row_stride,
+                                           'Mono12Packed',
+                                           'Mono16')
                 else:
-                    raise lowlevel.AndorError('Unsupported bytes per pixel ({}).'.format(im_bytes_per_pixel))
+                    raise lowlevel.AndorError('Unsupported pixel encoding ({}).'.format(im_encoding))
 #               print('notifying {} ({}) ({})'.format(self._im_sequence_number, aim.im, aim.ismb.name))
                 self._notify_of_new_image(aim)
 #               print('notified {}'.format(self._im_sequence_number))
@@ -270,6 +286,7 @@ class Camera:
         self._add_enum('BitDepth', 'bit_depth', readonly=True)
         self._add_enum('CycleMode', 'cycle_mode')
         self._add_enum('IOSelector', 'io_selector')
+        self._add_enum('PixelEncoding', 'pixel_encoding', readonly=True)
         self._add_enum('PixelReadoutRate', 'pixel_readout_rate')
         self._add_enum('ElectronicShutteringMode', 'shutter_mode')
         self._add_enum('SimplePreAmpGainControl', 'sensor_gain')
