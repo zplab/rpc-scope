@@ -353,8 +353,8 @@ class Camera:
             self._c_callback = lowlevel.FeatureCallback(self._andor_callback)
             self._serve_properties = False
             # TODO: figure out which property causes NOTIMPLEMENTED barf in live mode
-#           for at_feature in self._callback_properties.keys():
-#               lowlevel.RegisterFeatureCallback(at_feature, self._c_callback, 0)
+            for at_feature in self._callback_properties.keys():
+                lowlevel.RegisterFeatureCallback(at_feature, self._c_callback, 0)
             self._serve_properties = True
 
             self._publish_live_mode_enabled = self._property_server.add_property(self._property_prefix + 'live_mode_enabled', False)
@@ -383,7 +383,15 @@ class Camera:
         '''Directly expose numeric or string camera setting.'''
         andor_getter = getattr(lowlevel, 'Get'+at_type)
         def getter():
-            return andor_getter(at_feature)
+            # Value retrieval fails for certain properties, depending on camera state.  For
+            # example, GetInt('FrameCount') fails with the Andor NOTIMPLEMENTED error code
+            # when CycleMode is Continuous.  A camera property getter response or change
+            # notification of value None may indicate that the property is not applicable
+            # given the current camera state.
+            try:
+                return andor_getter(at_feature)
+            except lowlevel.AndorError:
+                return None
         setattr(self, 'get_'+py_name, getter)
         self._callback_properties[at_feature] = (getter, py_name)
         
