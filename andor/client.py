@@ -65,6 +65,7 @@ class ZMQAndorImageClient(Qt.QObject):
 
     def __del__(self):
         print('~~~~~~~~~~~~~~ZMQAndorImageClient')
+        self.stop()
 
     def stop(self):
         self._worker.request_worker_exit()
