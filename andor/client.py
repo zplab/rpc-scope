@@ -90,31 +90,31 @@ class ZMQAndorImageClient_worker(Qt.QObject):
 
     def _listen_for_new_image(self):
         while True:
-            print('_listen_for_new_image')
+#           print('_listen_for_new_image')
             with self._exit_requested_lock:
                 if self._exit_requested:
                     break
             if self._sub.poll(1000):
                 s = self._sub.recv_string(zmq.NOBLOCK)
-                print(s)
+#               print(s)
                 if s == 'new image':
                     self._req.send_json({'req' : 'get newest', 'node' : platform.node()})
-                    print('sent get newest req')
+#                   print('sent get newest req')
                     image_msg = self._req.recv_json()
-                    print('received get newest req rep')
+#                   print('received get newest req rep')
                     rep = image_msg.pop('rep')
-                    print(rep)
+#                   print(rep)
                     if rep == 'ismb image':
-                        print('ismb image')
+#                       print('ismb image')
                         andor_image = AndorImage.reconstruct(**image_msg)
                         self._req.send_json({'req' : 'got', 'ismb_name' : andor_image.ismb.name})
-                        print('sent got req')
+#                       print('sent got req')
                         self._req.recv_json()
-                        print('received got req rep')
+#                       print('received got req rep')
                         self.new_andor_image_received.emit(andor_image)
-                        print('emitted')
+#                       print('emitted')
                     elif rep == 'pickled image':
-                        print('pickled image')
+#                       print('pickled image')
                         andor_image = AndorImage()
                         andor_image.im = pickle.loads(codecs.decode(image_msg['pickled image'].encode('ascii'), 'base64'))
                         self.new_andor_image_received.emit(andor_image)

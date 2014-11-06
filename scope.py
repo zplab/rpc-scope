@@ -49,10 +49,11 @@ class Scope(messaging.message_device.AsyncDeviceNamespace):
         
         if not message_manager and has_iotool:
             self.il = Namespace()
-            self.il.spectra_x = spectra_x.SpectraX(config.SpectraX.SERIAL_PORT, config.SpectraX.SERIAL_BAUD, 
-                iotool, property_server, property_prefix='scope.il.spectra_x.')
             self.tl = Namespace()
-            self.tl.lamp = tl_lamp.TL_Lamp(iotool, property_server, property_prefix='scope.tl.lamp.')
+        if has_iotool:
+            self.il.spectra_x = spectra_x.SpectraX(config.SpectraX.SERIAL_PORT, config.SpectraX.SERIAL_BAUD, 
+                self.iotool, property_server, property_prefix='scope.il.spectra_x.')
+            self.tl.lamp = tl_lamp.TL_Lamp(self.iotool, property_server, property_prefix='scope.tl.lamp.')
         
         try:
             self.camera = andor.camera.Camera(property_server, property_prefix='scope.camera.')

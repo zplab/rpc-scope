@@ -74,12 +74,12 @@ def lumencor_lamps(**lamps):
 
 def transmitted_lamp(enable=None, intensity=None):
     """enable: True (lamp on), False (lamp off), or None (no change).
-    intensity: None (no change) or value in the range [0, 1] for min to max.
+    intensity: None (no change) or value in the range [0, 255] for min to max.
     """
     command = []
     if pwm is not None:
-        pwm_value = int(round(value * _config.IOTool.TL_PWM_MAX))
-        command.append(pwm(_config.IOTool.TL_PWM_PIN, pwm_value))
+        assert 0 <= intensity <= _config.IOTool.TL_PWM_MAX
+        command.append(pwm(_config.IOTool.TL_PWM_PIN, intensity))
     if enable is not None:
         if enable:
             command.append(set_high(_config.IOTool.TL_ENABLE_PIN))

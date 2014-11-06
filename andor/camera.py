@@ -95,8 +95,8 @@ class ZMQAndorImageServer(AndorImageServer):
         self._live_acquisition_thread.start()
         self._req_handler_thread.start()
 
-    def __del__(self):
-        print('~~~~~~~~~~~~~~~~~~~~~~~~~~~ZMQAndorImageServer.__del__~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+#   def __del__(self):
+#       print('~~~~~~~~~~~~~~~~~~~~~~~~~~~ZMQAndorImageServer.__del__~~~~~~~~~~~~~~~~~~~~~~~~~~~')
 
     def _get_in_live_mode(self):
         with self._in_live_mode_cv:
@@ -120,9 +120,9 @@ class ZMQAndorImageServer(AndorImageServer):
         while not self._stop_requested.is_set():
             with self._in_live_mode_cv:
                 if not self._in_live_mode:
-                    print('********waiting')
+#                   print('********waiting')
                     self._in_live_mode_cv.wait()
-                    print('********done waiting')
+#                   print('********done waiting')
                     if not self._in_live_mode:
                         # Either the user toggled live mode faster than we could respond or a stop
                         # request has been received.
@@ -137,7 +137,7 @@ class ZMQAndorImageServer(AndorImageServer):
                 self._im_sequence_number += 1
                 # TODO: parse image metadata if present and trim metadata section & stride alignment buffering
                 aim = AndorImage()
-                print('acquiring {}'.format(self._im_sequence_number))
+#               print('acquiring {}'.format(self._im_sequence_number))
                 aim.ismb, aim.im = ISMBlob.create_with_numpy_view('ZMQAndorImageServer_{:012}.ismb'.format(self._im_sequence_number),
                                                                   (int(im_bytecount / im_row_stride), int(im_row_stride / im_bytes_per_pixel)),
                                                                   numpy.uint16)
@@ -146,15 +146,15 @@ class ZMQAndorImageServer(AndorImageServer):
                     lowlevel.Command('SoftwareTrigger')
                     # TODO: limit wait based on exposure time
                     # TODO: verify that pointer returned matches queued buffer
-                    print('waiting {}'.format(self._im_sequence_number))
+#                   print('waiting {}'.format(self._im_sequence_number))
                     lowlevel.WaitBuffer(999999)
                 elif im_bytes_per_pixel == 1.5:
                     pass
                 else:
                     raise lowlevel.AndorError('Unsupported bytes per pixel ({}).'.format(im_bytes_per_pixel))
-                print('notifying {} ({}) ({})'.format(self._im_sequence_number, aim.im, aim.ismb.name))
+#               print('notifying {} ({}) ({})'.format(self._im_sequence_number, aim.im, aim.ismb.name))
                 self._notify_of_new_image(aim)
-                print('notified {}'.format(self._im_sequence_number))
+#               print('notified {}'.format(self._im_sequence_number))
             except lowlevel.AndorError as e:
                 # TODO: inform clients of the details of the error.  Currently, the client knows
                 # that live mode exited spontaneously but not why.
@@ -380,7 +380,7 @@ class Camera:
         return lowlevel.AT_CALLBACK_SUCCESS
 
     def __del__(self):
-        print('~~~~~~~~~~~~~~~~~~~~~~~~~~~Camera.__del__~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+#       print('~~~~~~~~~~~~~~~~~~~~~~~~~~~Camera.__del__~~~~~~~~~~~~~~~~~~~~~~~~~~~')
         if self._property_server:
             for at_feature in self._callback_properties.keys():
                 lowlevel.UnregisterFeatureCallback(at_feature, self._c_callback, 0)

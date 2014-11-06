@@ -3,14 +3,14 @@ class TL_Lamp:
         self._iotool = iotool
         self._property_server = property_server
         self._property_prefix = property_prefix
-        self.lamp(enable=False, intensity=255)
+        self.set(enable=False, intensity=255)
     
-    def lamp(self, enable=None, intensity=None):
+    def set(self, enable=None, intensity=None):
         """Set lamp on/off and brightness values
         enable: True (lamp on), False (lamp off), or None (no change).
-        intensity: None (no change) or value in the range [0, 1] for min to max.
+        intensity: None (no change) or value in the range [0, 255] for min to max.
         """
-        self._iotool.execute(self._io_tool.commands.transmitted_lamp(enable, intensity))
+        self._iotool.execute(self._iotool.commands.transmitted_lamp(enable, intensity))
         if self._property_server:
             if enable is not None:
                 self._property_server.update_property(self._property_prefix+'enabled', enable)

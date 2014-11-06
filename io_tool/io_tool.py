@@ -10,6 +10,7 @@ class IOTool:
 
     def _send(self, commands):
         command_bytes = bytes('\n'.join(commands) + '\n', encoding='ascii')
+        print(command_bytes)
         self._serial_port.write(command_bytes)
     
     def execute(self, *commands):

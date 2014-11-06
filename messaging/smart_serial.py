@@ -3,6 +3,7 @@ import struct
 import fcntl
 import select
 import os
+import errno
 
 class Serial(serialposix.PosixSerial):
     def __init__(self, port, baudrate=9600, timeout=None, **kwargs):

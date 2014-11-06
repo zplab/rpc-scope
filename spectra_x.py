@@ -60,7 +60,7 @@ class SpectraX:
         The keyword argument names must be valid lamp names. The values must be
         in the range [0, 255], or None to do nothing. (Lamps not specified as
         arguments are also not altered)."""
-        for lamp, value in lamps.keys():
+        for lamp, value in lamps.items():
             if value is not None:
                 self._lamp_intensity(lamp, value)
 
@@ -71,7 +71,7 @@ class SpectraX:
         either True to enable that lamp, False to disable, or None to do nothing.
         (Lamps not specified as arguments are also not altered)."""
         self._iotool.assert_empty_buffer()
-        self._iotool.execute(self._io_tool.commands.lumencor_lamps(**lamps))
+        self._iotool.execute(self._iotool.commands.lumencor_lamps(**lamps))
         self._iotool.assert_empty_buffer()
         if self._property_server:
             for lamp, enable in lamps.items():
