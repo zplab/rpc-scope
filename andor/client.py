@@ -22,6 +22,7 @@
 #
 # Authors: Erik Hvatum, Zach Pincus
 
+#ipython -i -c 'import zmq;context=zmq.Context();from rpc_acquisition import scope_server;client, scope = scope_server.rpc_client_main(context=context);prop_client = scope_server.property_client_main(context=context)'
 
 #from ris_widget._ris_widget import RisWidget;rw=RisWidget();rw.show()
 #from rpc_acquisition.andor.client import ZMQAndorImageClient
