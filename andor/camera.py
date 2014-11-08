@@ -26,6 +26,7 @@ import codecs
 import ctypes
 from ism_blob import ISMBlob
 import numpy
+import os
 import pickle
 import platform
 import sys
@@ -38,6 +39,8 @@ from .. import scope_configuration as config
 from .andor_image import AndorImage
 
 _c_uint8_p = ctypes.POINTER(ctypes.c_uint8)
+_c_uint32_p = ctypes.POINTER(ctypes.c_uint32)
+_c_uint64_p = ctypes.POINTER(ctypes.c_uint64)
 
 class AndorImageServer:
     def __init__(self, camera):
@@ -142,40 +145,50 @@ class ZMQAndorImageServer(AndorImageServer):
                 im_width = self.camera.get_aoi_width()
                 im_height = self.camera.get_aoi_height()
                 im_row_stride = self.camera.get_aoi_stride()
+                im_has_timestamp = self.camera.get_metadata_enabled() and self.camera.get_include_timestamp_in_metadata()
+                im_exposure_time = self.camera.get_exposure_time()
+                im_timestamp = None
                 self._im_sequence_number += 1
-                # TODO: parse image metadata if present and trim metadata section & stride alignment buffering
-                aim = AndorImage()
 #               print('acquiring {}'.format(self._im_sequence_number))
-                aim.ismb, aim.im = ISMBlob.create_with_numpy_view('ZMQAndorImageServer_{:012}.ismb'.format(self._im_sequence_number),
-                                                                  (int(im_bytecount / im_row_stride), int(im_row_stride / im_bytes_per_pixel)),
-                                                                  numpy.uint16)
-                if im_encoding in ('Mono16', 'Mono12'):
-                    lowlevel.QueueBuffer(ctypes.cast(aim.ismb.data, _c_uint8_p), im_bytecount)
-                    lowlevel.Command('SoftwareTrigger')
-                    # TODO: limit wait based on exposure time
-                    # TODO: verify that pointer returned matches queued buffer
-#                   print('waiting {}'.format(self._im_sequence_number))
-                    lowlevel.WaitBuffer(999999)
-                elif im_encoding == 'Mono12Packed':
-                    # NB: The following line is about 311x faster than im_12 = bytearray(im_bytecount),
-                    # requiring 900ns to make a 5.86 megabyte buffer (280us for bytearray)
-                    im12 = numpy.empty((im_bytecount), numpy.uint8)
-                    c_im12 = im12.ctypes.data_as(_c_uint8_p)
-                    lowlevel.QueueBuffer(c_im12, im_bytecount)
-                    lowlevel.Command('SoftwareTrigger')
-                    # TODO: limit wait based on exposure time
-                    # TODO: verify that pointer returned matches queued buffer
-                    lowlevel.WaitBuffer(999999)
-                    lowlevel.ConvertBuffer(c_im12,
-                                           ctypes.cast(aim.ismb.data, _c_uint8_p),
-                                           im_width,
-                                           im_height,
-                                           im_row_stride,
-                                           'Mono12Packed',
-                                           'Mono16')
-                else:
-                    raise lowlevel.AndorError('Unsupported pixel encoding ({}).'.format(im_encoding))
-#               print('notifying {} ({}) ({})'.format(self._im_sequence_number, aim.im, aim.ismb.name))
+                im = ISMBlob.new_ism_array('ZMQAndorImageServer_{}_{:010}.ismb'.format(os.getpid(), self._im_sequence_number),
+                                           (im_height, im_width),
+                                           numpy.uint16)
+                imr = numpy.empty((im_bytecount), numpy.uint8)
+                c_imr = imr.ctypes.data_as(_c_uint8_p)
+                lowlevel.QueueBuffer(c_imr, im_bytecount)
+                lowlevel.Command('SoftwareTrigger')
+                if ctypes.cast(lowlevel.WaitBuffer(max(im_exposure_time * 1000 + 250, 500))[0], ctypes.c_void_p).value != imr.ctypes.data:
+                    raise lowlevel.AndorError('WaitBuffer filled a different buffer than expected.')
+                # Mono12Packed images require unpacking, which ConvertBuffer handles competently.
+                # Mono16 typically images contain padding at the end of each row (stride) which
+                # must be removed via copy operation in order make an array that is contiguous in
+                # memory.  This could be accomplished via im[:,:] = imr[:2160,:2560], which took
+                # about 1.63ms when tested.  Using ConvertBuffer to achieve the same required 1.64ms,
+                # which is within benchmarking margin of error, so ConvertBuffer is used in all cases.
+                lowlevel.ConvertBuffer(c_imr,
+                                       ctypes.cast(im.ctypes.data, _c_uint8_p),
+                                       im_width,
+                                       im_height,
+                                       im_row_stride,
+                                       im_encoding,
+                                       'Mono16')
+                if im_has_timestamp:
+                    p = imr.ctypes.data + im_bytecount
+                    while True:
+                        p -= 8
+                        cid, md_block_len = ctypes.cast(p, _c_uint32_p)[0:1]
+                        if cid == 1:
+                            p -= 8
+                            im_timestamp = ctypes.cast(p, _c_uint64_p)[0]
+                            print('im_timestamp')
+                            break
+                        else:
+                            # -4: md_block_len (metadata block length) does not include the length
+                            # field itself
+                            p -= field_len - 4
+                            if p < imr.ctypes.data + 8:
+                                raise lowlevel.AndorError('Failed to find timestamp in image metadata.')
+                aim = AndorImage(im, im_timestamp, im_exposure_time, self._im_sequence_number)
                 self._notify_of_new_image(aim)
 #               print('notified {}'.format(self._im_sequence_number))
             except lowlevel.AndorError as e:
@@ -221,21 +234,28 @@ class ZMQAndorImageServer(AndorImageServer):
         if newest is None:
             self._rep_socket.send_json({'rep' : 'none available'})
         else:
+            ismb_name = newest.im.base.base.name
+            print(ismb_name)
             if msg['node'] != '' and msg['node'] == platform.node():
                 rmsg = {
                     'rep' : 'ismb image',
-                    'ismb_name' : newest.ismb.name,
-                    'shape' : newest.im.shape
+                    'ismb_name' : ismb_name,
+                    'sequence_number' : newest.sequence_number,
+                    'exposure_time' : newest.exposure_time,
+                    'timestamp' : newest.timestamp
                     }
                 self._rep_socket.send_json(rmsg)
-                if newest.ismb.name in self._on_wire:
-                    self._on_wire[newest.ismb.name][1] += 1
+                if ismb_name in self._on_wire:
+                    self._on_wire[ismb_name][1] += 1
                 else:
-                    self._on_wire[newest.ismb.name] = [newest, 1]
+                    self._on_wire[ismb_name] = [newest, 1]
             else:
                 rmsg = {
                     'rep' : 'pickled image',
-                    'pickled image' : codecs.encode(pickle.dumps(newest.im), 'base64').decode('ascii')
+                    'pickled image' : codecs.encode(pickle.dumps(newest.im), 'base64').decode('ascii'),
+                    'sequence_number' : newest.sequence_number,
+                    'exposure_time' : newest.exposure_time,
+                    'timestamp' : newest.timestamp
                 }
                 self._rep_socket.send_json(rmsg)
 
@@ -246,10 +266,11 @@ class ZMQAndorImageServer(AndorImageServer):
             onwire[1] -= 1
             if onwire[1] == 0:
                 del self._on_wire[ismb_name]
+            self._rep_socket.send_json({'rep' : 'ok'})
         else:
             sys.stderr.write('Warning: ismb_name "{}" in got request absent from _on_wire dict.'.format(ismb_name))
             sys.stderr.flush()
-        self._rep_socket.send_json({'rep' : 'ok'})
+            self._rep_socket.send_json({'rep' : 'ERROR', 'error' : 'Specified AndorImage is not in _on_wire dict.'})
 
 class ReadOnly_AT_Enum(enumerated_properties.DictProperty):
     def __init__(self, feature):

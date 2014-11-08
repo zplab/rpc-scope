@@ -23,17 +23,16 @@
 # Authors: Erik Hvatum, Zach Pincus
 
 from ism_blob import ISMBlob
-import numpy
 
 class AndorImage:
-    def __init__(self):
-        self.ismb = None
-        self.im = None
+    def __init__(self, im=None, timestamp=None, exposure_time=None, sequence_number=None):
+        self.im = im
+        self.timestamp = timestamp
+        self.exposure_time = exposure_time
+        self.sequence_number = sequence_number
 
     @classmethod
-    def reconstruct(cls, ismb_name, shape):
-        ismb, im = ISMBlob.open_with_numpy_view(ismb_name, shape, numpy.uint16)
-        andor_image = cls()
-        andor_image.ismb = ismb
-        andor_image.im = im
-        return andor_image
+    def from_ismb(cls, ismb_name, **kwargs):
+        print(ismb_name)
+        im = ISMBlob.open_ism_array(ismb_name)
+        return cls(im, **kwargs)

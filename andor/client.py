@@ -110,8 +110,9 @@ class ZMQAndorImageClient_worker(Qt.QObject):
 #                   print(rep)
                     if rep == 'ismb image':
 #                       print('ismb image')
-                        andor_image = AndorImage.reconstruct(**image_msg)
-                        self._req.send_json({'req' : 'got', 'ismb_name' : andor_image.ismb.name})
+                        print(image_msg['ismb_name'])
+                        andor_image = AndorImage.from_ismb(**image_msg)
+                        self._req.send_json({'req' : 'got', 'ismb_name' : image_msg['ismb_name']})
 #                       print('sent got req')
                         self._req.recv_json()
 #                       print('received got req rep')
@@ -119,8 +120,8 @@ class ZMQAndorImageClient_worker(Qt.QObject):
 #                       print('emitted')
                     elif rep == 'pickled image':
 #                       print('pickled image')
-                        andor_image = AndorImage()
-                        andor_image.im = pickle.loads(codecs.decode(image_msg['pickled image'].encode('ascii'), 'base64'))
+                        im = pickle.loads(codecs.decode(image_msg['pickled image'].encode('ascii'), 'base64'))
+                        andor_image = AndorImage(im, **image_msg)
                         self.new_andor_image_received.emit(andor_image)
                     else:
                         sys.stderr.write('Received bad reply to get newest request: {}'.format(str(image_msg)[:128]))
