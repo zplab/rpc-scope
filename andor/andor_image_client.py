@@ -93,7 +93,7 @@ class ZMQAndorImageClient_worker(Qt.QObject):
                         self.new_andor_image_received.emit(andor_image)
                     elif rep == 'raw image':
                         imr = self._req.recv(copy=False, track=False)
-                        imb = buffer(imr)
+                        imb = memoryview(imr)
                         im_shape = image_msg.pop('shape')
                         im = numpy.frombuffer(imb, dtype=numpy.uint16).reshape(im_shape)
                         andor_image = AndorImage(im, **image_msg)
