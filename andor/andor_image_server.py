@@ -149,9 +149,10 @@ class ZMQAndorImageServer(AndorImageServer):
                 im_timestamp = None
                 self._im_sequence_number += 1
 #               print('acquiring {}'.format(self._im_sequence_number))
-                im = ISMBlob.new_ism_array('ZMQAndorImageServer_{}_{:010}.ismb'.format(os.getpid(), self._im_sequence_number),
-                                           (im_height, im_width),
-                                           numpy.uint16)
+                im_ismb = ISMBlob.new('ZMQAndorImageServer_{}_{:010}.ismb'.format(os.getpid(), self._im_sequence_number),
+                                      (im_height, im_width),
+                                      numpy.uint16)
+                im = im_ismb.asarray()
                 imr = numpy.empty((im_bytecount), numpy.uint8)
                 c_imr = imr.ctypes.data_as(_c_uint8_p)
                 lowlevel.QueueBuffer(c_imr, im_bytecount)

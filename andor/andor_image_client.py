@@ -22,22 +22,6 @@
 #
 # Authors: Erik Hvatum, Zach Pincus
 
-#ipython -i -c 'import zmq;context=zmq.Context();from rpc_acquisition import scope_server;client, scope = scope_server.rpc_client_main(context=context);prop_client = scope_server.property_client_main(context=context)'
-
-#from ris_widget._ris_widget import RisWidget;rw=RisWidget();rw.show()
-#from rpc_acquisition.andor.client import ZMQAndorImageClient
-#zaic = ZMQAndorImageClient(context)
-#newest_andor_image = None
-#def new_andor_image_received(andor_image):
-#    global newest_andor_image
-#    newest_andor_image = andor_image
-#    rw.showImage(andor_image.im)
-#    zaic.listen_for_new_image()
-#zaic.new_andor_image_received.connect(new_andor_image_received)
-#zaic.listen_for_new_image()
-#scope.camera.live_mode_enabled = True
-
-
 import codecs
 from ism_blob import ISMBlob
 import pickle
