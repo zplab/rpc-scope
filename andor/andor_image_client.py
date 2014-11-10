@@ -22,9 +22,8 @@
 #
 # Authors: Erik Hvatum, Zach Pincus
 
-import codecs
 from ism_blob import ISMBlob
-import pickle
+import numpy
 import platform
 from PyQt5 import Qt
 import sys
@@ -92,8 +91,11 @@ class ZMQAndorImageClient_worker(Qt.QObject):
                         self._req.send_json({'req' : 'got', 'ismb_name' : image_msg['ismb_name']})
                         self._req.recv_json()
                         self.new_andor_image_received.emit(andor_image)
-                    elif rep == 'pickled image':
-                        im = pickle.loads(codecs.decode(image_msg['pickled image'].encode('ascii'), 'base64'))
+                    elif rep == 'raw image':
+                        imr = self._req.recv(copy=False, track=False)
+                        imb = buffer(imr)
+                        im_shape = image_msg.pop('shape')
+                        im = numpy.frombuffer(imb, dtype=numpy.uint16).reshape(im_shape)
                         andor_image = AndorImage(im, **image_msg)
                         self.new_andor_image_received.emit(andor_image)
                     else:

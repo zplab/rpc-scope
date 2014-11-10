@@ -23,13 +23,11 @@
 # Authors: Erik Hvatum, Zach Pincus
 
 from .andor_image import AndorImage
-import codecs
 import ctypes
 from ism_blob import ISMBlob
 from . import lowlevel
 import numpy
 import os
-import pickle
 import platform
 from .. import scope_configuration as config
 import sys
@@ -251,13 +249,15 @@ class ZMQAndorImageServer(AndorImageServer):
                     self._on_wire[ismb_name] = [newest, 1]
             else:
                 rmsg = {
-                    'rep' : 'pickled image',
-                    'pickled image' : codecs.encode(pickle.dumps(newest.im), 'base64').decode('ascii'),
+                    'rep' : 'raw image',
                     'sequence_number' : newest.sequence_number,
                     'exposure_time' : newest.exposure_time,
-                    'timestamp' : newest.timestamp
+                    'timestamp' : newest.timestamp,
+                    'shape' : newest.im.shape
                 }
-                self._rep_socket.send_json(rmsg)
+                self._rep_socket.send_json(rmsg, zmq.SNDMORE)
+                # ZMQ keeps a reference to newest.im however long it requires
+                self._rep_socket.send(newest.im, copy=False)
 
     def _on_got(self, msg):
         ismb_name = msg['ismb_name']
