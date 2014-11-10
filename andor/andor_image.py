@@ -33,6 +33,5 @@ class AndorImage:
 
     @classmethod
     def from_ismb(cls, ismb_name, **kwargs):
-        print(ismb_name)
         im = ISMBlob.open_ism_array(ismb_name)
         return cls(im, **kwargs)

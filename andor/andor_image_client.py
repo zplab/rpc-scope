@@ -95,31 +95,20 @@ class ZMQAndorImageClient_worker(Qt.QObject):
 
     def _listen_for_new_image(self):
         while True:
-#           print('_listen_for_new_image')
             if self._exit_requested.is_set():
                 break
             if self._sub.poll(1000):
                 s = self._sub.recv_string(zmq.NOBLOCK)
-#               print(s)
                 if s == 'new image':
                     self._req.send_json({'req' : 'get newest', 'node' : platform.node()})
-#                   print('sent get newest req')
                     image_msg = self._req.recv_json()
-#                   print('received get newest req rep')
                     rep = image_msg.pop('rep')
-#                   print(rep)
                     if rep == 'ismb image':
-#                       print('ismb image')
-                        print(image_msg['ismb_name'])
                         andor_image = AndorImage.from_ismb(**image_msg)
                         self._req.send_json({'req' : 'got', 'ismb_name' : image_msg['ismb_name']})
-#                       print('sent got req')
                         self._req.recv_json()
-#                       print('received got req rep')
                         self.new_andor_image_received.emit(andor_image)
-#                       print('emitted')
                     elif rep == 'pickled image':
-#                       print('pickled image')
                         im = pickle.loads(codecs.decode(image_msg['pickled image'].encode('ascii'), 'base64'))
                         andor_image = AndorImage(im, **image_msg)
                         self.new_andor_image_received.emit(andor_image)

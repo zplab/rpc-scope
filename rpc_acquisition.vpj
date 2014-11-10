@@ -17,8 +17,9 @@
 			</Folder>
 			<F N="andor/__init__.py"/>
 			<F N="andor/andor_image.py"/>
+			<F N="andor/andor_image_client.py"/>
+			<F N="andor/andor_image_server.py"/>
 			<F N="andor/camera.py"/>
-			<F N="andor/client.py"/>
 			<F N="andor/common.py"/>
 			<F N="andor/lowlevel.py"/>
 			<F N="andor/wrapper.py"/>
