@@ -115,7 +115,7 @@ class ZMQAndorImageServer(AndorImageServer):
             if in_live_mode != self._in_live_mode:
                 self._in_live_mode = in_live_mode
                 if self._in_live_mode:
-                    self.camera.trigger_mode.set_value('Software')
+                    self.camera.trigger_mode.set_value('External')
                     self.camera.cycle_mode.set_value('Continuous')
                     lowlevel.Flush()
                     lowlevel.Command('AcquisitionStart')
@@ -125,6 +125,8 @@ class ZMQAndorImageServer(AndorImageServer):
                     lowlevel.Flush()
 
     def _live_acquisition_threadproc(self):
+        import time
+        lt = None
         while not self._stop_requested.is_set():
             with self._in_live_mode_cv:
                 if not self._in_live_mode:
@@ -155,7 +157,8 @@ class ZMQAndorImageServer(AndorImageServer):
                 c_imr = imr.ctypes.data_as(_c_uint8_p)
                 lowlevel.QueueBuffer(c_imr, im_bytecount)
                 lowlevel.Command('SoftwareTrigger')
-                if ctypes.cast(lowlevel.WaitBuffer(max(im_exposure_time * 1000 + 250, 500))[0], ctypes.c_void_p).value != imr.ctypes.data:
+                if ctypes.cast(lowlevel.WaitBuffer(9999999)[0], ctypes.c_void_p).value != imr.ctypes.data:
+#               if ctypes.cast(lowlevel.WaitBuffer(max(im_exposure_time * 1000 + 250, 500))[0], ctypes.c_void_p).value != imr.ctypes.data:
                     raise lowlevel.AndorError('WaitBuffer filled a different buffer than expected.')
                 # Mono12Packed images require unpacking, which ConvertBuffer handles competently.
                 # Mono16 typically images contain padding at the end of each row (stride) which
@@ -170,6 +173,10 @@ class ZMQAndorImageServer(AndorImageServer):
                                        im_row_stride,
                                        im_encoding,
                                        'Mono16')
+                nt = time.time()
+                if lt is not None:
+                    print(1 / (nt - lt))
+                lt = nt
                 if im_has_timestamp:
                     p = imr.ctypes.data + im_bytecount
                     while True:
