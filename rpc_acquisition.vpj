@@ -60,7 +60,9 @@
 			<F N="simple_rpc/rpc_server.py"/>
 			<F N="simple_rpc/trie.py"/>
 		</Folder>
+		<F N="__init__.py"/>
 		<F N="enumerated_properties.py"/>
+		<F N="pedals.py"/>
 		<F N="scope.py"/>
 		<F N="scope_configuration.py"/>
 		<F N="scope_server.py"/>
