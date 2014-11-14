@@ -195,4 +195,4 @@ def generate_code(outfile):
 
 if __name__ == '__main__':
     import pathlib
-    generate_code(outfile=str(pathlib.Path(__file__).parent / '../wrapper.py'))
+    generate_code(outfile=str(pathlib.Path(__file__).parent.parent / 'wrapper.py'))
