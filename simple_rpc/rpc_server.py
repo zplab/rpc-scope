@@ -99,7 +99,7 @@ class RPCServer:
         """Call the named command with *args and **kwargs"""
         py_command = self.lookup(command)
         if py_command is None:
-            self._reply(error='No such command: {}'.format(command))
+            self._reply('No such command: {}'.format(command), error=True)
             return
         try:
             self.interrupter.armed = True
@@ -110,7 +110,7 @@ class RPCServer:
             
         except (Exception, KeyboardInterrupt) as e:
             exception_str = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
-            self._reply(error=exception_str)
+            self._reply(exception_str, error=True)
         else:
             self._reply(response)
     
@@ -125,7 +125,7 @@ class RPCServer:
                 return None
         return v
 
-    def _reply(self, reply=None, error=None):
+    def _reply(self, reply, error=False):
         """Reply to clients with either a valid response or an error string."""
         raise NotImplementedError()
 
@@ -156,14 +156,20 @@ class ZMQServer(RPCServer):
             self._reply(error='Could not unpack command, arguments, and keyword arguments from JSON message.')
         return command, args, kwargs
     
-    def _reply(self, reply=None, error=None):
-        response = {'retval':reply, 'error':error}
-        try:
-            json = zmq.utils.jsonapi.dumps(response)
-        except:
-            response = {'retval':None, 'error':'Could not JSON-serialize return value.'}
-            json = zmq.utils.jsonapi.dumps(response)
-        self.socket.send(json)
+    def _reply(self, reply, error=False):
+        if error:
+            reply_type = 'error'
+        elif isinstance(reply, bytes):
+            reply_type = 'bindata'
+        else:
+            reply_type = 'json'
+            try:
+                reply = zmq.utils.jsonapi.dumps(response)
+            except:
+                reply_type = 'error'
+                reply = zmq.utils.jsonapi.dumps('Could not JSON-serialize return value.')
+            self.socket.send_string(reply_type, flags=zmq.SNDMORE)
+            self.socket.send(reply)
 
 class Namespace:
     """Placeholder class to hold attribute values"""

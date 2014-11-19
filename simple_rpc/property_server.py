@@ -1,6 +1,8 @@
 import zmq
+import threading
+import queue
 
-class PropertyServer:
+class PropertyServer(threading.Thread):
     """Server for publishing changes to properties (i.e. (key, value) pairs) to
     other clients.
     
@@ -28,15 +30,24 @@ class PropertyServer:
         
     """
     def __init__(self, verbose=False):
+        super().__init__(daemon=True)
         self.properties = {}
         self.verbose = verbose
+        self.task_queue = queue.Queue()
+        self.running = True
+        self.start()
+    
+    def run(self):
+        while self.running:
+            property_name, value = self.task_queue.get() # block until something's in the queue
+            self._publish_update(property_name, value)
     
     def rebroadcast_properties(self):
         """Re-send an update about all known property values. Useful for 
         clients that have just connected and want to learn about the current
         state."""
         for property_name, value in self.properties:
-            self._publish_update(property_name, value)
+            self.task_queue.put((property_name, value))
     
     def add_property(self, property_name, value):
         """Add a named property and provide an initial value.
@@ -51,7 +62,7 @@ class PropertyServer:
         self.properties[property_name] = value
         if self.verbose:
             print('updating property: {} to {}'.format(property_name, value))
-        self._publish_update(property_name, value)
+        self.task_queue.put((property_name, value))
 
     def property_decorator(self, property_name):
         """Return a property decorator that will auto-update the named
@@ -63,7 +74,7 @@ class PropertyServer:
                 super().__set__(obj, value)
                 propertyserver.update_property(property_name, value)
         return serverproperty
-
+        
     def _publish_update(self, property_name, value):
         raise NotImplementedError()
 
@@ -74,10 +85,10 @@ class ZMQServer(PropertyServer):
             port: a string ZeroMQ port identifier, like ''tcp://127.0.0.1:5555''.
             context: a ZeroMQ context to share, if one already exists.
         """
-        super().__init__(verbose)
         self.context = context if context is not None else zmq.Context()
         self.socket = self.context.socket(zmq.PUB)
         self.socket.bind(port)
+        super().__init__(verbose)
 
     def _publish_update(self, property_name, value):
         # dump json first to catch "not serializable" errors before sending the first part of a two-part message

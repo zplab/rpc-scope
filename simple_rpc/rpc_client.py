@@ -22,9 +22,9 @@ class RPCClient:
             retval, error = self._receive_reply()
         except KeyboardInterrupt:
             self._send_interrupt('interrupt')
-            retval, error = self._receive_reply()
-        if error is not None:
-            raise RPCError(error)
+            retval, is_error = self._receive_reply()
+        if is_error:
+            raise RPCError(retval)
         return retval
 
     def _send(self, command, args, kwargs):
@@ -121,17 +121,22 @@ class ZMQClient(RPCClient):
             context: a ZeroMQ context to share, if one already exists.
         """
         self.context = context if context is not None else zmq.Context()
-        self.rpc_socket = self.context.socket(zmq.REQ)
-        self.rpc_socket.connect(rpc_port)
+        self.socket = self.context.socket(zmq.REQ)
+        self.socket.connect(rpc_port)
         self.interrupt_socket = self.context.socket(zmq.PUSH)
         self.interrupt_socket.connect(interrupt_port)
 
     def _send(self, command, args, kwargs):
-        self.rpc_socket.send_json((command, args, kwargs))
+        self.socket.send_json((command, args, kwargs))
     
     def _receive_reply(self):
-        reply_dict = self.rpc_socket.recv_json()
-        return reply_dict['retval'], reply_dict['error']
+        reply_type = self.socket.recv_string()
+        assert(self.socket.getsockopt(zmq.RCVMORE))
+        if reply_type == 'bindata':
+            reply = self.socket.recv()
+        else:
+            reply = self.socket.recv_json()
+        return reply, reply_type == 'error'
 
     def _send_interrupt(self, message):
         self.interrupt_socket.send(bytes(message, encoding='ascii'))

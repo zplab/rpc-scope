@@ -25,7 +25,7 @@
 # Base classes capable of being made available through RPC for properties limited to
 # predetermined or run-time determined sets of valid values.
 
-class SetProperty:
+class ReadonlySetProperty:
     '''Base class for any enumerated device property that is limited to a set of known values
     typically retrieved from and passed to the hardware as is.
 
@@ -50,21 +50,28 @@ class SetProperty:
         '''The current value.'''
         return self._read()
 
-    def set_value(self, value):
-        if value not in self._valid_set:
-            raise ValueError('value must be one of {}.'.format(self.get_recognized_values()))
-        self._write(value)
-
     def _get_valid_set(self):
         raise NotImplementedError()
 
     def _read(self):
         raise AttributeError("can't get attribute")
 
+
+class SetProperty(ReadonlySetProperty):
+    __doc__ = ReadonlySetProperty.__doc__
+    
+    def set_value(self, value):
+        if value not in self._valid_set:
+            raise ValueError('value must be one of {}.'.format(self.get_recognized_values()))
+        self._write(value)
+
     def _write(self, value):
         raise AttributeError("can't set attribute")
 
-class DictProperty:
+
+
+
+class ReadonlyDictProperty:
     '''Base class for any enumerated device property that is limited to a set of non-user-
     friendly values identified to the user by more meaningful names.
 
@@ -92,16 +99,19 @@ class DictProperty:
         '''The current value.'''
         return self._hw_to_usr[self._read()]
 
-    def set_value(self, value):
-        if value not in self._usr_to_hw:
-            raise ValueError('value must be one of {}.'.format(self.get_recognized_values()))
-        self._write(self._usr_to_hw[value])
-
     def _get_hw_to_usr(self):
         raise NotImplementedError()
 
     def _read(self):
         raise AttributeError("can't get attribute")
+
+class DictProperty(ReadonlyDictProperty):
+    __doc__ = ReadonlyDictProperty.__doc__
+    
+    def set_value(self, value):
+        if value not in self._usr_to_hw:
+            raise ValueError('value must be one of {}.'.format(self.get_recognized_values()))
+        self._write(self._usr_to_hw[value])
 
     def _write(self, value):
         raise AttributeError("can't set attribute")

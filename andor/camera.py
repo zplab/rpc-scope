@@ -21,11 +21,16 @@
 # SOFTWARE.
 #
 # Authors: Erik Hvatum, Zach Pincus
+import threading
+import time
+import ctypes
+
+import ism_blob
 
 from .. import enumerated_properties
 from . import lowlevel
 
-class ReadOnly_AT_Enum(enumerated_properties.DictProperty):
+class ReadOnly_AT_Enum(enumerated_properties.ReadonlyDictProperty):
     def __init__(self, feature):
         self._feature = feature
         super().__init__()
@@ -37,7 +42,7 @@ class ReadOnly_AT_Enum(enumerated_properties.DictProperty):
     def _read(self):
         return lowlevel.GetEnumIndex(self._feature)
 
-class AT_Enum(ReadOnly_AT_Enum):
+class AT_Enum(ReadOnly_AT_Enum, enumerated_properties.DictProperty):
     def get_available_values(self):
         '''The currently accepted values.  This is the subset of recognized_values
         that may be assigned without raising a NOTIMPLEMENTED AndorError, given the
@@ -50,6 +55,40 @@ class AT_Enum(ReadOnly_AT_Enum):
 class Camera:
     '''This class provides an abstraction of the raw Andor API ctypes shim found in
     rpc_acquisition.andor.lowlevel.'''
+
+    _CAMERA_DEFAULTS = [
+        ('AOIBinning', lowlevel.SetEnum, '1x1'),
+        ('AOIHeight', lowlevel.SetInt, 2160),
+        ('AOILeft', lowlevel.SetInt, 1),
+        ('AOITop', lowlevel.SetInt, 1),
+        ('AOIWidth', lowlevel.SetInt, 2560),
+        ('AccumulateCount', lowlevel.SetInt, 1),
+        ('AuxiliaryOutSource', lowlevel.SetEnum, 'FireAll'),
+        ('CycleMode', lowlevel.SetEnum, 'Fixed'),
+        ('ElectronicShutteringMode', lowlevel.SetEnum, 'Rolling'),
+        ('ExposureTime', lowlevel.SetFloat, 0.01),
+        ('FanSpeed', lowlevel.SetEnum, 'On'),
+        ('FrameCount', lowlevel.SetInt, 1),
+        ('IOSelector', lowlevel.SetEnum, 'Fire 1'),
+        ('IOInvert', lowlevel.SetBool, False),
+        ('IOSelector', lowlevel.SetEnum, 'Fire N'),
+        ('IOInvert', lowlevel.SetBool, False),
+        ('IOSelector', lowlevel.SetEnum, 'Aux Out 1'),
+        ('IOInvert', lowlevel.SetBool, False),
+        ('IOSelector', lowlevel.SetEnum, 'Arm'),
+        ('IOInvert', lowlevel.SetBool, False),
+        ('IOSelector', lowlevel.SetEnum, 'External Trigger'),
+        ('IOInvert', lowlevel.SetBool, False),
+        ('MetadataEnable', lowlevel.SetBool, False),
+        ('MetadataTimestamp', lowlevel.SetBool, True),
+        ('Overlap', lowlevel.SetBool, True),
+        ('PixelReadoutRate', lowlevel.SetEnum, '100 MHz'),
+        ('SensorCooling', lowlevel.SetBool, True),
+        ('SimplePreAmpGainControl', lowlevel.SetEnum, '16-bit (low noise & high well capacity)'),
+        ('SpuriousNoiseFilter', lowlevel.SetBool, True),
+        ('TriggerMode', lowlevel.SetEnum, 'Software'),
+        ('VerticallyCenterAOI', lowlevel.SetBool, False)
+    ]
 
     def __init__(self, property_server=None, property_prefix=''):
         lowlevel.initialize() # safe to call this multiple times
@@ -82,7 +121,7 @@ class Camera:
         self._add_property('CameraAcquiring', 'is_acquiring', 'Bool', readonly=True)
         self._add_property('CameraModel', 'model_name', 'String', readonly=True)
         self._add_property('ExposureTime', 'exposure_time', 'Float')
-        self._add_property('FrameCount', 'frame_count', 'Float')
+        self._add_property('FrameCount', 'frame_count', 'Int')
         self._add_property('FrameRate', 'frame_rate', 'Float')
         self._add_property('ImageSizeBytes', 'image_byte_count', 'Int', readonly=True)
         self._add_property('InterfaceType', 'interface_type', 'String', readonly=True)
@@ -96,28 +135,8 @@ class Camera:
         self._add_property('SpuriousNoiseFilter', 'spurious_noise_filter_enabled', 'Bool')
         self._add_property('TimestampClock', 'current_timestamp', 'Int', readonly=True)
         self._add_property('TimestampClockFrequency', 'timestamp_ticks_per_second', 'Int', readonly=True)
-
-        # Andor API commands and also abstractions not corresponding directly to any one Andor API
-        # camera property are implemented as member functions without a leading _.
-
-
-        # Sensor cooling reduces image noise, improving the quality of results, at the cost of
-        # supplying power to the Peltier junction unit within the camera that serves to cool the
-        # sensor.  Sensor cooling is always off when a camera is opened via the Andor API, even
-        # if the camera has not been power cycled in the time since a previous Andor API session
-        # activated sensor cooling.
-        #
-        # The cost of failing to activate sensor cooling in terms of insiduous reduction of result
-        # quality far outweighs the extra power usage required to maintain sensor cooling while
-        # the camera is opened.  Therefore, our first order of business after setting up properties
-        # is to enable sensor cooling and ensure that the camera cooling fan is also enabled (the
-        # fan defaults to being enabled, but it is critically important that it is enabled if
-        # sensor cooling is enabled, as the Peltier unit generates waste heat that would damage
-        # the camera if allowed to accumulate - so we set and verify this).
-        #
         # FanSpeed and SensorCooling are presented as read-only to make it harder to accidentally
-        # or ill-advisedly disable either.  Removing or supplying False to the readonly arguments
-        # of the two calling calls disabled this protection.
+        # or ill-advisedly disable either.
         self._add_enum('FanSpeed', 'fan', readonly=True)
         self._add_property('SensorCooling', 'sensor_cooling_enabled', 'Bool', readonly=True)
 
@@ -125,24 +144,23 @@ class Camera:
         self._property_prefix = property_prefix
         if property_server:
             self._c_callback = lowlevel.FeatureCallback(self._andor_callback)
-            self._serve_properties = False
             # TODO: figure out which property causes NOTIMPLEMENTED barf in live mode
             for at_feature in self._callback_properties.keys():
                 lowlevel.RegisterFeatureCallback(at_feature, self._c_callback, 0)
-            self._serve_properties = True
-
-            self._publish_live_mode_enabled = self._property_server.add_property(self._property_prefix + 'live_mode_enabled', False)
-            from .andor_image_server import ZMQAndorImageServer
-            self._andor_image_server = ZMQAndorImageServer(self, self._property_server.context)
+            self._update_live_mode = property_server.add_property(self._property_prefix + 'live_mode')
+            self._update_live_buffer = property_server.add_property(self._property_prefix + 'live_buffer')
+            self._update_live_frame = property_server.add_property(self._property_prefix + 'live_frame')
         else:
-            self._publish_live_mode_enabled = None
+            self._update_live_mode = self._update_live_frame = self._update_live_buffer = lambda x: None
+        self._live_mode = False
+        sellf._update_live_mode(false)
+        self._live_frame = 0
 
-        lowlevel.SetEnumString('FanSpeed', 'On')
-        if lowlevel.GetEnumStringByIndex('FanSpeed', lowlevel.GetEnumIndex('FanSpeed')) != 'On':
-            raise lowlevel.AndorError('Failed to turn on camera fan!')
-        lowlevel.SetBool('SensorCooling', True)
-        if not lowlevel.GetBool('SensorCooling'):
-            raise lowlevel.AndorError('Failed to enable sensor cooling!')
+        self.return_to_default_state()
+
+    def return_to_default_state(self):
+        for feature, setter, value in self._CAMERA_DEFAULTS:
+            setter(feature, value)
 
     def _add_enum(self, at_feature, py_name, readonly=False):
         '''Expose a camera setting presented by the Andor API via GetEnumIndex, 
@@ -151,8 +169,8 @@ class Camera:
             enum = ReadOnly_AT_Enum(at_feature)
         else:
             enum = AT_Enum(at_feature)
-        self._callback_properties[at_feature] = (enum.get_value, py_name)
         setattr(self, py_name, enum)
+        self._callback_properties[at_feature] = (enum.get_value, py_name)
 
     def _add_property(self, at_feature, py_name, at_type, readonly=False):
         '''Directly expose numeric or string camera setting.'''
@@ -177,13 +195,11 @@ class Camera:
             setattr(self, 'set_'+py_name, setter)
 
     def _andor_callback(self, camera_handle, at_feature, context):
-        if self._serve_properties:
-            getter, py_name = self._callback_properties[at_feature]
-            self._property_server.update_property(self._property_prefix + py_name, getter())
+        getter, py_name = self._callback_properties[at_feature]
+        self._property_server.update_property(self._property_prefix + py_name, getter())
         return lowlevel.AT_CALLBACK_SUCCESS
 
     def __del__(self):
-#       print('~~~~~~~~~~~~~~~~~~~~~~~~~~~Camera.__del__~~~~~~~~~~~~~~~~~~~~~~~~~~~')
         if self._property_server:
             for at_feature in self._callback_properties.keys():
                 lowlevel.UnregisterFeatureCallback(at_feature, self._c_callback, 0)
@@ -199,16 +215,12 @@ class Camera:
             'aoi_height' : self.get_aoi_height()
         }
 
+    def _delta_sort_key(self, kv):
+        key, value = kv
+        return value - getattr(self, 'get_'+key)()
+        
     def set_aoi(self, aoi_dict):
-        valid_keys = ['aoi_left', 'aoi_top', 'aoi_width', 'aoi_height']
-        extraneous = set(aoi_dict.keys()) - set(('aoi_left', 'aoi_top', 'aoi_width', 'aoi_height'))
-        if extraneous:
-            e = 'Invalid AOI dict key{} {} supplied.  '
-            if len(extraneous) == 1:
-                e = e.format('', "'{}'".format(extraneous.pop()))
-            else:
-                e = e.format('s', sorted(list(extraneous)))
-            raise KeyError(e + 'AOI dict keys must be one of {}.'.format(valid_keys))
+        assert set(aoi_dict.keys()).issubset({'aoi_left', 'aoi_top', 'aoi_width', 'aoi_height'})
         # Although this property gives the appearence of setting multiple AOI parameters simultaneously,
         # each parameter is actually sent to the layer beneath us one at a time, and it is never permitted
         # to (even temporarily) specify an illegal AOI.
@@ -219,26 +231,9 @@ class Camera:
         # 
         # Performing AOI updates in ascending order of signed parameter value change ensures that setting
         # a collection of AOI parameters that are together legal does not require transitioning through
-        # an illegal state.*
-        # 
-        # Although processing of vertical and horizontal parameters via this algorithm
-        # is separable, applying a sort to both together will never fail when separate processing would 
-        # succeed, and vice versa.**
-        #
-        # * A too-fat mouse will not fit through a too-occluded portal.  However, the mouse may fit
-        # _after_ decreasing the size of the occlusion.
-        # 
-        # ** Proof: the validity of a horizontal parameter depends only on the other horizontal
-        # parameter and never either vertical parameter, as does the validity of a vertical
-        # parameter, mutatis mutandis.  Therefore, only ordering of subset elements relative to other
-        # elements of the same subset matters, and sorting the combined set preserves subset ordering
-        # such that separating the sets after sorting yields identical results to sorting each separately.
-        deltas = []
-        for key, value in aoi_dict.items():
-            if value is not None:
-                deltas.append((key, value, value - getattr(self, 'get_' + key)()))
-        deltas.sort(key=lambda kv: kv[2])
-        for key, value, delta in deltas:
+        # an illegal state.
+        aoi_list = [(key, value) for key, value in aoi_dict.items() if value is not None]
+        for key, value in sorted(aoi_list, key = _delta_sort_key):
             getattr(self, 'set_' + key)(value)
 
     def software_trigger(self):
@@ -251,10 +246,116 @@ class Camera:
         '''Reset current_timestamp to 0.'''
         lowlevel.Command('TimestampClockReset')
 
-    def get_live_mode_enabled(self):
-        return self._andor_image_server.in_live_mode
+    def get_live_mode(self):
+        return self._live_mode
 
-    def set_live_mode_enabled(self, live_mode_enabled):
-        self._andor_image_server.in_live_mode = live_mode_enabled
-        if self._publish_live_mode_enabled is not None:
-            self._publish_live_mode_enabled(live_mode_enabled)
+    def set_live_mode(self, enabled):
+        if enabled:
+            self._enable_live()
+        else:
+            self._disable_live()
+        self._live_mode = enabled
+        self._update_live_mode(enabled)
+        self._update_live_buffer(self._live_buffer_name)
+
+    def _enable_live(self):
+        if self._live_mode:
+            return
+        self._live_buffer_name = 'live@'+str(time.time())
+        self._live_mode_manager = LiveMode(self._live_buffer_name, self._update_live_frame)
+        
+    def _disable_live(self):
+        if not self._live_mode:
+            return
+        self._live_mode_manager.stop()
+        self._live_buffer_name = None
+    
+    def get_live_buffer_name(self):
+        return self._live_buffer_name
+    
+
+class LiveMode:
+    def __init__(self, blob_name, frame_update, fps=None):
+        if fps is None:
+            fps = min(self.get_max_interface_fps(), self.get_frame_rate())
+        sleep_time = 1 / (fps-0.5) # subtract 0.5 for safety margin
+        width = lowlevel.GetInt('AOIWidth')
+        height = lowlevel.GetInt('AOIHeight')
+        self.ism_blob = ism_blob.ISM_Blob.new(blob_name, shape=(width, height), dtype=numpy.uint16, order='Fortran')
+        output_buffer = ctypes.byref(self.ism_blob.data)
+        lowlevel.Flush()
+        self.old_mode = self.cycle_mode.get_value()
+        self.cycle_mode.set_value('Continuous')
+        lowlevel.Command('AcquisitionStart')
+        self.live_reader = LiveReader(output_buffer, frame_update, sleep_time)
+        self.live_trigger = LiveTrigger(sleep_time)
+        
+
+    def stop(self):
+        self.live_trigger.stop()
+        self.live_reader.stop()
+        self.live_reader.join()
+        self.live_trigger.join()
+        lowlevel.Command('AcquisitionStop')
+        self.cycle_mode.set_value(self.old_mode)
+        
+
+class LiveModeThread(threading.Thread):
+    def __init__(self):
+        super().__init__(daemon=True)
+        self.running = True
+        self.start()
+    
+    def stop(self):
+        self.running = False
+    
+    def run(self):
+        while self.running:
+            self.loop()
+    
+    def loop(self):
+        raise NotImplementedError()
+    
+class LiveTrigger(LiveModeThread):
+    def __init__(self, sleep_time):
+        self.sleep_time = sleep_time
+        super().__init__()
+        
+    def loop(self):
+        time.sleep(self.sleep_time)
+        lowlevel.Command('SoftwareTrigger')
+
+class LiveReader(LiveModeThread):
+    def __init__(self, output_buffer, sequence_update, sleep_time):
+        self.output_buffer = output_buffer
+        self.sequence_update = sequence_update
+        self.last_times = numpy.zeros(100)
+        self.buffer = lowlevel.make_buffer()
+        self.width = lowlevel.GetInt('AOIWidth')
+        self.height = lowlevel.GetInt('AOIHeight')
+        self.stride = lowlevel.GetInt('AOIStride')
+        self.input_encoding = lowlevel.GetEnum('PixelEncoding')
+        self.image_number = 0
+        self.ready = threading.Event()
+        self.timeout = int(1000 * 2 * sleep_time) # double the triggering sleep time and convert to ms
+        super().__init__()
+        self.ready.wait() # don't return from init until a buffer is queued
+    
+    def loop(self):
+        t = time.time()
+        lowlevel.queue_buffer(self.buffer)
+        self.ready.set()
+        try:
+            lowlevel.WaitBuffer(self.timeout) # allowing for a timeout permits the thread to exit even if triggering is stopped in the middle of a wait
+        except AndorError as e:
+            if e.errtext == 'TIMEDOUT':
+                return
+            else:
+                raise
+        lowlevel.ConvertBuffer(self.buffer, self.output_buffer, self.width, self.height, 
+            self.stride, self.input_encoding, 'Mono16')
+        self.sequence_update(self.image_number)
+        self.image_number += 1
+        self.last_times[self.image_number % self.last_times.size] = time.time() - t
+        
+
