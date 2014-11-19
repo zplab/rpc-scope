@@ -24,6 +24,7 @@
 import threading
 import time
 import ctypes
+import numpy
 
 import ism_blob
 
@@ -44,50 +45,50 @@ class ReadOnly_AT_Enum(enumerated_properties.ReadonlyDictProperty):
 
 class AT_Enum(ReadOnly_AT_Enum, enumerated_properties.DictProperty):
     def get_available_values(self):
-        '''The currently accepted values.  This is the subset of recognized_values
+        """The currently accepted values. This is the subset of recognized_values
         that may be assigned without raising a NOTIMPLEMENTED AndorError, given the
-        camera model and its current state.'''
+        camera model and its current state."""
         return sorted((feature for idx, feature in self._hw_to_usr.items() if lowlevel.IsEnumIndexAvailable(self._feature, idx)))
 
     def _write(self, value):
         lowlevel.SetEnumIndex(self._feature, value)
 
 class Camera:
-    '''This class provides an abstraction of the raw Andor API ctypes shim found in
-    rpc_acquisition.andor.lowlevel.'''
+    """This class provides an abstraction of the raw Andor API ctypes shim found in
+    rpc_acquisition.andor.lowlevel."""
 
     _CAMERA_DEFAULTS = [
-        ('AOIBinning', lowlevel.SetEnum, '1x1'),
+        ('AOIBinning', lowlevel.SetEnumString, '1x1'),
         ('AOIHeight', lowlevel.SetInt, 2160),
         ('AOILeft', lowlevel.SetInt, 1),
         ('AOITop', lowlevel.SetInt, 1),
         ('AOIWidth', lowlevel.SetInt, 2560),
         ('AccumulateCount', lowlevel.SetInt, 1),
-        ('AuxiliaryOutSource', lowlevel.SetEnum, 'FireAll'),
-        ('CycleMode', lowlevel.SetEnum, 'Fixed'),
-        ('ElectronicShutteringMode', lowlevel.SetEnum, 'Rolling'),
+        ('AuxiliaryOutSource', lowlevel.SetEnumString, 'FireAll'),
+        ('CycleMode', lowlevel.SetEnumString, 'Fixed'),
+        ('ElectronicShutteringMode', lowlevel.SetEnumString, 'Rolling'),
         ('ExposureTime', lowlevel.SetFloat, 0.01),
-        ('FanSpeed', lowlevel.SetEnum, 'On'),
+        ('FanSpeed', lowlevel.SetEnumString, 'On'),
         ('FrameCount', lowlevel.SetInt, 1),
-        ('IOSelector', lowlevel.SetEnum, 'Fire 1'),
+        ('IOSelector', lowlevel.SetEnumString, 'Fire 1'),
         ('IOInvert', lowlevel.SetBool, False),
-        ('IOSelector', lowlevel.SetEnum, 'Fire N'),
+        ('IOSelector', lowlevel.SetEnumString, 'Fire N'),
         ('IOInvert', lowlevel.SetBool, False),
-        ('IOSelector', lowlevel.SetEnum, 'Aux Out 1'),
+        ('IOSelector', lowlevel.SetEnumString, 'Aux Out 1'),
         ('IOInvert', lowlevel.SetBool, False),
-        ('IOSelector', lowlevel.SetEnum, 'Arm'),
+        ('IOSelector', lowlevel.SetEnumString, 'Arm'),
         ('IOInvert', lowlevel.SetBool, False),
-        ('IOSelector', lowlevel.SetEnum, 'External Trigger'),
+        ('IOSelector', lowlevel.SetEnumString, 'External Trigger'),
         ('IOInvert', lowlevel.SetBool, False),
         ('MetadataEnable', lowlevel.SetBool, False),
         ('MetadataTimestamp', lowlevel.SetBool, True),
         ('Overlap', lowlevel.SetBool, True),
-        ('PixelReadoutRate', lowlevel.SetEnum, '100 MHz'),
+        ('PixelReadoutRate', lowlevel.SetEnumString, '100 MHz'),
         ('SensorCooling', lowlevel.SetBool, True),
-        ('SimplePreAmpGainControl', lowlevel.SetEnum, '16-bit (low noise & high well capacity)'),
+        ('SimplePreAmpGainControl', lowlevel.SetEnumString, '16-bit (low noise & high well capacity)'),
         ('SpuriousNoiseFilter', lowlevel.SetBool, True),
-        ('TriggerMode', lowlevel.SetEnum, 'Software'),
-        ('VerticallyCenterAOI', lowlevel.SetBool, False)
+        ('TriggerMode', lowlevel.SetEnumString, 'Software'),
+#        ('VerticallyCenterAOI', lowlevel.SetBool, False)
     ]
 
     def __init__(self, property_server=None, property_prefix=''):
@@ -153,7 +154,7 @@ class Camera:
         else:
             self._update_live_mode = self._update_live_frame = self._update_live_buffer = lambda x: None
         self._live_mode = False
-        sellf._update_live_mode(false)
+        self._update_live_mode(False)
         self._live_frame = 0
 
         self.return_to_default_state()
@@ -163,8 +164,8 @@ class Camera:
             setter(feature, value)
 
     def _add_enum(self, at_feature, py_name, readonly=False):
-        '''Expose a camera setting presented by the Andor API via GetEnumIndex, 
-        SetEnumIndex, and GetEnumStringByIndex as an enumerated property.'''
+        """Expose a camera setting presented by the Andor API via GetEnumIndex, 
+        SetEnumIndex, and GetEnumStringByIndex as an enumerated property."""
         if readonly:
             enum = ReadOnly_AT_Enum(at_feature)
         else:
@@ -205,9 +206,9 @@ class Camera:
                 lowlevel.UnregisterFeatureCallback(at_feature, self._c_callback, 0)
                     
     def get_aoi(self):
-        '''Convenience wrapper around the aoi_left, aoi_top, aoi_width, aoi_height
+        """Convenience wrapper around the aoi_left, aoi_top, aoi_width, aoi_height
         properties.  When setting this property, None elements and omitted entries
-        cause the corresponding aoi_* property to be left unmodified.'''
+        cause the corresponding aoi_* property to be left unmodified."""
         return {
             'aoi_left' : self.get_aoi_left(),
             'aoi_top' : self.get_aoi_top(),
@@ -237,9 +238,9 @@ class Camera:
             getattr(self, 'set_' + key)(value)
 
     def software_trigger(self):
-        '''Send software trigger.  Causes an exposure to be acquired and eventually
+        """Send software trigger.  Causes an exposure to be acquired and eventually
         written to a queued buffer when an acquisition sequence is in progress and
-        trigger_mode is 'Software'.'''
+        trigger_mode is 'Software'."""
         lowlevel.Command('SoftwareTrigger')
 
     def reset_timestamp(self):
@@ -262,7 +263,8 @@ class Camera:
         if self._live_mode:
             return
         self._live_buffer_name = 'live@'+str(time.time())
-        self._live_mode_manager = LiveMode(self._live_buffer_name, self._update_live_frame)
+        fps = min(self.get_max_interface_fps(), self.get_frame_rate()) * 0.95
+        self._live_mode_manager = LiveMode(self._live_buffer_name, self._update_live_frame, fps)
         
     def _disable_live(self):
         if not self._live_mode:
@@ -275,19 +277,16 @@ class Camera:
     
 
 class LiveMode:
-    def __init__(self, blob_name, frame_update, fps=None):
-        if fps is None:
-            fps = min(self.get_max_interface_fps(), self.get_frame_rate())
-        sleep_time = 1 / (fps-0.5) # subtract 0.5 for safety margin
+    def __init__(self, blob_name, frame_update, fps):
+        sleep_time = 1 / fps
         width = lowlevel.GetInt('AOIWidth')
         height = lowlevel.GetInt('AOIHeight')
-        self.ism_blob = ism_blob.ISM_Blob.new(blob_name, shape=(width, height), dtype=numpy.uint16, order='Fortran')
-        output_buffer = ctypes.byref(self.ism_blob.data)
+        self.ism_blob = ism_blob.ISMBlob.new(blob_name, shape=(width, height), dtype=numpy.uint16, order='Fortran')
         lowlevel.Flush()
-        self.old_mode = self.cycle_mode.get_value()
-        self.cycle_mode.set_value('Continuous')
+        self.old_mode = lowlevel.GetEnumIndex('CycleMode')
+        lowlevel.SetEnumString('CycleMode', 'Continuous')
         lowlevel.Command('AcquisitionStart')
-        self.live_reader = LiveReader(output_buffer, frame_update, sleep_time)
+        self.live_reader = LiveReader(self.ism_blob.data, frame_update, sleep_time)
         self.live_trigger = LiveTrigger(sleep_time)
         
 
@@ -297,14 +296,16 @@ class LiveMode:
         self.live_reader.join()
         self.live_trigger.join()
         lowlevel.Command('AcquisitionStop')
-        self.cycle_mode.set_value(self.old_mode)
+        lowlevel.SetEnumIndex('CycleMode', self.old_mode)
+        self.ism_blob.close()
+
         
 
 class LiveModeThread(threading.Thread):
     def __init__(self):
         super().__init__(daemon=True)
         self.running = True
-        self.start()
+        #self.start()
     
     def stop(self):
         self.running = False
@@ -334,12 +335,12 @@ class LiveReader(LiveModeThread):
         self.width = lowlevel.GetInt('AOIWidth')
         self.height = lowlevel.GetInt('AOIHeight')
         self.stride = lowlevel.GetInt('AOIStride')
-        self.input_encoding = lowlevel.GetEnum('PixelEncoding')
+        self.input_encoding = lowlevel.GetEnumStringByIndex('PixelEncoding', lowlevel.GetEnumIndex('PixelEncoding'))
         self.image_number = 0
         self.ready = threading.Event()
-        self.timeout = int(1000 * 2 * sleep_time) # double the triggering sleep time and convert to ms
+        self.timeout = int(1000 * 4 * sleep_time) # double the triggering sleep time and convert to ms
         super().__init__()
-        self.ready.wait() # don't return from init until a buffer is queued
+        #self.ready.wait() # don't return from init until a buffer is queued
     
     def loop(self):
         t = time.time()
@@ -347,15 +348,14 @@ class LiveReader(LiveModeThread):
         self.ready.set()
         try:
             lowlevel.WaitBuffer(self.timeout) # allowing for a timeout permits the thread to exit even if triggering is stopped in the middle of a wait
-        except AndorError as e:
+        except lowlevel.AndorError as e:
             if e.errtext == 'TIMEDOUT':
                 return
             else:
                 raise
-        lowlevel.ConvertBuffer(self.buffer, self.output_buffer, self.width, self.height, 
+        lowlevel.ConvertBuffer(self.buffer.ctypes.data_as(lowlevel.uint8_p), ctypes.cast(self.output_buffer, lowlevel.uint8_p), self.width, self.height, 
             self.stride, self.input_encoding, 'Mono16')
         self.sequence_update(self.image_number)
-        self.image_number += 1
         self.last_times[self.image_number % self.last_times.size] = time.time() - t
-        
+        self.image_number += 1
 

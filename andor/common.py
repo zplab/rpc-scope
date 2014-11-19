@@ -48,8 +48,7 @@ class AndorError(RuntimeError):
     def __init__(self, code):
         self.errtext = _at_err_dict[code]
         self.code = code
-        self.errtext = errtext
-        super().__init__(errtext)
+        super().__init__(self.errtext)
 
 def _at_errcheck(result, func, args):
     if result != 0:
