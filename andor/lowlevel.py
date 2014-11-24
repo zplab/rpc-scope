@@ -126,12 +126,14 @@ def _init_camera(desired_camera):
     # this assumption by querying the camera's name and ensuring that it matches
     # the name of our hardware camera:
     wrapper._at_camera_handle = wrapper._at_core_lib.AT_Open(0)
-    if desired_camera and GetString('CameraModel') != desired_camera:
-        wrapper._at_core_lib.AT_Close(wrapper._at_camera_handle)
-        wrapper._at_camera_handle = None
-        raise AndorError('Model name of Andor device 0, "' + camera_model_name + 
-                         '", does not match the desired camera model name, "' +
-                         model_name_of_desired_camera + '".')
+    if desired_camera:
+        actual_camera = GetString('CameraModel')
+        if actual_camera != desired_camera:
+            wrapper._at_core_lib.AT_Close(wrapper._at_camera_handle)
+            wrapper._at_camera_handle = None
+            raise AndorError('Model name of Andor device 0, "' + actual_camera + 
+                             '", does not match the desired camera model name, "' +
+                             desired_camera + '".')
 
     atexit.register(wrapper._at_core_lib.AT_Close, wrapper._at_camera_handle)
     
