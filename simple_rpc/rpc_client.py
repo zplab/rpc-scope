@@ -133,7 +133,7 @@ class ZMQClient(RPCClient):
         reply_type = self.socket.recv_string()
         assert(self.socket.getsockopt(zmq.RCVMORE))
         if reply_type == 'bindata':
-            reply = self.socket.recv()
+            reply = self.socket.recv(copy=False, track=False).buffer
         else:
             reply = self.socket.recv_json()
         return reply, reply_type == 'error'

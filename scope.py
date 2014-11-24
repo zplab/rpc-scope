@@ -7,6 +7,7 @@ from . import andor
 from . import io_tool
 from . import spectra_x
 from . import tl_lamp
+from . import acquisition_sequencer
 
 from . import scope_configuration as config
 
@@ -38,14 +39,11 @@ class Scope(messaging.message_device.AsyncDeviceNamespace):
             self.tl = dm6000b.illumination_axes.TL(message_manager, property_server, property_prefix='scope.tl.')
 
         try:
-            print('doing self.iotool = io_tool.IOTool(config.IOTool.SERIAL_PORT)')
             self.iotool = io_tool.IOTool(config.IOTool.SERIAL_PORT)
             has_iotool = True
         except SerialException as e:
             has_iotool = False
             _print_exception('Could not connect to IOTool box:', e)
-        finally:
-            print('did self.iotool = io_tool.IOTool(config.IOTool.SERIAL_PORT)')
         
         if not message_manager and has_iotool:
             self.il = Namespace()
@@ -57,6 +55,12 @@ class Scope(messaging.message_device.AsyncDeviceNamespace):
         
         try:
             self.camera = andor.camera.Camera(property_server, property_prefix='scope.camera.')
+            has_camera = True
         except andor.lowlevel.AndorError as e:
+            has_camera = False
             _print_exception('Could not connect to camera:', e)
+    
+        if has_camera and has_iotool:
+            self.acquisition_sequencer = acquisition_sequencer.AcquisitionSequencer(self.camera, self.io_tool, self.il.spectra_x)
+    
             

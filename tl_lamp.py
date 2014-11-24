@@ -16,4 +16,3 @@ class TL_Lamp:
                 self._property_server.update_property(self._property_prefix+'enabled', enable)
             if intensity is not None:
                 self._property_server.update_property(self._property_prefix+'intensity', intensity)
-                

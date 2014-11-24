@@ -44,7 +44,7 @@ class ReadonlySetProperty:
         of a read/write attribute, assigned to .value.  Assigning anything not appearing
         in this list to a writeable attribute's .value causes a ValueError exception to
         be raised.'''
-        return sorted(list(self._valid_set))
+        return self._valid_set
 
     def get_value(self):
         '''The current value.'''
@@ -62,7 +62,7 @@ class SetProperty(ReadonlySetProperty):
     
     def set_value(self, value):
         if value not in self._valid_set:
-            raise ValueError('value must be one of {}.'.format(self.get_recognized_values()))
+            raise ValueError('value must be one of {}.'.format(sorted(self.get_recognized_values())))
         self._write(value)
 
     def _write(self, value):
@@ -89,11 +89,8 @@ class ReadonlyDictProperty:
         self._usr_to_hw = {usr : hw for hw, usr in self._hw_to_usr.items()}
 
     def get_recognized_values(self):
-        '''The list of recognized values that may be assumed by .value, and in the case
-        of a read/write attribute, assigned to .value.  Assigning anything not appearing
-        in this list to a writeable attribute's .value causes a ValueError exception to
-        be raised.'''
-        return sorted(list(self._usr_to_hw.keys()))
+        '''The list of recognized values for this property.'''
+        return self._usr_to_hw.keys()
 
     def get_value(self):
         '''The current value.'''
@@ -110,7 +107,7 @@ class DictProperty(ReadonlyDictProperty):
     
     def set_value(self, value):
         if value not in self._usr_to_hw:
-            raise ValueError('value must be one of {}.'.format(self.get_recognized_values()))
+            raise ValueError('value must be one of {}.'.format(sorted(self.get_recognized_values())))
         self._write(self._usr_to_hw[value])
 
     def _write(self, value):

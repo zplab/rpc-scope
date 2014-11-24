@@ -35,6 +35,8 @@ class MessageManager(threading.Thread):
         self.running = True
         while self.running: # better than 'while True' because can alter self.running from another thread
             response = self._receive_message()
+            if response is None:
+                break
             response_key = self._generate_response_key(response)
             if self.verbose:
                 print('received response: {} with response key: {}'.format(response, response_key))
@@ -105,7 +107,8 @@ class MessageManager(threading.Thread):
         raise NotImplementedError()
 
     def _receive_message(self, message):
-        """Block until a message is received."""
+        """Block until a message is received. Return None if an error-condition
+        occurs during the read and the run() loop should be terminated."""
         raise NotImplementedError()
     
     def _generate_response_key(self, response):
@@ -139,9 +142,11 @@ class SerialMessageManager(MessageManager):
     
     def _receive_message(self):
         while self.running:
-            response = self.serial_port.read_until(self.response_terminator)
-            if response: # empty response = timeout
-                return str(response[:-len(self.response_terminator)], encoding='ascii')
+            try:
+                response = self.serial_port.read_until(self.response_terminator)
+            except smart_serial.SerialTimeout:
+                continue
+            return str(response[:-len(self.response_terminator)], encoding='ascii')
 
 class LeicaMessageManager(SerialMessageManager):
     """MessageManager subclass appropriate for routing messages from Leica API"""

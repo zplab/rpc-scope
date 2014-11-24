@@ -169,7 +169,7 @@ class ZMQServer(RPCServer):
                 reply_type = 'error'
                 reply = zmq.utils.jsonapi.dumps('Could not JSON-serialize return value.')
             self.socket.send_string(reply_type, flags=zmq.SNDMORE)
-            self.socket.send(reply)
+            self.socket.send(reply, copy=False)
 
 class Namespace:
     """Placeholder class to hold attribute values"""

@@ -86,3 +86,6 @@ def transmitted_lamp(enable=None, intensity=None):
         else:
             command.append(set_low(_config.IOTool.TL_ENABLE_PIN))
     return '\n'.join(command)
+
+def footpedal_wait():
+    return wait_low(_config.IOTool.FOOTPEDAL_PIN)

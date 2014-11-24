@@ -33,7 +33,14 @@ class IOTool:
     TL_ENABLE_PIN = 'E6'
     TL_PWM_PIN = 'D7'
     TL_PWM_MAX = 255
+    
+    FOOTPEDAL_PIN = 'B4'
 
 class SpectraX:
     SERIAL_PORT = '/dev/ttySpectraX'
     SERIAL_BAUD = 9600
+
+class Peltier:
+    SERIAL_PORT = '/dev/ttyPeltier'
+    SERIAL_BAUD = 2400
+    

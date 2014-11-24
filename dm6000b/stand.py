@@ -33,11 +33,13 @@ class DM6000Device(messaging.message_device.LeicaAsyncDevice):
     def __init__(self, message_manager, property_server=None, property_prefix=''):
         super().__init__(message_manager)
         self._property_server = property_server
-        self._property_prefix = property_prefix    
+        self._property_prefix = property_prefix
 
-    def _update_property(self, name, value):
+    def _add_property(self, name, value):
         if self._property_server:
-            self._property_server.update_property(self._property_prefix+name, value)
+            return self._property_server.add_property(self._property_prefix+name, value)
+        else:
+            return lambda x: None
             
 class Stand(DM6000Device):
     def get_all_microscopy_methods(self):
