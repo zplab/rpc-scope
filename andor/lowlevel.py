@@ -133,7 +133,6 @@ def _init_camera(desired_camera):
         raise AndorError('Model name of Andor device 0, "' + actual_camera + 
                          '", does not match the desired camera model name, "' +
                          desired_camera + '".')
-
     atexit.register(wrapper._at_core_lib.AT_Close, wrapper._at_camera_handle)
     
 def initialize(desired_camera='ZYLA-5.5-CL3'):
