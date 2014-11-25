@@ -166,13 +166,11 @@ class Camera:
     @contextlib.contextmanager
     def _live_guarded(self):
         live = self._live_mode
-        if live:
-            self.set_live_mode(False)
+        self.set_live_mode(False)
         try:
             yield
         finally:
-            if live:
-                self.set_live_mode(True)
+            self.set_live_mode(live)
 
     def _add_enum(self, at_feature, py_name, readonly=False):
         """Expose a camera setting presented by the Andor API via GetEnumIndex, 
@@ -305,7 +303,7 @@ class Camera:
         sleep_time = max(1/self.get_max_interface_fps(), frame_time) * 1.05
         input_buffer, self._live_array, convert_buffer = self._make_input_output_buffers(self._live_buffer_name)
         lowlevel.Flush()
-        self.push_state(overlap=False, cycle_mode='Continuous', trigger_mode='Software', pixel_readout_rate='100 MHz')
+        self.push_state(overlap=False, cycle_mode='Continuous', trigger_mode='Software', pixel_readout_rate='280 MHz')
         lowlevel.Command('AcquisitionStart')
         self.live_reader = LiveReader(input_buffer, convert_buffer, self._update_live_frame)
         self.live_trigger = LiveTrigger(sleep_time, self.live_reader)
@@ -347,22 +345,56 @@ class Camera:
                 width, height, stride, input_encoding, 'Mono16')
         return input_buffer, output_array, convert_buffer
 
+    def _make_input_output_buffer_sequence(self, namebase, count):
+        if count == 1:
+            names = [namebase]
+        else:
+            names = [namebase + str(i) for i in range(self._num_acquisitions)]
+        input_buffers, output_arrays, convert_buffers = zip(*map(self._make_input_output_buffers, names))
+        return names, input_buffers, output_arrays, convert_buffers
+
     def acquire_image(self):
-        buffer_name = 'acquire@'+str(time.time())
-        input_buffer, output_array, convert_buffer = self._make_input_output_buffers(buffer_name)
-        timeout = self.get_exposure_time() + 1000 # exposure time plus 1 sec should be plenty
-        with self._live_guarded():
-            lowlevel.Flush()
-            self.push_state(cycle_mode='Fixed', frame_count=1, trigger_mode='Internal')
-            lowlevel.queue_buffer(input_buffer)
-            lowlevel.Command('AcquisitionStart')
-            lowlevel.WaitBuffer(timeout)
-            lowlevel.Command('AcquisitionStop')
-            self.pop_state()
+        read_timeout = self.get_exposure_time() + 1000 # exposure time + 1 second
+        self.start_image_sequence_acquisition(1)
+        name = self.get_next_image(read_timeout)
+        self.end_image_sequence_acquisition()
+        return name
+    
+    def send_software_trigger(self):
+        lowlevel.Command('SoftwareTrigger')
+    
+    def start_image_sequence_acquisition(self, frame_count, trigger_mode='Internal', **camera_params):
+        if frame_count == 1:
+            namebase = 'acquire@'+str(time.time())
+        else:
+            namebase = 'sequence@{}-'.format(time.time())
+        live = self._live_mode
+        self.set_live_mode(False)
+        lowlevel.Flush()
+        self.push_state(cycle_mode='Fixed', frame_count=frame_count, trigger_mode=trigger_mode, **camera_params)
+        names, input_buffers, output_arrays, convert_buffers = self._make_input_output_buffer_sequence(namebase, count)
+        for ib in input_buffers:
+            lowlevel.queue_buffer(ib)
+        self._sequence_acquisition_state = SequenceAcquisitionState(live, names, output_arrays, convert_buffers)
+        lowlevel.Command('AcquisitionStart')
+
+    def get_next_image(self, read_timeout=lowlevel.ANDOR_INFINITE):
+        name, output_array, convert_buffer = next(self._sequence_acquisition_state.acquire_data)
+        lowlevel.WaitBuffer(read_timeout)
         convert_buffer()
-        ism_buffer_utils.server_register_array(buffer_name, output_array)
-        return buffer_name
+        ism_buffer_utils.server_register_array(name, output_array)
+        return name
         
+    def end_image_sequence_acquisition(self):
+        live = self._sequence_acquisition_state[0]
+        del self._sequence_acquisition_state
+        for name in names:
+            lowlevel.WaitBuffer(read_timeout)
+        lowlevel.Command('AcquisitionStop')
+        lowlevel.Flush()
+        self._camera.pop_state()
+        self.set_live_mode(live)
+            
     def set_state(self, **state):
         for k, v in state.items():
             getattr(self, 'set_'+k)(v)
@@ -375,6 +407,11 @@ class Camera:
     def pop_state(self):
         old_state = self._state_stack.pop()
         self.set_state(**old_state)
+
+class SequenceAcquisitionState:
+    def __init__(self, live, names, output_arrays, convert_buffers):
+        self.live = live
+        self.acquire_data = zip(names, output_arrays, convert_buffers)        
 
 class LiveModeThread(threading.Thread):
     def __init__(self):

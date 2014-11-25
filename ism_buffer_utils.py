@@ -18,15 +18,15 @@ def server_register_array(name, array):
     _ism_buffer_registry[name].append(array)
     
 def _server_release_array(name):
-    _ism_buffer_registry[name].pop()
+    return _ism_buffer_registry[name].pop()
 
-def _server_pack_ism_data(name, compresslevel=2, stolen_reference=True):
-    buffer = ism_buffer.open(name, stolen_reference=stolen_reference)
-    buf = io.BytesIO()
-    with gzip.GzipFile(fileobj=buf, mode='wb', compresslevel=compresslevel) as f:
-        f.write(buffer.descr) # json encoding of (dtype, shape, order)
+def _server_pack_ism_data(name, compresslevel=2):
+    ism_buf = ism_buffer.open(name)
+    io_buf = io.BytesIO()
+    with gzip.GzipFile(fileobj=io_buf, mode='wb', compresslevel=compresslevel) as f:
+        f.write(ism_buf.descr) # json encoding of (dtype, shape, order)
         f.write(b'\0')
-        f.write(ctypes.string_at(buffer.data, buffer.data._length_))
+        f.write(ctypes.string_at(ism_buf.data, ism_buf.data._length_))
     return buf.getvalue()
 
 def _client_unpack_ism_data(buf):

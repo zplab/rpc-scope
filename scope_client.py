@@ -4,17 +4,19 @@ from . import simple_rpc
 from . import scope_configuration as config
 from . import ism_buffer_utils
 
-def wrap_image_getter(function, get_data):
+def wrap_image_getter(namespace, func_name, get_data):
+    function = getattr(namespace, func_name)
     @functools.wraps(function)
     def wrapped():
         return get_data(function())
-    return wrapped
+    setattr(namespace, func_name, wrapped)
 
-def wrap_images_getter(function, get_data):
+def wrap_images_getter(namespace, func_name, get_data):
+    function = getattr(namespace, func_name)
     @functools.wraps(function)
     def wrapped():
         return [get_data(name) for name in function()]
-    return wrapped
+        setattr(namespace, func_name, wrapped)
 
 def rpc_client_main(rpc_port=None, rpc_interrupt_port=None, context=None):
     if rpc_port is None:
@@ -27,10 +29,11 @@ def rpc_client_main(rpc_port=None, rpc_interrupt_port=None, context=None):
     is_local, get_data = ism_buffer_utils.client_get_data_getter(client)
     scope._get_data = get_data
     if hasattr(scope, 'camera'):
-        scope.camera.acquire_image = wrap_image_getter(scope.camera.acquire_image)
-        scope.camera.get_live_image = wrap_image_getter(scope.camera.get_live_image)
+        wrap_image_getter(scope.camera, 'acquire_image', get_data)
+        wrap_image_getter(scope.camera, 'get_live_image', get_data)
+        wrap_image_getter(scope.camera, 'get_next_image', get_data)
     if hasattr(scope, 'acquisition_sequencer'):
-        scope.acquisition_sequencer.run_sequence = wrap_images_getter(scope.acquisition_sequencer.run_sequence)
+        wrap_images_getter(scope.acquisition_sequencer, 'run', get_data)
     return client, scope
 
 def property_client_main(property_port=None, context=None):
