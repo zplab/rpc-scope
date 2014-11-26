@@ -29,15 +29,15 @@ class AcquisitionSequencer:
         self._steps.append(commands.set_high(scope_configuration.IOTool.CAMERA_PINS['trigger']))
         self._steps.append(commands.set_low(scope_configuration.IOTool.CAMERA_PINS['trigger']))
         self._steps.append(commands.wait_high(scope_configuration.IOTool.CAMERA_PINS['AuxOut1'])) # set to 'FireAll'
-        self._steps.append(commands.transmitted_lamp(tl_enable, tl_intensity))
-        self._steps.append(commands.lumencor_lamps(**lamps))
+        self._steps.extend(commands.transmitted_lamp(tl_enable, tl_intensity))
+        self._steps.extend(commands.lumencor_lamps(**lamps))
         if exposure_ms <= 65.535:
             self._steps.append(commands.delay_us(int(round(exposure_ms*1000))-4)) # delay command itself takes 4 µs, so subtract off 4
         else:
             self._steps.append(commands.delay_ms(int(round(exposure_ms))))
         if tl_enable:
-            self._steps.append(commands.transmitted_lamp(enable=False))
-        self._steps.append(commands.lumencor_lamps(**{lamp:False for lamp in lamps})) # turn lamps back off
+            self._steps.extend(commands.transmitted_lamp(enable=False))
+        self._steps.extend(commands.lumencor_lamps(**{lamp:False for lamp in lamps})) # turn lamps back off
         
     def compile(self):
         assert self._num_acquisitions > 0
@@ -46,7 +46,6 @@ class AcquisitionSequencer:
         self._steps.append(commands.set_high(scope_configuration.IOTool.CAMERA_PINS['trigger']))
         self._steps.append(commands.set_low(scope_configuration.IOTool.CAMERA_PINS['trigger']))
         
-        steps = [s for s in self._steps if s] # filter out empty steps
         self._io_tool.store_program(steps)
         self._compiled = True
     

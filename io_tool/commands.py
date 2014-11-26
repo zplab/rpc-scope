@@ -61,31 +61,31 @@ def lumencor_lamps(**lamps):
     """Input keyword arguments must be lamp names specified in LUMENCOR_PINS
     keys. The values are either True to enable that lamp, False to disable,
     or None to do nothing (unspecified lamps are also not altered)."""
-    command = []
+    commands = []
     for lamp, enable in lamps.items():
         if enable is None:
             continue
         pin = _config.IOTool.LUMENCOR_PINS[lamp]
         if enable:
-            command.append(set_high(pin))
+            commands.append(set_high(pin))
         else:
-            command.append(set_low(pin))
-    return '\n'.join(command)
+            commands.append(set_low(pin))
+    return commands
 
 def transmitted_lamp(enable=None, intensity=None):
     """enable: True (lamp on), False (lamp off), or None (no change).
     intensity: None (no change) or value in the range [0, 255] for min to max.
     """
-    command = []
+    commands = []
     if pwm is not None:
         assert 0 <= intensity <= _config.IOTool.TL_PWM_MAX
-        command.append(pwm(_config.IOTool.TL_PWM_PIN, intensity))
+        commands.append(pwm(_config.IOTool.TL_PWM_PIN, intensity))
     if enable is not None:
         if enable:
-            command.append(set_high(_config.IOTool.TL_ENABLE_PIN))
+            commands.append(set_high(_config.IOTool.TL_ENABLE_PIN))
         else:
-            command.append(set_low(_config.IOTool.TL_ENABLE_PIN))
-    return '\n'.join(command)
+            commands.append(set_low(_config.IOTool.TL_ENABLE_PIN))
+    return commands
 
 def footpedal_wait():
     return wait_low(_config.IOTool.FOOTPEDAL_PIN)

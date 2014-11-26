@@ -10,7 +10,7 @@ class TL_Lamp:
         enable: True (lamp on), False (lamp off), or None (no change).
         intensity: None (no change) or value in the range [0, 255] for min to max.
         """
-        self._iotool.execute(self._iotool.commands.transmitted_lamp(enable, intensity))
+        self._iotool.execute(*self._iotool.commands.transmitted_lamp(enable, intensity))
         if self._property_server:
             if enable is not None:
                 self._property_server.update_property(self._property_prefix+'enabled', enable)
