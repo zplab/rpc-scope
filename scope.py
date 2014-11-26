@@ -9,7 +9,8 @@ from . import spectra_x
 from . import tl_lamp
 from . import acquisition_sequencer
 from . import autofocus
-
+from . import peltier
+from . import footpedal
 from . import scope_configuration as config
 
 def _print_exception(preamble, e):
@@ -20,7 +21,7 @@ class Namespace:
     pass
 
 class Scope(messaging.message_device.AsyncDeviceNamespace):
-    def __init__(self, property_server, verbose=False):
+    def __init__(self, property_server=None, verbose=False):
         super().__init__()
         
         if property_server:
@@ -58,6 +59,7 @@ class Scope(messaging.message_device.AsyncDeviceNamespace):
                 has_spectra_x = False
                 _print_exception('Could not connect to Spectra X:', e)
             self.tl.lamp = tl_lamp.TL_Lamp(self.iotool, property_server, property_prefix='scope.tl.lamp.')
+            self.footpedal = footpedal.Footpedal(self.iotool)
         
         try:
             self.camera = andor.camera.Camera(property_server, property_prefix='scope.camera.')
@@ -67,7 +69,13 @@ class Scope(messaging.message_device.AsyncDeviceNamespace):
             _print_exception('Could not connect to camera:', e)
     
         if has_camera and has_iotool and has_spectra_x:
-            self.camera.acquisition_sequencer = acquisition_sequencer.AcquisitionSequencer(self.camera, self.io_tool, self.il.spectra_x)
+            self.camera.acquisition_sequencer = acquisition_sequencer.AcquisitionSequencer(self.camera, self.iotool, self.il.spectra_x)
     
         if has_scope and has_camera:
             self.camera.autofocus = autofocus.Autofocus(self.camera, self.stage)
+
+        try:
+            self.peltier = peltier.Peltier(config.Peltier.SERIAL_PORT, config.Peltier.SERIAL_BAUD, 
+                property_server, property_prefix='scope.peltier')
+        except SerialException as e:
+            _print_exception('Could not connect to peltier controller:', e)

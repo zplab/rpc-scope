@@ -28,6 +28,7 @@ def rpc_client_main(rpc_port=None, rpc_interrupt_port=None, context=None):
     scope = client.proxy_namespace()
     is_local, get_data = ism_buffer_utils.client_get_data_getter(client)
     scope._get_data = get_data
+    scope._is_local = is_local
     if hasattr(scope, 'camera'):
         wrap_image_getter(scope.camera, 'acquire_image', get_data)
         wrap_image_getter(scope.camera, 'get_live_image', get_data)

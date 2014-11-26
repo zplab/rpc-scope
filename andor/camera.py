@@ -26,6 +26,7 @@ import time
 import ctypes
 import numpy
 import contextlib
+import collections
 
 from .. import ism_buffer_utils
 
@@ -155,7 +156,7 @@ class Camera:
             self._update_live_frame = property_server.add_property(self._property_prefix + 'live_frame', None)
         else:
             self._update_live_mode = self._update_live_frame = lambda x: None
-        self.set_live_mode(False)
+        self._live_mode = False
         self.return_to_default_state()
         self._state_stack = []
 
@@ -166,11 +167,13 @@ class Camera:
     @contextlib.contextmanager
     def _live_guarded(self):
         live = self._live_mode
-        self.set_live_mode(False)
+        if live:
+            self.set_live_mode(False)
         try:
             yield
         finally:
-            self.set_live_mode(live)
+            if live:
+            self.set_live_mode(True)
 
     def _add_enum(self, at_feature, py_name, readonly=False):
         """Expose a camera setting presented by the Andor API via GetEnumIndex, 
@@ -234,11 +237,18 @@ class Camera:
             read_time = self.get_readout_time()
             current_short = current_exposure < read_time
             new_short = ms < read_time
-            if current_short != new_short:
+            must_pause_live = current_short != new_short
+            if must_pause_live:
                 self.set_live_mode(False)
         lowlevel.SetFloat('ExposureTime', ms / 1000)
         if live:
-            self.set_live_mode(True)
+            if must_pause_live:
+                self.set_live_mode(True)
+            else:
+                # changed exposure time without pausing live... update sleep time
+                self._live_trigger.sleep_time = self._get_live_sleep_time()
+                # ... and clear recent FPS data
+                self._live_reader.last_times.clear() 
     
     def get_aoi(self):
         """Convenience wrapper around the aoi_left, aoi_top, aoi_width, aoi_height
@@ -280,11 +290,11 @@ class Camera:
         return self._live_mode
 
     def set_live_mode(self, enabled):
+        print("setting live mode", enabled)
         if enabled:
             self._enable_live()
         else:
             self._disable_live()
-        self._live_mode = enabled
         self._update_live_mode(enabled)
 
     def get_live_image(self):
@@ -295,44 +305,43 @@ class Camera:
         if self._live_mode:
             return
         self._live_buffer_name = 'live@'+str(time.time())
+        lowlevel.Flush()
+        self.push_state(overlap_enabled=False, cycle_mode='Continuous', trigger_mode='Software', pixel_readout_rate='280 MHz')
+        sleep_time = self._get_live_sleep_time()
+        input_buffer, self._live_array, convert_buffer = self._make_input_output_buffers(self._live_buffer_name)
+        self._live_mode = True
+        lowlevel.Command('AcquisitionStart')
+        self._live_reader = LiveReader(input_buffer, convert_buffer, self._update_live_frame)
+        self._live_trigger = LiveTrigger(sleep_time, self._live_reader)
+    
+    def _get_live_sleep_time(self):
         readout_time = self.get_readout_time()
-        if self.get_exposure_time() <= readout_time:
+        if self.get_exposure_time() / 1000 <= readout_time:
             frame_time = readout_time * 2
         else:
             frame_time = 1/self.get_frame_rate()
         sleep_time = max(1/self.get_max_interface_fps(), frame_time) * 1.05
-        input_buffer, self._live_array, convert_buffer = self._make_input_output_buffers(self._live_buffer_name)
-        lowlevel.Flush()
-        self.push_state(overlap=False, cycle_mode='Continuous', trigger_mode='Software', pixel_readout_rate='280 MHz')
-        lowlevel.Command('AcquisitionStart')
-        self.live_reader = LiveReader(input_buffer, convert_buffer, self._update_live_frame)
-        self.live_trigger = LiveTrigger(sleep_time, self.live_reader)
-        
+        return sleep_time
+
     def _disable_live(self):
         if not self._live_mode:
             return
         self._live_buffer_name = None
         self._live_array = None
-        self.live_trigger.stop()
-        self.live_reader.stop()
-        self.live_reader.join()
-        self.live_trigger.join()
+        self._live_trigger.stop()
+        self._live_reader.stop()
+        self._live_reader.join()
+        self._live_trigger.join()
         lowlevel.Command('AcquisitionStop')
         lowlevel.Flush()
+        self._live_mode = False
         self._update_live_frame(None)
         self.pop_state()
     
-    def get_live_buffer_name(self):
-        return self._live_buffer_name
-
     def get_live_fps(self):
         if not self._live_mode:
             return
-        if self.live_reader.image_count < self.live_reader.last_times.size:
-            data = self.live_reader.last_times[:self.live_reader.image_count]
-        else:
-            data = self.live_reader.last_times
-        return data.mean()
+        return 1/numpy.mean(self._live_reader.last_times)
         
     def _make_input_output_buffers(self, name):
         width, height, stride = self.get_aoi_width(), self.get_aoi_height(), self.get_aoi_stride()
@@ -341,7 +350,7 @@ class Camera:
             order='Fortran')
         input_buffer = lowlevel.make_buffer()
         def convert_buffer():
-            lowlevel.ConvertBuffer(input_buffer, output_array.ctypes.data_as(lowlevel.uint8p),
+            lowlevel.ConvertBuffer(input_buffer, output_array.ctypes.data_as(lowlevel.uint8_p),
                 width, height, stride, input_encoding, 'Mono16')
         return input_buffer, output_array, convert_buffer
 
@@ -349,12 +358,12 @@ class Camera:
         if count == 1:
             names = [namebase]
         else:
-            names = [namebase + str(i) for i in range(self._num_acquisitions)]
+            names = [namebase + str(i) for i in range(count)]
         input_buffers, output_arrays, convert_buffers = zip(*map(self._make_input_output_buffers, names))
         return names, input_buffers, output_arrays, convert_buffers
 
     def acquire_image(self):
-        read_timeout = self.get_exposure_time() + 1000 # exposure time + 1 second
+        read_timeout = int(self.get_exposure_time()) + 1000 # exposure time + 1 second
         self.start_image_sequence_acquisition(1)
         name = self.get_next_image(read_timeout)
         self.end_image_sequence_acquisition()
@@ -372,7 +381,7 @@ class Camera:
         self.set_live_mode(False)
         lowlevel.Flush()
         self.push_state(cycle_mode='Fixed', frame_count=frame_count, trigger_mode=trigger_mode, **camera_params)
-        names, input_buffers, output_arrays, convert_buffers = self._make_input_output_buffer_sequence(namebase, count)
+        names, input_buffers, output_arrays, convert_buffers = self._make_input_output_buffer_sequence(namebase, frame_count)
         for ib in input_buffers:
             lowlevel.queue_buffer(ib)
         self._sequence_acquisition_state = SequenceAcquisitionState(live, names, output_arrays, convert_buffers)
@@ -386,14 +395,11 @@ class Camera:
         return name
         
     def end_image_sequence_acquisition(self):
-        live = self._sequence_acquisition_state[0]
-        del self._sequence_acquisition_state
-        for name in names:
-            lowlevel.WaitBuffer(read_timeout)
         lowlevel.Command('AcquisitionStop')
         lowlevel.Flush()
-        self._camera.pop_state()
-        self.set_live_mode(live)
+        self.pop_state()
+        self.set_live_mode(self._sequence_acquisition_state.live)
+        del self._sequence_acquisition_state
             
     def set_state(self, **state):
         for k, v in state.items():
@@ -402,10 +408,18 @@ class Camera:
     def push_state(self, **state):
         old_state = {k: getattr(self, 'get_'+k)() for k in state.keys()}
         self._state_stack.append(old_state)
+        overlap = state.pop('overlap_enabled', None)
         self.set_state(**state)
+        # overlap mode has complex dependencies, so it generally shouldn't be set until the very end
+        if overlap is not None and lowlevel.IsWritable('Overlap'):
+            self.set_overlap_enabled(overlap)
         
     def pop_state(self):
         old_state = self._state_stack.pop()
+        overlap = old_state.pop('overlap_enabled', None)
+        # overlap mode has complex dependencies, so it generally should be unset first
+        if overlap is not None and lowlevel.IsWritable('Overlap'):
+            self.set_overlap_enabled(overlap)
         self.set_state(**old_state)
 
 class SequenceAcquisitionState:
@@ -440,7 +454,9 @@ class LiveTrigger(LiveModeThread):
         time.sleep(self.sleep_time)
         if self.trigger_count - self.live_reader.image_count > 10:
             while self.trigger_count - self.live_reader.image_count > 1:
-                time.sleep(self._sleep_time)
+                if not self.running:
+                    return
+                time.sleep(self.sleep_time)
         lowlevel.Command('SoftwareTrigger')
         self.trigger_count += 1
 
@@ -450,7 +466,7 @@ class LiveReader(LiveModeThread):
         self.input_buffer = input_buffer
         self.convert_buffer = convert_buffer
         self.sequence_update = sequence_update
-        self.last_times = numpy.zeros(100)
+        self.last_times = collections.deque(maxlen=10)
         self.image_count = 0 # number of frames retrieved
         self.ready = threading.Event()
         super().__init__()
@@ -468,7 +484,7 @@ class LiveReader(LiveModeThread):
             else:
                 raise
         self.convert_buffer()
-        self.last_times[self.image_count % self.last_times.size] = time.time() - t
+        self.last_times.append(time.time() - t)
         self.image_count += 1
         self.sequence_update(self.image_count)
 

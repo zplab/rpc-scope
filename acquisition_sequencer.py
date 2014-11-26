@@ -16,7 +16,7 @@ class AcquisitionSequencer:
         # set the wait time low because we have clean shielded cables
         self._steps.append(commands.wait_time(2))
         # turn off all the spectra x lamps
-        self._steps.append(commands.lumencor_lamps(**{lamp:False for lamp in scope_configuration.IOTool.LUMENCOR_PINS.keys()}))
+        self._steps.extend(commands.lumencor_lamps(**{lamp:False for lamp in scope_configuration.IOTool.LUMENCOR_PINS.keys()}))
         self._spectra_x_intensities = spectra_x_intensities
         self._readout_rate = readout_rate
         self._num_acquisitions = 0
@@ -25,9 +25,9 @@ class AcquisitionSequencer:
         self._num_acquisitions += 1
         self._exposures.append(exposure_ms)
         lamps = {lamp:True for lamp, value in spectra_x_lamps.items() if value}
-        self._steps.append(commands.wait_high(scope_configuration.IOTool.CAMERA_PINS['arm']))
-        self._steps.append(commands.set_high(scope_configuration.IOTool.CAMERA_PINS['trigger']))
-        self._steps.append(commands.set_low(scope_configuration.IOTool.CAMERA_PINS['trigger']))
+        self._steps.append(commands.wait_high(scope_configuration.IOTool.CAMERA_PINS['Arm']))
+        self._steps.append(commands.set_high(scope_configuration.IOTool.CAMERA_PINS['Trigger']))
+        self._steps.append(commands.set_low(scope_configuration.IOTool.CAMERA_PINS['Trigger']))
         self._steps.append(commands.wait_high(scope_configuration.IOTool.CAMERA_PINS['AuxOut1'])) # set to 'FireAll'
         self._steps.extend(commands.transmitted_lamp(tl_enable, tl_intensity))
         self._steps.extend(commands.lumencor_lamps(**lamps))
@@ -42,20 +42,21 @@ class AcquisitionSequencer:
     def compile(self):
         assert self._num_acquisitions > 0
         # send one last trigger to end the final acquisition
-        self._steps.append(commands.wait_high(scope_configuration.IOTool.CAMERA_PINS['arm']))
-        self._steps.append(commands.set_high(scope_configuration.IOTool.CAMERA_PINS['trigger']))
-        self._steps.append(commands.set_low(scope_configuration.IOTool.CAMERA_PINS['trigger']))
+        steps = list(self._steps)
+        steps.append(commands.wait_high(scope_configuration.IOTool.CAMERA_PINS['Arm']))
+        steps.append(commands.set_high(scope_configuration.IOTool.CAMERA_PINS['Trigger']))
+        steps.append(commands.set_low(scope_configuration.IOTool.CAMERA_PINS['Trigger']))
         
-        self._io_tool.store_program(steps)
+        self._io_tool.store_program(*steps)
         self._compiled = True
     
     def run(self):
         assert self._compiled
-        self._spectra_x.lamp_intensities(**self._spectra_x_intensities)
+        self._spectra_x.lamp_intensity(**self._spectra_x_intensities)
         self._camera.start_image_sequence_acquisition(self._num_acquisitions, trigger_mode='External Exposure', 
-            overlap=True, auxiliary_out_source='FireAll', pixel_readout_rate=self._readout_rate)
+            overlap_enabled=True, auxiliary_out_source='FireAll', pixel_readout_rate=self._readout_rate)
         self._io_tool.start_program()
-        names = [self._camera.get_next_image(read_timeout=exposure+1000) for exposure in self._exposures)]
+        names = [self._camera.get_next_image(read_timeout=exposure+1000) for exposure in self._exposures]
         self._io_tool.wait_for_program_done()
         self._camera.end_image_sequence_acquisition()
         return names

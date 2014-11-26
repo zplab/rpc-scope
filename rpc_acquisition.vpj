@@ -8,13 +8,6 @@
 		<Folder
 			Name="andor"
 			Filters="">
-			<Folder
-				Name="generate_wrappers"
-				Filters="">
-				<F N="andor/generate_wrappers/make_andor.py"/>
-				<F N="andor/generate_wrappers/output_ctypes.py"/>
-				<F N="andor/generate_wrappers/pyparsing.py"/>
-			</Folder>
 			<F N="andor/__init__.py"/>
 			<F N="andor/andor_image.py"/>
 			<F N="andor/andor_image_client.py"/>
@@ -61,9 +54,14 @@
 			<F N="simple_rpc/trie.py"/>
 		</Folder>
 		<F N="__init__.py"/>
+		<F N="acquisition_sequencer.py"/>
+		<F N="autofocus.py"/>
 		<F N="enumerated_properties.py"/>
-		<F N="pedals.py"/>
+		<F N="footpedal.py"/>
+		<F N="ism_buffer_utils.py"/>
+		<F N="peltier.py"/>
 		<F N="scope.py"/>
+		<F N="scope_client.py"/>
 		<F N="scope_configuration.py"/>
 		<F N="scope_server.py"/>
 		<F N="spectra_x.py"/>

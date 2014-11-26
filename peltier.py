@@ -1,11 +1,11 @@
 import threading
 import time
 
-from .. import messaging
+from . import messaging
 
 class Peltier:
-    def __init__(self, serial_port, property_server=None, property_prefix=''):
-        self._serial_port = messaging.smart_serial.Serial(serial_port)
+    def __init__(self, serial_port, serial_baud, property_server=None, property_prefix=''):
+        self._serial_port = messaging.smart_serial.Serial(serial_port, serial_baud)
         if property_server:
             self._update_temp = property_server.add_property(property_prefix+'temperature', self.get_temperature())
             self._sleep_time = 10
@@ -19,7 +19,7 @@ class Peltier:
             time.sleep(self._sleep_time)
            
     def _read(self):
-        return self._serial_port.read_until('\r')[:-1].decode('ascii')
+        return self._serial_port.read_until(b'\r')[:-1].decode('ascii')
 
     def _write(self, val):
         self._serial_port.write(val.encode('ascii') + b'\r')

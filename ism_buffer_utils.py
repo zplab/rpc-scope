@@ -26,7 +26,7 @@ def _server_pack_ism_data(name, compresslevel=2):
     with gzip.GzipFile(fileobj=io_buf, mode='wb', compresslevel=compresslevel) as f:
         f.write(ism_buf.descr) # json encoding of (dtype, shape, order)
         f.write(b'\0')
-        f.write(ctypes.string_at(ism_buf.data, ism_buf.data._length_))
+        f.write(ctypes.string_at(ism_buf.data, size=len(ism_buf.data))) # ism_buf.data is uint8, so len == byte-size
     return buf.getvalue()
 
 def _client_unpack_ism_data(buf):
@@ -39,7 +39,7 @@ def _server_get_node():
     return platform.get_node()
 
 def client_get_data_getter(rpc_client):
-    is_local = client('_ism_buffer_utils._server_get_node') == platform.get_node():
+    is_local = client('_ism_buffer_utils._server_get_node') == platform.get_node()
     if is_local: # on same machine -- use ISM buffer directly
         def get_data(name, release=True):
             array = ism_buffer.open(name).asarray()

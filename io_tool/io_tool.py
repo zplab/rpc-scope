@@ -3,15 +3,17 @@ import time
 from .. import messaging
 from . import commands
 
-_ECHO_OFF = '\x80\xFF'
+_ECHO_OFF = b'\x80\xFF'
 
 class IOTool:
     def __init__(self, serial_port):
         self._serial_port = messaging.smart_serial.Serial(serial_port)
         self._serial_port.write(b'!\nreset\n') # force the IOTool box to reset to known-good state
         time.sleep(1) # give it time to reboot
-        echo_reply = self.execute(_ECHO_OFF) # disable echo
-        assert echo_reply == _ECHO_OFF + '\r\n' # read back echo of above (no further echoes will come)
+        self._serial_port = messaging.smart_serial.Serial(serial_port)
+        self._serial_port.write(_ECHO_OFF + b'\n') # disable echo
+        echo_reply = self._serial_port.read_until(b'>')[:-1]
+        assert echo_reply == _ECHO_OFF + b'\r\n' # read back echo of above (no further echoes will come)
         self._assert_empty_buffer()
         self.commands = commands
     
@@ -34,7 +36,7 @@ class IOTool:
     
     def store_program(self, *commands):
         all_commands = ['program'] + list(commands) + ['end']
-        responses = self.execute(all_commands)
+        responses = self.execute(*all_commands)
         errors = ['{}: {}'.format(command, response) for command, response in zip(all_commands, responses) if response is not None]
         if errors:
             raise RuntimeError('Program errors:\n'+'\n'.join(errors))
@@ -44,7 +46,7 @@ class IOTool:
             self.store_program(*commands)
         else:
             self._assert_empty_buffer()
-        self._serial_port.write(b'run {}\n'.format(iters))
+        self._serial_port.write('run {}\n'.format(iters).encode('ascii'))
     
     def wait_for_serial_char(self):
         self._serial_port.read(1)

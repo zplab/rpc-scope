@@ -1,6 +1,5 @@
-from . import camera
 import numpy
-import ism_buffer_utils
+from . import ism_buffer_utils
 
 def brenner(array, z):
     x_diffs = (array[2:, :] - array[:-2, :])**2

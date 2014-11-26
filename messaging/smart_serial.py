@@ -6,8 +6,9 @@ import os
 import errno
 
 import serial.serialposix as serialposix
-from serial import SerialException
 
+class SerialException(Exception):
+    pass
 class SerialTimeout(SerialException):
     pass
 
@@ -53,12 +54,12 @@ class Serial(serialposix.PosixSerial):
                     # Disconnected devices, at least on Linux, show the
                     # behavior that they are always ready to read immediately
                     # but reading returns nothing.
-                    raise serialposix.SerialException('device reports readiness to read but returned no data (device disconnected or multiple access on port?)')
+                    raise SerialException('device reports readiness to read but returned no data (device disconnected or multiple access on port?)')
                 self.read_buffer += buf
             except OSError as e:
                 # ignore EAGAIN errors. all other errors are shown
                 if e.errno != errno.EAGAIN:
-                    raise serialposix.SerialException('read failed: %s' % (e,))
+                    raise SerialException('read failed: %s' % (e,))
 
         read_buffer = self.read_buffer
         try:
@@ -103,12 +104,12 @@ class Serial(serialposix.PosixSerial):
                     # Disconnected devices, at least on Linux, show the
                     # behavior that they are always ready to read immediately
                     # but reading returns nothing.
-                    raise serialposix.SerialException('device reports readiness to read but returned no data (device disconnected or multiple access on port?)')
+                    raise SerialException('device reports readiness to read but returned no data (device disconnected or multiple access on port?)')
                 self.read_buffer += buf
             except OSError as e:
                 # ignore EAGAIN errors. all other errors are shown
                 if e.errno != errno.EAGAIN:
-                    raise serialposix.SerialException('read failed: %s' % (e,))
+                    raise SerialException('read failed: %s' % (e,))
 
         read_buffer = self.read_buffer
         match_last = match_pos + ml

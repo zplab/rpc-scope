@@ -77,7 +77,7 @@ def transmitted_lamp(enable=None, intensity=None):
     intensity: None (no change) or value in the range [0, 255] for min to max.
     """
     commands = []
-    if pwm is not None:
+    if intensity is not None:
         assert 0 <= intensity <= _config.IOTool.TL_PWM_MAX
         commands.append(pwm(_config.IOTool.TL_PWM_PIN, intensity))
     if enable is not None:

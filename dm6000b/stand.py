@@ -31,9 +31,11 @@ SET_ACT_METHOD = 70029
 
 class DM6000Device(messaging.message_device.LeicaAsyncDevice):
     def __init__(self, message_manager, property_server=None, property_prefix=''):
-        super().__init__(message_manager)
         self._property_server = property_server
         self._property_prefix = property_prefix
+        # init last because that calls the subclasses _setup_device() method, which might need
+        # access to the property_server etc.
+        super().__init__(message_manager)
 
     def _add_property(self, name, value):
         if self._property_server:

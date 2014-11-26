@@ -145,5 +145,5 @@ def queue_buffer(buf):
     QueueBuffer(buf, len(buf))
 
 def make_buffer():
-    return ctypes.c_uint8 * GetInt('ImageSizeBytes')
+    return (ctypes.c_uint8 * GetInt('ImageSizeBytes'))()
 
