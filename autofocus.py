@@ -23,7 +23,7 @@ class Autofocus:
         for z in numpy.linspace(start, end, steps):
             self._stage.set_z(z)
             self._camera.send_software_trigger()
-            name = self._camera.get_next_image(read_timeout)
+            name = self._camera.next_image(read_timeout)
             array = ism_buffer_utils._server_release_array(name)
             focus_values.append((metric(array, z), z))
         self._camera.end_image_sequence_acquisition()

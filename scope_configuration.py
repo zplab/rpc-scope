@@ -35,6 +35,8 @@ class IOTool:
     TL_PWM_MAX = 255
     
     FOOTPEDAL_PIN = 'B4'
+    FOOTPEDAL_CLOSED_TTL_STATE = False
+    FOOTPEDAL_BOUNCE_DELAY_MS = 100
 
 class SpectraX:
     SERIAL_PORT = '/dev/ttySpectraX'

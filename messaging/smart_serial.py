@@ -5,11 +5,10 @@ import select
 import os
 import errno
 
+import serial
 import serial.serialposix as serialposix
 
-class SerialException(Exception):
-    pass
-class SerialTimeout(SerialException):
+class SerialTimeout(serial.SerialException):
     pass
 
 class Serial(serialposix.PosixSerial):
@@ -57,6 +56,12 @@ class Serial(serialposix.PosixSerial):
                     raise SerialException('device reports readiness to read but returned no data (device disconnected or multiple access on port?)')
                 self.read_buffer += buf
             except OSError as e:
+                # because SerialException is a IOError subclass, which is a OSError subclass,
+                # we could accidentally catch and re-raise SerialExceptions we ourselves raise earlier
+                # which is a tad silly.
+                if isinstance(e, SerialException):
+                    raise
+                    
                 # ignore EAGAIN errors. all other errors are shown
                 if e.errno != errno.EAGAIN:
                     raise SerialException('read failed: %s' % (e,))
@@ -107,6 +112,12 @@ class Serial(serialposix.PosixSerial):
                     raise SerialException('device reports readiness to read but returned no data (device disconnected or multiple access on port?)')
                 self.read_buffer += buf
             except OSError as e:
+                # because SerialException is a IOError subclass, which is a OSError subclass,
+                # we could accidentally catch and re-raise SerialExceptions we ourselves raise earlier
+                # which is a tad silly.
+                if isinstance(e, SerialException):
+                    raise
+                
                 # ignore EAGAIN errors. all other errors are shown
                 if e.errno != errno.EAGAIN:
                     raise SerialException('read failed: %s' % (e,))

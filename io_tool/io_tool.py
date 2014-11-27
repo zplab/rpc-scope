@@ -2,15 +2,16 @@ import time
 
 from .. import messaging
 from . import commands
+from .. import scope_configuration as config
 
 _ECHO_OFF = b'\x80\xFF'
 
 class IOTool:
-    def __init__(self, serial_port):
-        self._serial_port = messaging.smart_serial.Serial(serial_port)
+    def __init__(self):
+        self._serial_port = messaging.smart_serial.Serial(config.IOTool.SERIAL_PORT, timeout=4)
         self._serial_port.write(b'!\nreset\n') # force the IOTool box to reset to known-good state
-        time.sleep(1) # give it time to reboot
-        self._serial_port = messaging.smart_serial.Serial(serial_port)
+        time.sleep(0.5) # give it time to reboot
+        self._serial_port = messaging.smart_serial.Serial(config.IOTool.SERIAL_PORT, timeout=4)
         self._serial_port.write(_ECHO_OFF + b'\n') # disable echo
         echo_reply = self._serial_port.read_until(b'>')[:-1]
         assert echo_reply == _ECHO_OFF + b'\r\n' # read back echo of above (no further echoes will come)

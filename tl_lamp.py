@@ -1,18 +1,21 @@
-class TL_Lamp:
+from .simple_rpc import property_utils
+
+class TL_Lamp(property_utils.PropertyDevice):
     def __init__(self, iotool, property_server=None, property_prefix=''):
+        super().__init__(property_server, property_prefix)
         self._iotool = iotool
-        self._property_server = property_server
-        self._property_prefix = property_prefix
-        self.set(enable=False, intensity=255)
-    
-    def set(self, enable=None, intensity=None):
-        """Set lamp on/off and brightness values
-        enable: True (lamp on), False (lamp off), or None (no change).
-        intensity: None (no change) or value in the range [0, 255] for min to max.
+        self.set_enabled(False)
+        self.set_intensity(255)
+
+    def set_enabled(self, enable):
+        """Turn lamp on or off.
         """
-        self._iotool.execute(*self._iotool.commands.transmitted_lamp(enable, intensity))
-        if self._property_server:
-            if enable is not None:
-                self._property_server.update_property(self._property_prefix+'enabled', enable)
-            if intensity is not None:
-                self._property_server.update_property(self._property_prefix+'intensity', intensity)
+        self._iotool.execute(*self._iotool.commands.transmitted_lamp(enable=enable))
+        self._update_property('enabled', enable)
+        
+    
+    def set_intensity(self, value):
+        """Set intensity to any value in the range [0, 255] for min to max.
+        """
+        self._iotool.execute(*self._iotool.commands.transmitted_lamp(intensity=value))
+        self._update_property('intensity', value)

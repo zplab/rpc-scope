@@ -2,12 +2,16 @@ import threading
 import time
 
 from . import messaging
+from .simple_rpc import property_utils
+from . import scope_configuration as config
 
-class Peltier:
-    def __init__(self, serial_port, serial_baud, property_server=None, property_prefix=''):
-        self._serial_port = messaging.smart_serial.Serial(serial_port, serial_baud)
+class Peltier(property_utils.PropertyDevice):
+    def __init__(self, property_server=None, property_prefix=''):
+        super().__init__(property_server, property_prefix)
+        self._serial_port = messaging.smart_serial.Serial(config.Peltier.SERIAL_PORT, baudrate=config.Peltier.SERIAL_BAUD, timeout=4)
         if property_server:
-            self._update_temp = property_server.add_property(property_prefix+'temperature', self.get_temperature())
+            self._update_property('temperature', self.get_temperature())
+            self._update_property('target_temperature', self.get_target_temperature())
             self._sleep_time = 10
             self._timer_running = True
             self._timer_thread = threading.Thread(target=self._timer_update_temp, daemon=True)
@@ -15,7 +19,7 @@ class Peltier:
             
     def _timer_update_temp(self):
         while self._timer_running:
-            self._update_temp(self.get_temperature())
+            self._update_property(self.get_temperature())
             time.sleep(self._sleep_time)
            
     def _read(self):
@@ -54,6 +58,7 @@ class Peltier:
 
     def set_target_temperature(self, temp):
         self._call_param('A', '{:.1f}'.format(temp))
+        self._update_property('target_temperature', temp)
 
     def set_timer(self, hours, minutes, seconds):
         assert hours <= 99 and minutes <= 99 and seconds <= 99

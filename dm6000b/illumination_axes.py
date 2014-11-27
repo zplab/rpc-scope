@@ -37,17 +37,29 @@ from .. import enumerated_properties
 # However, by not coalescing the messages, we are at least guaranteed to be able
 # to wait for the same number of responses as messages sent, even if we can't
 # match up the precise message and responses. This should be good enough.
+
+# TL and IL shutters
 SET_SHUTTER_LAMP = 77032
 GET_SHUTTER_LAMP = 77033
 
+# filter cube positions
 POS_ABS_IL_TURRET = 78022
 GET_POS_IL_TURRET = 78023
 GET_CUBENAME = 78027
 GET_MIN_POS_IL_TURRET = 78031
 GET_MAX_POS_IL_TURRET = 78032
 
+#swing-out condenser head
 POS_ABS_KOND = 81022
 GET_POS_KOND = 81023
+
+# TL field and aperture diaphragm
+POS_ABS_LFBL_TL = 83022
+GET_POS_LFBL_TL = 83023
+POS_ABS_APBL_TL = 84022
+GET_POS_APBL_TL = 84023
+
+# IL field diaphragm
 
 class FilterCube(enumerated_properties.DictProperty):
     def __init__(self, il):
@@ -92,9 +104,17 @@ class _ShutterDevice(stand.DM6000Device):
 class IL(_ShutterDevice):
     '''IL represents an interface into elements used in Incident Light (Fluorescence) mode.'''
     _shutter_idx = 1
-    # TODO: add filter cube position control, DIC fine shearing, IL aperture control (size 0-6 or whatever / circle vs. square)
+    # TODO: add DIC fine shearing, IL aperture control (size 0-6 or whatever / circle vs. square), maybe
     def _setup_device(self):
-        self.filter_cube = FilterCube(self)
+        self._filter_cube = FilterCube(self)
+        self.get_filter_cube = self._filter_cube.get_value
+        self.get_filter_cube_values = self._filter_cube.get_recognized_values
+        self._update_property('filter_cube', self.get_filter_cube())
+    
+    def set_filter_cube(self, cube):
+        self._update_property('filter_cube', cube)
+        self._filter_cube.set_value(cube)
+        
 
 class TL(_ShutterDevice):
     '''IL represents an interface into elements used in Transmitted Light (Brighftield and DIC) mode.'''
@@ -109,4 +129,4 @@ class TL(_ShutterDevice):
     def set_condenser_retracted(self, retracted):
         response = self.send_message(POS_ABS_KOND, int(not retracted), intent="set condenser position")
 
-    # TODO: add control over field and aperture diaphragms.
+    # TODO: add control over field and aperture diaphragms, maybe

@@ -57,7 +57,7 @@ def loop(index, count):
 def goto(index):
     return _make_command('go', index)
 
-def lumencor_lamps(**lamps):
+def spectra_x_lamps(**lamps):
     """Input keyword arguments must be lamp names specified in LUMENCOR_PINS
     keys. The values are either True to enable that lamp, False to disable,
     or None to do nothing (unspecified lamps are also not altered)."""
@@ -86,6 +86,3 @@ def transmitted_lamp(enable=None, intensity=None):
         else:
             commands.append(set_low(_config.IOTool.TL_ENABLE_PIN))
     return commands
-
-def footpedal_wait():
-    return wait_low(_config.IOTool.FOOTPEDAL_PIN)

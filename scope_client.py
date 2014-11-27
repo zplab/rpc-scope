@@ -31,8 +31,8 @@ def rpc_client_main(rpc_port=None, rpc_interrupt_port=None, context=None):
     scope._is_local = is_local
     if hasattr(scope, 'camera'):
         wrap_image_getter(scope.camera, 'acquire_image', get_data)
-        wrap_image_getter(scope.camera, 'get_live_image', get_data)
-        wrap_image_getter(scope.camera, 'get_next_image', get_data)
+        wrap_image_getter(scope.camera, 'live_image', get_data)
+        wrap_image_getter(scope.camera, 'next_image', get_data)
     if hasattr(scope, 'acquisition_sequencer'):
         wrap_images_getter(scope.acquisition_sequencer, 'run', get_data)
     return client, scope
@@ -47,32 +47,28 @@ class LiveStreamer:
     def __init__(self, scope, image_ready_callback):
         self.scope = scope
         self.image_ready_callback = image_ready_callback
-        self.ready_to_receive = False
         self.image_received = False
+        self.live = False
         property_client.subscribe('scope.camera.live_mode', self._live_change, valueonly=True)
         property_client.subscribe('scope.camera.live_frame', self._live_update, valueonly=True)
     
     def get_image(self):
         assert self.image_received
-        image = scope.camera.get_live_image()
-        # get image before re-arming because if this is over the network, it could take a while
-        self.ready_to_receive = True
+        # get image before re-enabling image-receiving because if this is over the network, it could take a while
+        image = scope.camera.live_image()
         self.image_received = False
         return image, self.frame_no
         
     def _live_change(self, live):
         # called in property_client's thread: note we can't do RPC calls
-        if live:
-            self.ready_to_receive = True
-            self.image_received = False
-        else:
-            self.ready_to_receive = False
-            self.image_received = False
+        self.live = live
         
     def _live_update(self, frame_no):
         # called in property client's thread: note we can't do RPC calls
-        if self.ready_to_receive:
+        # if we've already received an image, but nobody on the main thread
+        # has called get_image() to retrieve it, then just ignore subsequent
+        # updates
+        if not self.image_received:
             self.image_received = True
-            self.ready_to_receive = False
             self.frame_no = frame_no
             self.image_ready_callback()

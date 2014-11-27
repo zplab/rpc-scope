@@ -43,9 +43,9 @@ class Stage(stand.DM6000Device):
         self._y_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_Y).response) / 1000
         self._z_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_Z).response) / 1000
         x, y, z = self.get_position()
-        self._update_x = self._add_property('x', x)
-        self._update_y = self._add_property('y', y)
-        self._update_z = self._add_property('z', z)
+        self._update_property('x', x)
+        self._update_property('y', y)
+        self._update_property('z', z)
     
     def set_position(self, xyz):
         """Set x, y, and z position to respective elements of xyz tuple/iterable.
@@ -63,17 +63,17 @@ class Stage(stand.DM6000Device):
     def set_x(self, x):
         "Set x-axis position in mm"
         self._set_pos(x, self._x_mm_per_count, POS_ABS_X)
-        self._update_x(x)
+        self._update_property('x', x)
     
     def set_y(self, y):
         "Set y-axis position in mm"
         self._set_pos(y, self._y_mm_per_count, POS_ABS_Y)
-        self._update_z(z)
+        self._update_property('y', y)
     
     def set_z(self, z):
         "Set z-axis position in mm"
         self._set_pos(z, self._z_mm_per_count, POS_ABS_Z)
-        self._update_z(z)
+        self._update_property('z', z)
     
 
     def get_position(self):

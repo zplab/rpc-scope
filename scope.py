@@ -29,9 +29,9 @@ class Scope(messaging.message_device.AsyncDeviceNamespace):
         
         try:
             message_manager = messaging.message_manager.LeicaMessageManager(config.Stand.SERIAL_PORT, config.Stand.SERIAL_BAUD, verbose=verbose)
+            self.stand = dm6000b.stand.Stand(message_manager, property_server, property_prefix='scope.stand.')
             self.nosepiece = dm6000b.objective_turret.ObjectiveTurret(message_manager, property_server, property_prefix='scope.nosepiece.')
             self.stage = dm6000b.stage.Stage(message_manager, property_server, property_prefix='scope.stage.')
-            self.stand = dm6000b.stand.Stand(message_manager, property_server, property_prefix='scope.stand.')
             self.il = dm6000b.illumination_axes.IL(message_manager, property_server, property_prefix='scope.il.')
             self.tl = dm6000b.illumination_axes.TL(message_manager, property_server, property_prefix='scope.tl.')
             has_scope = True
@@ -40,7 +40,7 @@ class Scope(messaging.message_device.AsyncDeviceNamespace):
             _print_exception('Could not connect to microscope:', e)
         
         try:
-            self.iotool = io_tool.IOTool(config.IOTool.SERIAL_PORT)
+            self.iotool = io_tool.IOTool()
             has_iotool = True
         except SerialException as e:
             has_iotool = False
@@ -52,8 +52,7 @@ class Scope(messaging.message_device.AsyncDeviceNamespace):
             
         if has_iotool:
             try:
-                self.il.spectra_x = spectra_x.SpectraX(config.SpectraX.SERIAL_PORT, config.SpectraX.SERIAL_BAUD, 
-                    self.iotool, property_server, property_prefix='scope.il.spectra_x.')
+                self.il.spectra_x = spectra_x.SpectraX(self.iotool, property_server, property_prefix='scope.il.spectra_x.')
                 has_spectra_x = True
             except SerialException as e:
                 has_spectra_x = False
@@ -75,7 +74,6 @@ class Scope(messaging.message_device.AsyncDeviceNamespace):
             self.camera.autofocus = autofocus.Autofocus(self.camera, self.stage)
 
         try:
-            self.peltier = peltier.Peltier(config.Peltier.SERIAL_PORT, config.Peltier.SERIAL_BAUD, 
-                property_server, property_prefix='scope.peltier')
+            self.peltier = peltier.Peltier(property_server, property_prefix='scope.peltier')
         except SerialException as e:
             _print_exception('Could not connect to peltier controller:', e)

@@ -27,11 +27,12 @@ import ctypes
 import numpy
 import contextlib
 import collections
+import atexit
 
-from .. import ism_buffer_utils
-
-from .. import enumerated_properties
 from . import lowlevel
+from .. import ism_buffer_utils
+from .. import enumerated_properties
+from ..simple_rpc import property_utils
 
 class ReadOnly_AT_Enum(enumerated_properties.ReadonlyDictProperty):
     def __init__(self, feature):
@@ -55,7 +56,7 @@ class AT_Enum(ReadOnly_AT_Enum, enumerated_properties.DictProperty):
     def _write(self, value):
         lowlevel.SetEnumIndex(self._feature, value)
 
-class Camera:
+class Camera(property_utils.PropertyDevice):
     """This class provides an abstraction of the raw Andor API ctypes shim found in
     rpc_acquisition.andor.lowlevel."""
 
@@ -95,7 +96,10 @@ class Camera:
     ]
 
     def __init__(self, property_server=None, property_prefix=''):
+        super().__init__(property_server, property_prefix)
         lowlevel.initialize() # safe to call this multiple times
+        self.return_to_default_state()
+        
         self._callback_properties = {}
 
         # Expose some certain camera properties presented by the Andor API more or less directly,
@@ -144,36 +148,22 @@ class Camera:
         self._add_enum('FanSpeed', 'fan', readonly=True)
         self._add_property('SensorCooling', 'sensor_cooling_enabled', 'Bool', readonly=True)
 
-        self._callback_properties['ExposureTime'] = (lowlevel.GetFloat, 'exposure_time') # we special case the getters and setters below
+        update_exp = self._add_property('exposure_time', self.get_exposure_time())
+        self._callback_properties['ExposureTime'] = (self.get_exposure_time, update_exp) # we use special case getters and setters below
         
-        self._property_server = property_server
-        self._property_prefix = property_prefix
         if property_server:
             self._c_callback = lowlevel.FeatureCallback(self._andor_callback)
             for at_feature in self._callback_properties.keys():
                 lowlevel.RegisterFeatureCallback(at_feature, self._c_callback, 0)
-            self._update_live_mode = property_server.add_property(self._property_prefix + 'live_mode', False)
-            self._update_live_frame = property_server.add_property(self._property_prefix + 'live_frame', None)
-        else:
-            self._update_live_mode = self._update_live_frame = lambda x: None
+
+        self._update_live_frame = self._add_property('live_frame', None)
         self._live_mode = False
-        self.return_to_default_state()
+        self._update_property('live_mode', enabled)
         self._state_stack = []
 
     def return_to_default_state(self):
         for feature, setter, value in self._CAMERA_DEFAULTS:
             setter(feature, value)
-
-    @contextlib.contextmanager
-    def _live_guarded(self):
-        live = self._live_mode
-        if live:
-            self.set_live_mode(False)
-        try:
-            yield
-        finally:
-            if live:
-            self.set_live_mode(True)
 
     def _add_enum(self, at_feature, py_name, readonly=False):
         """Expose a camera setting presented by the Andor API via GetEnumIndex, 
@@ -186,12 +176,13 @@ class Camera:
             values_getter = enum.get_values_validity
         setattr(self, 'get_'+py_name, enum.get_value)
         setattr(self, 'get_'+py_name+'_values', values_getter)
+        self._callback_properties[at_feature] = (enum.get_value, self._add_property(py_name, enum.get_value()))
+
         if not readonly:
             def setter(value):
                 with self._live_guarded():
                     enum.set_value(value)
             setattr(self, 'set_'+py_name, setter)
-        self._callback_properties[at_feature] = (enum.get_value, py_name)
 
     def _add_property(self, at_feature, py_name, at_type, readonly=False):
         '''Directly expose numeric or string camera setting.'''
@@ -207,7 +198,7 @@ class Camera:
             except lowlevel.AndorError:
                 return None
         setattr(self, 'get_'+py_name, getter)
-        self._callback_properties[at_feature] = (getter, py_name)
+        self._callback_properties[at_feature] = (getter, self._add_property(py_name, getter()))
         
         if not readonly:
             andor_setter = getattr(lowlevel, 'Set'+at_type)
@@ -217,14 +208,25 @@ class Camera:
             setattr(self, 'set_'+py_name, setter)
     
     def _andor_callback(self, camera_handle, at_feature, context):
-        getter, py_name = self._callback_properties[at_feature]
-        self._property_server.update_property(self._property_prefix + py_name, getter())
+        getter, update = self._callback_properties[at_feature]
+        update(getter())
         return lowlevel.AT_CALLBACK_SUCCESS
 
     def __del__(self):
         if self._property_server:
             for at_feature in self._callback_properties.keys():
                 lowlevel.UnregisterFeatureCallback(at_feature, self._c_callback, 0)
+    
+    @contextlib.contextmanager
+    def _live_guarded(self):
+        live = self._live_mode
+        if live:
+            self.set_live_mode(False)
+        try:
+            yield
+        finally:
+            if live:
+            self.set_live_mode(True)
     
     def get_exposure_time(self):
         """Return exposure time in ms"""
@@ -246,7 +248,7 @@ class Camera:
                 self.set_live_mode(True)
             else:
                 # changed exposure time without pausing live... update sleep time
-                self._live_trigger.sleep_time = self._get_live_sleep_time()
+                self._live_trigger.sleep_time = self._calculate_live_sleep_time()
                 # ... and clear recent FPS data
                 self._live_reader.last_times.clear() 
     
@@ -290,14 +292,13 @@ class Camera:
         return self._live_mode
 
     def set_live_mode(self, enabled):
-        print("setting live mode", enabled)
         if enabled:
             self._enable_live()
         else:
             self._disable_live()
-        self._update_live_mode(enabled)
+        self._update_property('live_mode', enabled)
 
-    def get_live_image(self):
+    def live_image(self):
         ism_buffer_utils.server_register_array(self._live_buffer_name, self._live_array)
         return self._live_buffer_name
 
@@ -307,14 +308,14 @@ class Camera:
         self._live_buffer_name = 'live@'+str(time.time())
         lowlevel.Flush()
         self.push_state(overlap_enabled=False, cycle_mode='Continuous', trigger_mode='Software', pixel_readout_rate='280 MHz')
-        sleep_time = self._get_live_sleep_time()
+        sleep_time = self._calculate_live_sleep_time()
         input_buffer, self._live_array, convert_buffer = self._make_input_output_buffers(self._live_buffer_name)
         self._live_mode = True
         lowlevel.Command('AcquisitionStart')
         self._live_reader = LiveReader(input_buffer, convert_buffer, self._update_live_frame)
         self._live_trigger = LiveTrigger(sleep_time, self._live_reader)
     
-    def _get_live_sleep_time(self):
+    def _calculate_live_sleep_time(self):
         readout_time = self.get_readout_time()
         if self.get_exposure_time() / 1000 <= readout_time:
             frame_time = readout_time * 2
@@ -326,8 +327,6 @@ class Camera:
     def _disable_live(self):
         if not self._live_mode:
             return
-        self._live_buffer_name = None
-        self._live_array = None
         self._live_trigger.stop()
         self._live_reader.stop()
         self._live_reader.join()
@@ -336,6 +335,11 @@ class Camera:
         lowlevel.Flush()
         self._live_mode = False
         self._update_live_frame(None)
+        # Note: do not set self._live_buffer_name or self._live_array to None.
+        # Instead let them stick around, so if any clients wanted to call live_image()
+        # to obtain the live array, they can still grab the last frame.
+        # This avoids the race condition where live mode is turned off right before
+        # a client tries to grab the image.
         self.pop_state()
     
     def get_live_fps(self):
@@ -365,7 +369,7 @@ class Camera:
     def acquire_image(self):
         read_timeout = int(self.get_exposure_time()) + 1000 # exposure time + 1 second
         self.start_image_sequence_acquisition(1)
-        name = self.get_next_image(read_timeout)
+        name = self.next_image(read_timeout)
         self.end_image_sequence_acquisition()
         return name
     
@@ -387,7 +391,7 @@ class Camera:
         self._sequence_acquisition_state = SequenceAcquisitionState(live, names, output_arrays, convert_buffers)
         lowlevel.Command('AcquisitionStart')
 
-    def get_next_image(self, read_timeout=lowlevel.ANDOR_INFINITE):
+    def next_image(self, read_timeout=lowlevel.ANDOR_INFINITE):
         name, output_array, convert_buffer = next(self._sequence_acquisition_state.acquire_data)
         lowlevel.WaitBuffer(read_timeout)
         convert_buffer()
@@ -425,20 +429,32 @@ class Camera:
 class SequenceAcquisitionState:
     def __init__(self, live, names, output_arrays, convert_buffers):
         self.live = live
-        self.acquire_data = zip(names, output_arrays, convert_buffers)        
+        self.acquire_data = zip(names, output_arrays, convert_buffers)
 
 class LiveModeThread(threading.Thread):
     def __init__(self):
         super().__init__(daemon=True)
         self.running = True
+        # Without stopping any running live-mode threads at exit, the 
+        # weakref.finalize() machinery will tear apart the ISM_Buffer
+        # array used by the LiveReader, leading to segfaults.
+        # By registering this atexit AFTER the ISM_Buffer is constructed,
+        # we guarantee that the thread will be caused to exit BEFORE
+        # the ISM_Buffer finalization process.
+        atexit.register(self._exit_stop)
         self.start()
     
     def stop(self):
         self.running = False
     
+    def _exit_stop(self):
+        self.running = False
+        self.join()
+    
     def run(self):
         while self.running:
             self.loop()
+        atexit.unregister(self.stop)
     
     def loop(self):
         raise NotImplementedError()

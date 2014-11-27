@@ -1,4 +1,6 @@
 from . import messaging
+from .simple_rpc import property_utils
+from . import scope_configuration as config
 
 def _make_dac_bytes(IIC_Addr, bit):
     dac_bytes = bytearray(b'\x53\x00\x03\x00\x00\x00\x50')
@@ -26,20 +28,30 @@ LAMP_SPECS = {
 
 LAMP_NAMES = set(LAMP_DAC_COMMANDS.keys())
     
-class SpectraX:
-    def __init__(self, serial_port, serial_baud, iotool, property_server=None, property_prefix=''):
-        self._serial_port = messaging.smart_serial.Serial(serial_port, baudrate=serial_baud)
+class SpectraX(property_utils.PropertyDevice):
+    def __init__(self, iotool, property_server=None, property_prefix=''):
+        super().__init__(property_server, property_prefix)
+        self._serial_port = messaging.smart_serial.Serial(config.SpectraX.SERIAL_PORT, baudrate=config.SpectraX.SERIAL_BAUD, timeout=4)
         # RS232 Lumencor docs state: "The [following] two commands MUST be issued after every power cycle to properly configure controls for further commands."
         # "Set GPIO0-3 as open drain output"
         self._serial_port.write(b'\x57\x02\xFF\x50')
         # "Set GPI05-7 push-pull out, GPIO4 open drain out"
         self._serial_port.write(b'\x57\x03\xAB\x50')
         self._iotool = iotool
-        self._property_server = property_server
-        self._property_prefix = property_prefix
+        if property_server:
+            self._update_property('temperature', self.get_temperature())
+            self._sleep_time = 10
+            self._timer_running = True
+            self._timer_thread = threading.Thread(target=self._timer_update_temp, daemon=True)
+            self._timer_thread.start()
+        
         self.lamp_enable(**{lamp:False for lamp in LAMP_NAMES})
         self.lamp_intensity(**{lamp:255 for lamp in LAMP_NAMES})
             
+    def _timer_update_temp(self):
+        while self._timer_running:
+            self._update_property('temperature', self.get_temperature())
+            time.sleep(self._sleep_time)
     
     def _lamp_intensity(self, lamp, value):
         assert 0 <= value <= 255
@@ -51,8 +63,7 @@ class SpectraX:
         dac_bytes[4] = intensity_bytes >> 8
         dac_bytes[5] = intensity_bytes & 0x00FF
         self._serial_port.write(bytes(dac_bytes))
-        if self._property_server:
-                self._property_server.update_property(self._property_prefix+lamp+'.intensity', value)
+        self._update_property(lamp+'.intensity', value)
     
     def lamp_intensity(self, **lamps):
         """Set intensity of named lamp to a given value.
@@ -70,14 +81,19 @@ class SpectraX:
         The keyword argument names must be valid lamp names. The values must be
         either True to enable that lamp, False to disable, or None to do nothing.
         (Lamps not specified as arguments are also not altered)."""
-        self._iotool.execute(*self._iotool.commands.lumencor_lamps(**lamps))
-        if self._property_server:
-            for lamp, enable in lamps.items():
-                if enable is not None:
-                    self._property_server.update_property(self._property_prefix+lamp+'.enabled', enable)
+        self._iotool.execute(*self._iotool.commands.spectra_x_lamps(**lamps))
+        for lamp, enable in lamps.items():
+            if enable is not None:
+                self._update_property(lamp+'.enabled', enable)
     
     def get_lamp_specs(self):
         """Return a dict mapping lamp names to tuples of (peak_wavelength, bandwidth), in nm,
         where bandwidth is the minimum width required to contain 75% of the spectral intensity
         of the lamp output."""
         return LAMP_SPECS
+    
+    def get_temperature(self):
+        self._serial_port.write(b'\x53\x91\x02\x50')
+        r = self._serial_port.read(2)
+        return ((r[0] << 3) | (r[1] >> 5)) * 0.125
+        
