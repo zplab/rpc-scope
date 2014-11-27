@@ -37,6 +37,8 @@ class SpectraX(property_utils.PropertyDevice):
         self._serial_port.write(b'\x57\x02\xFF\x50')
         # "Set GPI05-7 push-pull out, GPIO4 open drain out"
         self._serial_port.write(b'\x57\x03\xAB\x50')
+        # test if we can connect:
+        self.get_temperature()
         self._iotool = iotool
         if property_server:
             self._update_property('temperature', self.get_temperature())

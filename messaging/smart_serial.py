@@ -8,7 +8,8 @@ import errno
 import serial
 import serial.serialposix as serialposix
 
-class SerialTimeout(serial.SerialException):
+SerialException = serial.SerialException
+class SerialTimeout(SerialException):
     pass
 
 class Serial(serialposix.PosixSerial):

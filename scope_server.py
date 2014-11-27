@@ -1,7 +1,7 @@
 import zmq
 import platform
 
-from . import simple_rpc
+from .simple_rpc import rpc_server, property_server
 from . import scope
 from . import scope_configuration as config
 from . import ism_buffer_utils
@@ -17,13 +17,17 @@ def server_main(rpc_port=None, rpc_interrupt_port=None, property_port=None, verb
     if context is None:
         context = zmq.Context()
 
-    property_server = simple_rpc.property_server.ZMQServer(property_port, context=context, verbose=verbose)
+    property_update_server = property_server.ZMQServer(property_port, context=context, verbose=verbose)
 
-    scope_controller = scope.Scope(property_server, verbose=verbose)
+    scope_controller = scope.Scope(property_update_server, verbose=verbose)
     # add ism_buffer_utils as hidden elements of the namespace, which RPC clients can use for seamless buffer sharing
     scope_controller._ism_buffer_utils = ism_buffer_utils
 
-    interrupter = simple_rpc.rpc_server.ZMQInterrupter(rpc_interrupt_port, context=context)
-    rpc_server = simple_rpc.rpc_server.ZMQServer(scope_controller, interrupter, rpc_port, context=context, verbose=verbose)
+    interrupter = rpc_server.ZMQInterrupter(rpc_interrupt_port, context=context)
+    scope_server = rpc_server.ZMQServer(scope_controller, interrupter, rpc_port, context=context, verbose=verbose)
 
-    rpc_server.run()
+    scope_server.run()
+
+
+if __name__ == '__main__':
+    server_main()

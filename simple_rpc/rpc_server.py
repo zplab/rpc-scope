@@ -164,7 +164,7 @@ class ZMQServer(RPCServer):
         else:
             reply_type = 'json'
             try:
-                reply = zmq.utils.jsonapi.dumps(response)
+                reply = zmq.utils.jsonapi.dumps(reply)
             except:
                 reply_type = 'error'
                 reply = zmq.utils.jsonapi.dumps('Could not JSON-serialize return value.')

@@ -19,7 +19,7 @@ class RPCClient:
     def __call__(self, command, *args, **kwargs):
         self._send(command, args, kwargs)
         try:
-            retval, error = self._receive_reply()
+            retval, is_error = self._receive_reply()
         except KeyboardInterrupt:
             self._send_interrupt('interrupt')
             retval, is_error = self._receive_reply()
@@ -159,7 +159,7 @@ def _rich_proxy_function(doc, argspec, name, rpc_client, rpc_function):
     # and exec-ing it.
     for arg in args:
         if arg in defaults:
-            arg_parts.append('{}={}'.format(arg, defaults[arg]))
+            arg_parts.append('{}={!r}'.format(arg, defaults[arg]))
         else:
             arg_parts.append(arg)
         call_parts.append(arg)
@@ -173,9 +173,9 @@ def _rich_proxy_function(doc, argspec, name, rpc_client, rpc_function):
         if not varargs:
             arg_parts.append('*')
         for arg in kwonly:
-            call_parts.append('{}={}'.format(arg, arg))
+            call_parts.append('{}={!r}'.format(arg, arg))
             if arg in kwdefaults:
-                arg_parts.append('{}={}'.format(arg, kwdefaults[arg]))
+                arg_parts.append('{}={!r}'.format(arg, kwdefaults[arg]))
             else:
                 arg_parts.append(arg)
     # we actually create a factory-function via exec, which then when called

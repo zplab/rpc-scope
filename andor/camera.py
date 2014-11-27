@@ -105,48 +105,47 @@ class Camera(property_utils.PropertyDevice):
         # Expose some certain camera properties presented by the Andor API more or less directly,
         # the only transformation being translation of enumeration indexes to descriptive strings
         # for convenience
-        self._add_enum('AuxiliaryOutSource', 'auxiliary_out_source')
-        self._add_enum('AOIBinning', 'binning')
-        self._add_enum('BitDepth', 'bit_depth', readonly=True)
-        self._add_enum('CycleMode', 'cycle_mode')
-        self._add_enum('IOSelector', 'io_selector')
-        self._add_enum('PixelEncoding', 'pixel_encoding', readonly=True)
-        self._add_enum('PixelReadoutRate', 'pixel_readout_rate')
-        self._add_enum('ElectronicShutteringMode', 'shutter_mode')
-        self._add_enum('SimplePreAmpGainControl', 'sensor_gain')
-        self._add_enum('TriggerMode', 'trigger_mode')
-        self._add_enum('TemperatureStatus', 'temperature_status', readonly=True)
+        self._add_andor_enum('AuxiliaryOutSource', 'auxiliary_out_source')
+        self._add_andor_enum('AOIBinning', 'binning')
+        self._add_andor_enum('BitDepth', 'bit_depth', readonly=True)
+        self._add_andor_enum('CycleMode', 'cycle_mode')
+        self._add_andor_enum('IOSelector', 'io_selector')
+        self._add_andor_enum('PixelEncoding', 'pixel_encoding', readonly=True)
+        self._add_andor_enum('PixelReadoutRate', 'pixel_readout_rate')
+        self._add_andor_enum('ElectronicShutteringMode', 'shutter_mode')
+        self._add_andor_enum('SimplePreAmpGainControl', 'sensor_gain')
+        self._add_andor_enum('TriggerMode', 'trigger_mode')
+        self._add_andor_enum('TemperatureStatus', 'temperature_status', readonly=True)
         
         # Directly expose certain plain camera properties from Andor API
-        self._add_property('AccumulateCount', 'accumulate_count', 'Int')
-        self._add_property('AOIHeight', 'aoi_height', 'Int')
-        self._add_property('AOILeft', 'aoi_left', 'Int')
-        self._add_property('AOIStride', 'aoi_stride', 'Int', readonly=True)
-        self._add_property('AOITop', 'aoi_top', 'Int')
-        self._add_property('AOIWidth', 'aoi_width', 'Int')
-        self._add_property('BaselineLevel', 'baseline_level', 'Int', readonly=True)
-        self._add_property('BytesPerPixel', 'bytes_per_pixel', 'Float', readonly=True)
-        self._add_property('CameraAcquiring', 'is_acquiring', 'Bool', readonly=True)
-        self._add_property('CameraModel', 'model_name', 'String', readonly=True)
-        self._add_property('FrameCount', 'frame_count', 'Int')
-        self._add_property('FrameRate', 'frame_rate', 'Float')
-        self._add_property('ImageSizeBytes', 'image_byte_count', 'Int', readonly=True)
-        self._add_property('InterfaceType', 'interface_type', 'String', readonly=True)
-        self._add_property('IOInvert', 'selected_io_pin_inverted', 'Bool')
-        self._add_property('MaxInterfaceTransferRate', 'max_interface_fps', 'Float', readonly=True)
-        self._add_property('MetadataEnable', 'metadata_enabled', 'Bool')
-        self._add_property('MetadataTimestamp', 'include_timestamp_in_metadata', 'Bool')
-        self._add_property('Overlap', 'overlap_enabled', 'Bool')
-        self._add_property('ReadoutTime', 'readout_time', 'Float', readonly=True)
-        self._add_property('SerialNumber', 'serial_number', 'String', readonly=True)
-        self._add_property('SpuriousNoiseFilter', 'spurious_noise_filter_enabled', 'Bool')
-        self._add_property('StaticBlemishCorrection', 'static_blemish_correction_enabled', 'Bool')
-        self._add_property('TimestampClock', 'current_timestamp', 'Int', readonly=True)
-        self._add_property('TimestampClockFrequency', 'timestamp_ticks_per_second', 'Int', readonly=True)
+        self._add_andor_property('AccumulateCount', 'accumulate_count', 'Int')
+        self._add_andor_property('AOIHeight', 'aoi_height', 'Int')
+        self._add_andor_property('AOILeft', 'aoi_left', 'Int')
+        self._add_andor_property('AOIStride', 'aoi_stride', 'Int', readonly=True)
+        self._add_andor_property('AOITop', 'aoi_top', 'Int')
+        self._add_andor_property('AOIWidth', 'aoi_width', 'Int')
+        self._add_andor_property('BytesPerPixel', 'bytes_per_pixel', 'Float', readonly=True)
+        self._add_andor_property('CameraAcquiring', 'is_acquiring', 'Bool', readonly=True)
+        self._add_andor_property('CameraModel', 'model_name', 'String', readonly=True)
+        self._add_andor_property('FrameCount', 'frame_count', 'Int')
+        self._add_andor_property('FrameRate', 'frame_rate', 'Float')
+        self._add_andor_property('ImageSizeBytes', 'image_byte_count', 'Int', readonly=True)
+        self._add_andor_property('InterfaceType', 'interface_type', 'String', readonly=True)
+        self._add_andor_property('IOInvert', 'selected_io_pin_inverted', 'Bool')
+        self._add_andor_property('MaxInterfaceTransferRate', 'max_interface_fps', 'Float', readonly=True)
+        self._add_andor_property('MetadataEnable', 'metadata_enabled', 'Bool')
+        self._add_andor_property('MetadataTimestamp', 'include_timestamp_in_metadata', 'Bool')
+        self._add_andor_property('Overlap', 'overlap_enabled', 'Bool')
+        self._add_andor_property('ReadoutTime', 'readout_time', 'Float', readonly=True)
+        self._add_andor_property('SerialNumber', 'serial_number', 'String', readonly=True)
+        self._add_andor_property('SpuriousNoiseFilter', 'spurious_noise_filter_enabled', 'Bool')
+        self._add_andor_property('StaticBlemishCorrection', 'static_blemish_correction_enabled', 'Bool')
+        self._add_andor_property('TimestampClock', 'current_timestamp', 'Int', readonly=True)
+        self._add_andor_property('TimestampClockFrequency', 'timestamp_ticks_per_second', 'Int', readonly=True)
         # FanSpeed and SensorCooling are presented as read-only to make it harder to accidentally
         # or ill-advisedly disable either.
-        self._add_enum('FanSpeed', 'fan', readonly=True)
-        self._add_property('SensorCooling', 'sensor_cooling_enabled', 'Bool', readonly=True)
+        self._add_andor_enum('FanSpeed', 'fan', readonly=True)
+        self._add_andor_property('SensorCooling', 'sensor_cooling_enabled', 'Bool', readonly=True)
 
         update_exp = self._add_property('exposure_time', self.get_exposure_time())
         self._callback_properties['ExposureTime'] = (self.get_exposure_time, update_exp) # we use special case getters and setters below
@@ -158,14 +157,14 @@ class Camera(property_utils.PropertyDevice):
 
         self._update_live_frame = self._add_property('live_frame', None)
         self._live_mode = False
-        self._update_property('live_mode', enabled)
+        self._update_property('live_mode', False)
         self._state_stack = []
 
     def return_to_default_state(self):
         for feature, setter, value in self._CAMERA_DEFAULTS:
             setter(feature, value)
 
-    def _add_enum(self, at_feature, py_name, readonly=False):
+    def _add_andor_enum(self, at_feature, py_name, readonly=False):
         """Expose a camera setting presented by the Andor API via GetEnumIndex, 
         SetEnumIndex, and GetEnumStringByIndex as an enumerated property."""
         if readonly:
@@ -184,7 +183,7 @@ class Camera(property_utils.PropertyDevice):
                     enum.set_value(value)
             setattr(self, 'set_'+py_name, setter)
 
-    def _add_property(self, at_feature, py_name, at_type, readonly=False):
+    def _add_andor_property(self, at_feature, py_name, at_type, readonly=False):
         '''Directly expose numeric or string camera setting.'''
         andor_getter = getattr(lowlevel, 'Get'+at_type)
         def getter():
@@ -226,7 +225,7 @@ class Camera(property_utils.PropertyDevice):
             yield
         finally:
             if live:
-            self.set_live_mode(True)
+                self.set_live_mode(True)
     
     def get_exposure_time(self):
         """Return exposure time in ms"""

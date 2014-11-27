@@ -22,7 +22,7 @@
 #
 # Authors: Erik Hvatum, Zach Pincus
 
-from .. import messaging
+from ..messaging import message_device
 from ..simple_rpc import property_utils
 from . import microscopy_method_names
 
@@ -30,17 +30,17 @@ GET_ALL_METHODS = 70026
 GET_ACT_METHOD = 70028
 SET_ACT_METHOD = 70029
 
-class DM6000Device(messaging.message_device.LeicaAsyncDevice, property_utils.PropertyDevice):
+class DM6000Device(message_device.LeicaAsyncDevice, property_utils.PropertyDevice):
     def __init__(self, message_manager, property_server=None, property_prefix=''):
         # init LeicaAsyncDevice last because that calls the subclasses _setup_device() method, which might need
         # access to the property_server etc.
         property_utils.PropertyDevice.__init__(self, property_server, property_prefix)
-        messaging.message_device.LeicaAsyncDevice.__init__(self, message_manager)
+        message_device.LeicaAsyncDevice.__init__(self, message_manager)
             
 class Stand(DM6000Device):
     def get_all_microscopy_methods(self):
-        '''Returns a dict of microscopy method names to bool values indicating whether the associated
-        microscopy method is available.'''
+        """Returns a dict of microscopy method names to bool values indicating whether the associated
+        microscopy method is available."""
         method_mask = list(self.send_message(GET_ALL_METHODS, async=False, intent='get mask of available microscopy methods').response.strip())
         method_mask.reverse()
         method_dict = {}

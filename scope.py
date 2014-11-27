@@ -1,10 +1,10 @@
 from serial import SerialException
 import traceback
 
-from . import messaging
-from . import dm6000b
-from . import andor
-from . import io_tool
+from .messaging import message_manager, message_device
+from .dm6000b import stand, stage, objective_turret, illumination_axes
+from .andor import camera
+from .io_tool import io_tool
 from . import spectra_x
 from . import tl_lamp
 from . import acquisition_sequencer
@@ -20,7 +20,7 @@ def _print_exception(preamble, e):
 class Namespace:
     pass
 
-class Scope(messaging.message_device.AsyncDeviceNamespace):
+class Scope(message_device.AsyncDeviceNamespace):
     def __init__(self, property_server=None, verbose=False):
         super().__init__()
         
@@ -28,12 +28,12 @@ class Scope(messaging.message_device.AsyncDeviceNamespace):
             self.rebroadcast_properties = property_server.rebroadcast_properties
         
         try:
-            message_manager = messaging.message_manager.LeicaMessageManager(config.Stand.SERIAL_PORT, config.Stand.SERIAL_BAUD, verbose=verbose)
-            self.stand = dm6000b.stand.Stand(message_manager, property_server, property_prefix='scope.stand.')
-            self.nosepiece = dm6000b.objective_turret.ObjectiveTurret(message_manager, property_server, property_prefix='scope.nosepiece.')
-            self.stage = dm6000b.stage.Stage(message_manager, property_server, property_prefix='scope.stage.')
-            self.il = dm6000b.illumination_axes.IL(message_manager, property_server, property_prefix='scope.il.')
-            self.tl = dm6000b.illumination_axes.TL(message_manager, property_server, property_prefix='scope.tl.')
+            manager = message_manager.LeicaMessageManager(config.Stand.SERIAL_PORT, config.Stand.SERIAL_BAUD, verbose=verbose)
+            self.stand = stand.Stand(manager, property_server, property_prefix='scope.stand.')
+            self.nosepiece = objective_turret.ObjectiveTurret(manager, property_server, property_prefix='scope.nosepiece.')
+            self.stage = stage.Stage(manager, property_server, property_prefix='scope.stage.')
+            self.il = illumination_axes.IL(manager, property_server, property_prefix='scope.il.')
+            self.tl = illumination_axes.TL(manager, property_server, property_prefix='scope.tl.')
             has_scope = True
         except SerialException as e:
             has_scope = False
@@ -61,9 +61,9 @@ class Scope(messaging.message_device.AsyncDeviceNamespace):
             self.footpedal = footpedal.Footpedal(self.iotool)
         
         try:
-            self.camera = andor.camera.Camera(property_server, property_prefix='scope.camera.')
+            self.camera = camera.Camera(property_server, property_prefix='scope.camera.')
             has_camera = True
-        except andor.lowlevel.AndorError as e:
+        except camera.lowlevel.AndorError as e:
             has_camera = False
             _print_exception('Could not connect to camera:', e)
     
