@@ -8,15 +8,17 @@ _ECHO_OFF = b'\x80\xFF'
 
 class IOTool:
     def __init__(self):
-        self._serial_port = messaging.smart_serial.Serial(config.IOTool.SERIAL_PORT, timeout=4)
+        self._serial_port = messaging.smart_serial.Serial(config.IOTool.SERIAL_PORT, timeout=1)
         self._serial_port.write(b'!\nreset\n') # force the IOTool box to reset to known-good state
         time.sleep(0.5) # give it time to reboot
-        self._serial_port = messaging.smart_serial.Serial(config.IOTool.SERIAL_PORT, timeout=4)
+        self._serial_port = messaging.smart_serial.Serial(config.IOTool.SERIAL_PORT, timeout=1)
         self._serial_port.write(_ECHO_OFF + b'\n') # disable echo
         echo_reply = self._serial_port.read_until(b'>')[:-1]
         assert echo_reply == _ECHO_OFF + b'\r\n' # read back echo of above (no further echoes will come)
         self._assert_empty_buffer()
         self.commands = commands
+        self._serial_port.setTimeout(None) # change to infinite time-out once initialized and in known-good state,
+        # so that waiting for IOTool replies won't cause timeouts
     
     def execute(self, *commands):
         self._assert_empty_buffer()

@@ -130,7 +130,7 @@ class SerialMessageManager(MessageManager):
                     (otherwise must set self.running to False to quit)"""
         # need a timeout on the serial port so that _receive_message can 
         # occasionally check its 'running' attribute to decide if it needs to return.
-        self.serial_port = smart_serial.Serial(serial_port, baudrate=serial_baud, timeout=4)
+        self.serial_port = smart_serial.Serial(serial_port, baudrate=serial_baud, timeout=1)
         self.thread_name = 'SerialMessageManager({})'.format(self.serial_port.port)
         self.response_terminator = response_terminator
         super().__init__(verbose, daemon)

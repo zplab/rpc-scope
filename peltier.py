@@ -8,9 +8,7 @@ from . import scope_configuration as config
 class Peltier(property_utils.PropertyDevice):
     def __init__(self, property_server=None, property_prefix=''):
         super().__init__(property_server, property_prefix)
-        self._serial_port = messaging.smart_serial.Serial(config.Peltier.SERIAL_PORT, baudrate=config.Peltier.SERIAL_BAUD, timeout=4)
-        # test if we can connect
-        self.get_temperature()
+        self._serial_port = messaging.smart_serial.Serial(config.Peltier.SERIAL_PORT, baudrate=config.Peltier.SERIAL_BAUD, timeout=1)
         if property_server:
             self._update_property('temperature', self.get_temperature())
             self._update_property('target_temperature', self.get_target_temperature())

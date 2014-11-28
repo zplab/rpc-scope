@@ -31,7 +31,7 @@ LAMP_NAMES = set(LAMP_DAC_COMMANDS.keys())
 class SpectraX(property_utils.PropertyDevice):
     def __init__(self, iotool, property_server=None, property_prefix=''):
         super().__init__(property_server, property_prefix)
-        self._serial_port = messaging.smart_serial.Serial(config.SpectraX.SERIAL_PORT, baudrate=config.SpectraX.SERIAL_BAUD, timeout=4)
+        self._serial_port = messaging.smart_serial.Serial(config.SpectraX.SERIAL_PORT, baudrate=config.SpectraX.SERIAL_BAUD, timeout=1)
         # RS232 Lumencor docs state: "The [following] two commands MUST be issued after every power cycle to properly configure controls for further commands."
         # "Set GPIO0-3 as open drain output"
         self._serial_port.write(b'\x57\x02\xFF\x50')

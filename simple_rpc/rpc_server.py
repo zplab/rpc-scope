@@ -192,8 +192,6 @@ class Interrupter(threading.Thread):
                 print('interrupt received: {}, armed={}'.format(message, self.armed))
             if message == 'interrupt' and self.armed:
                 os.kill(os.getpid(), signal.SIGINT)
-            elif message == 'halt':
-                self.running = False
 
     def _receive(self):
         raise NotImplementedError()
