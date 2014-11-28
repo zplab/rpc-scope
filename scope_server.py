@@ -23,7 +23,7 @@ def server_main(rpc_port=None, rpc_interrupt_port=None, property_port=None, verb
     # add ism_buffer_utils as hidden elements of the namespace, which RPC clients can use for seamless buffer sharing
     scope_controller._ism_buffer_utils = ism_buffer_utils
 
-    interrupter = rpc_server.ZMQInterrupter(rpc_interrupt_port, context=context)
+    interrupter = rpc_server.ZMQInterrupter(rpc_interrupt_port, context=context, verbose=verbose)
     scope_server = rpc_server.ZMQServer(scope_controller, interrupter, rpc_port, context=context, verbose=verbose)
 
     scope_server.run()

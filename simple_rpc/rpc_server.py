@@ -168,8 +168,8 @@ class ZMQServer(RPCServer):
             except:
                 reply_type = 'error'
                 reply = zmq.utils.jsonapi.dumps('Could not JSON-serialize return value.')
-            self.socket.send_string(reply_type, flags=zmq.SNDMORE)
-            self.socket.send(reply, copy=False)
+        self.socket.send_string(reply_type, flags=zmq.SNDMORE)
+        self.socket.send(reply, copy=False)
 
 class Namespace:
     """Placeholder class to hold attribute values"""
@@ -179,15 +179,17 @@ class Interrupter(threading.Thread):
     """Interrupter runs in a background thread and creates KeyboardInterrupt
     events in the main thread when requested to do so."""
     def __init__(self):
-        super().__init__(name='InterruptServer', daemon=True)
+        super().__init__(name='InterruptServer', verbose=False, daemon=True)
         self.running = True
         self.armed = False
+        self.verbose = verbose
         self.start()
     
     def run(self):
         while self.running:
             message = self._receive()
-            print('interrupt received: {}, armed={}'.format(message, self.armed))
+            if self.verbose:
+                print('interrupt received: {}, armed={}'.format(message, self.armed))
             if message == 'interrupt' and self.armed:
                 os.kill(os.getpid(), signal.SIGINT)
             elif message == 'halt':

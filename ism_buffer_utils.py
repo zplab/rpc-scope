@@ -36,10 +36,10 @@ def _client_unpack_ism_data(buf):
     return numpy.ndarray(shape, dtype=dtype, order=order, buffer=data, offset=header_end+1)
 
 def _server_get_node():
-    return platform.get_node()
+    return platform.node()
 
 def client_get_data_getter(rpc_client):
-    is_local = rpc_client('_ism_buffer_utils._server_get_node') == platform.get_node()
+    is_local = rpc_client('_ism_buffer_utils._server_get_node') == platform.node()
     if is_local: # on same machine -- use ISM buffer directly
         def get_data(name, release=True):
             array = ism_buffer.open(name).asarray()
