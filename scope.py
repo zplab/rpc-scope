@@ -1,5 +1,4 @@
 from serial import SerialException
-import traceback
 
 from .messaging import message_manager, message_device
 from .dm6000b import stand, stage, objective_turret, illumination_axes
@@ -11,11 +10,11 @@ from . import acquisition_sequencer
 from . import autofocus
 from . import peltier
 from . import footpedal
+
 from . import scope_configuration as config
 
 def _print_exception(preamble, e):
-    exception_str = ''.join(traceback.format_exception(type(e), e, e.__traceback__, chain=False))
-    print(preamble + '\n' + exception_str)
+    print(preamble + '\n\t' + str(e) + '\n')
 
 class Namespace:
     pass

@@ -26,9 +26,11 @@ def server_main(rpc_port=None, rpc_interrupt_port=None, property_port=None, verb
     interrupter = rpc_server.ZMQInterrupter(rpc_interrupt_port, context=context, verbose=verbose)
     scope_server = rpc_server.ZMQServer(scope_controller, interrupter, rpc_port, context=context, verbose=verbose)
 
-    print('Scope Server Ready')
-    scope_server.run()
-
+    print('******************\nScope Server Ready\n******************')
+    try:
+        scope_server.run()
+    except KeyboardInterrupt:
+        return
 
 if __name__ == '__main__':
     server_main()
