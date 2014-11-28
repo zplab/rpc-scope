@@ -25,7 +25,7 @@ def _server_release_array(name):
     """For calling over RPC: doesn't try to return the array"""
     _release_array(name)
 
-def _server_pack_ism_data(name, compresslevel=2):
+def _server_pack_ism_data(name, compresslevel):
     ism_buf = ism_buffer.open(name)
     io_buf = io.BytesIO()
     if compresslevel is None:
@@ -67,7 +67,8 @@ def client_get_data_getter(rpc_client, force_remote=False):
                 self.compresslevel = 2
             def set_network_compression(self, compresslevel=2):
                 """Set the amount of compression applied to images streamed over the network:
-                None = send raw bytes, or 0-9 indicates gzip compression level."""
+                None = send raw bytes, or 0-9 indicates gzip compression level.
+                None is best for a wired local connection; 2 is best for a wifi connection."""
                 self.compresslevel = compresslevel
             def __call__(self, name):
                 data = rpc_client('_ism_buffer_utils._server_pack_ism_data', name, self.compresslevel)

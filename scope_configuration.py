@@ -1,7 +1,10 @@
+HOST = '127.0.0.1'
+#HOST = '*'
+
 class Server:
-    RPC_PORT = 'tcp://127.0.0.1:6000'
-    RPC_INTERRUPT_PORT = 'tcp://127.0.0.1:6001'
-    PROPERTY_PORT = 'tcp://127.0.0.1:6002'
+    RPC_PORT = 'tcp://{}:6000'.format(HOST)
+    RPC_INTERRUPT_PORT = 'tcp://{}:6001'.format(HOST)
+    PROPERTY_PORT = 'tcp://{}:6002'.format(HOST)
 
 class Stand:
     SERIAL_PORT = '/dev/ttyScope'
@@ -9,8 +12,6 @@ class Stand:
 
 class Camera:
     MODEL = 'ZYLA-5.5-CL3'
-    IMAGE_SERVER_PORT = 'tcp://127.0.0.1:6003'
-    IMAGE_SERVER_NOTIFICATION_PORT = 'tcp://127.0.0.1:6004'
     
 class IOTool:
     SERIAL_PORT = '/dev/ttyIOTool'
