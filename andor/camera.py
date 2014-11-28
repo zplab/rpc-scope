@@ -62,10 +62,10 @@ class Camera(property_utils.PropertyDevice):
 
     _CAMERA_DEFAULTS = [
         ('AOIBinning', lowlevel.SetEnumString, '1x1'),
-        ('AOIHeight', lowlevel.SetInt, 2160),
         ('AOILeft', lowlevel.SetInt, 1),
         ('AOITop', lowlevel.SetInt, 1),
         ('AOIWidth', lowlevel.SetInt, 2560),
+        ('AOIHeight', lowlevel.SetInt, 2160),
         ('AccumulateCount', lowlevel.SetInt, 1),
         ('AuxiliaryOutSource', lowlevel.SetEnumString, 'FireAll'),
         ('CycleMode', lowlevel.SetEnumString, 'Fixed'),
@@ -85,6 +85,7 @@ class Camera(property_utils.PropertyDevice):
         ('IOInvert', lowlevel.SetBool, False),
         ('MetadataEnable', lowlevel.SetBool, False),
         ('MetadataTimestamp', lowlevel.SetBool, True),
+        ('TriggerMode', lowlevel.SetEnumString, 'Internal'), # need to set internal trigger mode to be able to set overlap false
         ('Overlap', lowlevel.SetBool, False),
         ('PixelReadoutRate', lowlevel.SetEnumString, '100 MHz'),
         ('SensorCooling', lowlevel.SetBool, True),
@@ -97,11 +98,12 @@ class Camera(property_utils.PropertyDevice):
 
     def __init__(self, property_server=None, property_prefix=''):
         super().__init__(property_server, property_prefix)
-        lowlevel.initialize() # safe to call this multiple times
-        self.return_to_default_state()
-        
         self._callback_properties = {}
 
+        lowlevel.initialize() # safe to call this multiple times
+        self._live_mode = False
+        self.return_to_default_state()
+        
         # Expose some certain camera properties presented by the Andor API more or less directly,
         # the only transformation being translation of enumeration indexes to descriptive strings
         # for convenience
@@ -156,13 +158,14 @@ class Camera(property_utils.PropertyDevice):
                 lowlevel.RegisterFeatureCallback(at_feature, self._c_callback, 0)
 
         self._update_live_frame = self._add_property('live_frame', None)
-        self._live_mode = False
         self._update_property('live_mode', False)
         self._state_stack = []
 
     def return_to_default_state(self):
-        for feature, setter, value in self._CAMERA_DEFAULTS:
-            setter(feature, value)
+        with self._live_guarded():
+            for feature, setter, value in self._CAMERA_DEFAULTS:
+                setter(feature, value)
+
 
     def _add_andor_enum(self, at_feature, py_name, readonly=False):
         """Expose a camera setting presented by the Andor API via GetEnumIndex, 
@@ -232,16 +235,17 @@ class Camera(property_utils.PropertyDevice):
         return 1000 * lowlevel.GetFloat('ExposureTime')
         
     def set_exposure_time(self, ms):
+        sec = ms / 1000
         live = self._live_mode
         if live: # pause live if we can't do fast exposure switching
             current_exposure = lowlevel.GetFloat('ExposureTime')
             read_time = self.get_readout_time()
             current_short = current_exposure < read_time
-            new_short = ms < read_time
+            new_short = sec < read_time
             must_pause_live = current_short != new_short
             if must_pause_live:
                 self.set_live_mode(False)
-        lowlevel.SetFloat('ExposureTime', ms / 1000)
+        lowlevel.SetFloat('ExposureTime', sec)
         if live:
             if must_pause_live:
                 self.set_live_mode(True)
@@ -280,8 +284,13 @@ class Camera(property_utils.PropertyDevice):
         # a collection of AOI parameters that are together legal does not require transitioning through
         # an illegal state.
         aoi_list = [(key, value) for key, value in aoi_dict.items() if value is not None]
-        for key, value in sorted(aoi_list, key = _delta_sort_key):
-            getattr(self, 'set_' + key)(value)
+        for key, value in sorted(aoi_list, key = self._delta_sort_key):
+            with self._live_guarded():
+                getattr(self, 'set_' + key)(value)
+
+    def full_aoi(self):
+        """Set the AOI to full frame"""
+        self._set_aoi({'aoi_height': 2160, 'aoi_left': 1, 'aoi_top': 1, 'aoi_width': 2560})
 
     def reset_timestamp(self):
         '''Reset current_timestamp to 0.'''
@@ -445,7 +454,8 @@ class LiveModeThread(threading.Thread):
     
     def stop(self):
         self.running = False
-    
+        atexit.unregister(self._exit_stop)
+
     def _exit_stop(self):
         self.running = False
         self.join()

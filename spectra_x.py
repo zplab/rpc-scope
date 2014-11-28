@@ -1,4 +1,7 @@
-from . import messaging
+import threading
+import time
+
+from .messaging import smart_serial
 from .simple_rpc import property_utils
 from . import scope_configuration as config
 
@@ -31,14 +34,18 @@ LAMP_NAMES = set(LAMP_DAC_COMMANDS.keys())
 class SpectraX(property_utils.PropertyDevice):
     def __init__(self, iotool, property_server=None, property_prefix=''):
         super().__init__(property_server, property_prefix)
-        self._serial_port = messaging.smart_serial.Serial(config.SpectraX.SERIAL_PORT, baudrate=config.SpectraX.SERIAL_BAUD, timeout=1)
+        self._serial_port = smart_serial.Serial(config.SpectraX.SERIAL_PORT, baudrate=config.SpectraX.SERIAL_BAUD, timeout=1)
         # RS232 Lumencor docs state: "The [following] two commands MUST be issued after every power cycle to properly configure controls for further commands."
         # "Set GPIO0-3 as open drain output"
         self._serial_port.write(b'\x57\x02\xFF\x50')
         # "Set GPI05-7 push-pull out, GPIO4 open drain out"
         self._serial_port.write(b'\x57\x03\xAB\x50')
         # test if we can connect:
-        self.get_temperature()
+        try:
+            self.get_temperature()
+        except smart_serial.SerialTimeout:
+            # explicitly clobber traceback from SerialTimeout exception
+            raise smart_serial.SerialException('Could not read data from Spectra X -- is it turned on?')
         self._iotool = iotool
         if property_server:
             self._update_property('temperature', self.get_temperature())

@@ -14,7 +14,7 @@ from . import footpedal
 from . import scope_configuration as config
 
 def _print_exception(preamble, e):
-    exception_str = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
+    exception_str = ''.join(traceback.format_exception(type(e), e, e.__traceback__, chain=False))
     print(preamble + '\n' + exception_str)
 
 class Namespace:
@@ -74,6 +74,6 @@ class Scope(message_device.AsyncDeviceNamespace):
             self.camera.autofocus = autofocus.Autofocus(self.camera, self.stage)
 
         try:
-            self.peltier = peltier.Peltier(property_server, property_prefix='scope.peltier')
+            self.peltier = peltier.Peltier(property_server, property_prefix='scope.peltier.')
         except SerialException as e:
             _print_exception('Could not connect to peltier controller:', e)

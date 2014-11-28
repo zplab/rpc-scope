@@ -1,6 +1,6 @@
 import time
 
-from .. import messaging
+from ..messaging import smart_serial
 from . import commands
 from .. import scope_configuration as config
 
@@ -8,14 +8,18 @@ _ECHO_OFF = b'\x80\xFF'
 
 class IOTool:
     def __init__(self):
-        self._serial_port = messaging.smart_serial.Serial(config.IOTool.SERIAL_PORT, timeout=1)
-        self._serial_port.write(b'!\nreset\n') # force the IOTool box to reset to known-good state
-        time.sleep(0.5) # give it time to reboot
-        self._serial_port = messaging.smart_serial.Serial(config.IOTool.SERIAL_PORT, timeout=1)
-        self._serial_port.write(_ECHO_OFF + b'\n') # disable echo
-        echo_reply = self._serial_port.read_until(b'>')[:-1]
-        assert echo_reply == _ECHO_OFF + b'\r\n' # read back echo of above (no further echoes will come)
-        self._assert_empty_buffer()
+        self._serial_port = smart_serial.Serial(config.IOTool.SERIAL_PORT, timeout=1)
+        try:
+            self._serial_port.write(b'!\nreset\n') # force the IOTool box to reset to known-good state
+            time.sleep(0.5) # give it time to reboot
+            self._serial_port = smart_serial.Serial(config.IOTool.SERIAL_PORT, timeout=1)
+            self._serial_port.write(_ECHO_OFF + b'\n') # disable echo
+            echo_reply = self._serial_port.read_until(b'>')[:-1]
+            assert echo_reply == _ECHO_OFF + b'\r\n' # read back echo of above (no further echoes will come)
+            self._assert_empty_buffer()
+        except (smart_serial.SerialTimeout, RuntimeError):
+            # explicitly clobber traceback from SerialTimeout exception
+            raise smart_serial.SerialException('Could not communicate with IOTool device -- is it attached?')
         self.commands = commands
         self._serial_port.setTimeout(None) # change to infinite time-out once initialized and in known-good state,
         # so that waiting for IOTool replies won't cause timeouts

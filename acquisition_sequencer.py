@@ -22,6 +22,7 @@ class AcquisitionSequencer:
         self._num_acquisitions = 0
         
     def add_step(self, exposure_ms, tl_enable=None, tl_intensity=None, **spectra_x_lamps):
+        self.compiled = False
         self._num_acquisitions += 1
         self._exposures.append(exposure_ms)
         lamps = {lamp:True for lamp, value in spectra_x_lamps.items() if value}
@@ -51,7 +52,8 @@ class AcquisitionSequencer:
         self._compiled = True
     
     def run(self):
-        assert self._compiled
+        if not self._compiled:
+            self.compile()
         self._spectra_x.lamp_intensity(**self._spectra_x_intensities)
         self._camera.start_image_sequence_acquisition(self._num_acquisitions, trigger_mode='External Exposure', 
             overlap_enabled=True, auxiliary_out_source='FireAll', pixel_readout_rate=self._readout_rate)

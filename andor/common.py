@@ -45,6 +45,9 @@ _at_err_dict = {
 }
 
 class AndorError(RuntimeError):
+    pass
+
+class AndorLowlevelError(AndorError):
     def __init__(self, code):
         self.errtext = _at_err_dict[code]
         self.code = code
@@ -52,7 +55,7 @@ class AndorError(RuntimeError):
 
 def _at_errcheck(result, func, args):
     if result != 0:
-        raise AndorError(result)
+        raise AndorLowlevelError(result)
     return args
 
 # NB: Callbacks should return AT_CALLBACK_SUCCESS, or, equivalently, 0

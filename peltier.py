@@ -1,14 +1,19 @@
 import threading
 import time
 
-from . import messaging
+from .messaging import smart_serial
 from .simple_rpc import property_utils
 from . import scope_configuration as config
 
 class Peltier(property_utils.PropertyDevice):
     def __init__(self, property_server=None, property_prefix=''):
         super().__init__(property_server, property_prefix)
-        self._serial_port = messaging.smart_serial.Serial(config.Peltier.SERIAL_PORT, baudrate=config.Peltier.SERIAL_BAUD, timeout=1)
+        self._serial_port = smart_serial.Serial(config.Peltier.SERIAL_PORT, baudrate=config.Peltier.SERIAL_BAUD, timeout=1)
+        try:
+            self.get_temperature()
+        except smart_serial.SerialTimeout:
+            # explicitly clobber traceback from SerialTimeout exception
+            raise smart_serial.SerialException('Could not read data from Peltier controller -- is it turned on?')
         if property_server:
             self._update_property('temperature', self.get_temperature())
             self._update_property('target_temperature', self.get_target_temperature())
@@ -19,7 +24,7 @@ class Peltier(property_utils.PropertyDevice):
             
     def _timer_update_temp(self):
         while self._timer_running:
-            self._update_property(self.get_temperature())
+            self._update_property('temperature', self.get_temperature())
             time.sleep(self._sleep_time)
            
     def _read(self):
@@ -32,8 +37,10 @@ class Peltier(property_utils.PropertyDevice):
         self._write(val)
         return self._read()
 
-    def _call_param(self, val, param):
-        self._write(val + param)
+    def _call(self, val, param=''):
+        if param:
+            val = val + ' ' + param
+        self._write(val)
         if not self._read().endswith('OK'):
             raise RuntimeError('Invalid command to incubator.')
 
@@ -57,19 +64,19 @@ class Peltier(property_utils.PropertyDevice):
         return float(temp)
 
     def set_target_temperature(self, temp):
-        self._call_param('A', '{:.1f}'.format(temp))
+        self._call('A', '{:.1f}'.format(temp))
         self._update_property('target_temperature', temp)
 
     def set_timer(self, hours, minutes, seconds):
         assert hours <= 99 and minutes <= 99 and seconds <= 99
-        self._call_param('B', '{:02d}{:02d}{:02d}'.format(hours, minutes, seconds))
+        self._call('B', '{:02d}{:02d}{:02d}'.format(hours, minutes, seconds))
 
     def set_auto_off_mode(self, mode):
         mode_str = "ON" if mode else "OFF"
-        self._call_param('C', mode_str)
+        self._call('C', mode_str)
 
     def show_temperature_on_screen(self):
-        self._call_param('D')
+        self._call('D')
 
     def show_timer_on_screen(self):
-        self._call_param('E')
+        self._call('E')

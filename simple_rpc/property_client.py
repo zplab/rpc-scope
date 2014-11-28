@@ -83,10 +83,12 @@ class ZMQClient(PropertyClient):
     def subscribe(self, property_name, callback, valueonly=False):
         self.socket.setsockopt_string(zmq.SUBSCRIBE, property_name)
         super().subscribe(property_name, callback, valueonly)
+    subscribe.__doc__ = PropertyClient.subscribe.__doc__
 
-    def subscribe_prefix(self, property_prefix, callback, valueonly=False):
+    def subscribe_prefix(self, property_prefix, callback):
         self.socket.setsockopt_string(zmq.SUBSCRIBE, property_prefix)
-        super().subscribe_prefix(property_prefix, callback, valueonly)
+        super().subscribe_prefix(property_prefix, callback)
+    subscribe_prefix.__doc__ = PropertyClient.subscribe_prefix.__doc__
 
     def _receive_update(self):
         property_name = self.socket.recv_string()

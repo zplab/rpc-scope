@@ -46,7 +46,7 @@ class PropertyServer(threading.Thread):
         """Re-send an update about all known property values. Useful for 
         clients that have just connected and want to learn about the current
         state."""
-        for property_name, value in self.properties:
+        for property_name, value in self.properties.items():
             self.task_queue.put((property_name, value))
     
     def add_property(self, property_name, value):

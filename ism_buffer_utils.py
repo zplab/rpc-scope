@@ -1,5 +1,6 @@
 import json
 import numpy
+import struct
 import gzip
 import io
 import ctypes
@@ -17,40 +18,61 @@ def server_create_array(name, shape, dtype, order):
 def server_register_array(name, array):
     _ism_buffer_registry[name].append(array)
     
-def _server_release_array(name):
+def _release_array(name):
     return _ism_buffer_registry[name].pop()
+
+def _server_release_array(name):
+    """For calling over RPC: doesn't try to return the array"""
+    _release_array(name)
 
 def _server_pack_ism_data(name, compresslevel=2):
     ism_buf = ism_buffer.open(name)
     io_buf = io.BytesIO()
-    with gzip.GzipFile(fileobj=io_buf, mode='wb', compresslevel=compresslevel) as f:
-        f.write(ism_buf.descr) # json encoding of (dtype, shape, order)
-        f.write(b'\0')
-        f.write(ctypes.string_at(ism_buf.data, size=len(ism_buf.data))) # ism_buf.data is uint8, so len == byte-size
-    return buf.getvalue()
+    if compresslevel is None:
+        f = io_buf
+    else:
+        f = gzip.GzipFile(fileobj=io_buf, mode='wb', compresslevel=compresslevel)
+    f.write(struct.pack('<H', len(ism_buf.descr)))
+    f.write(ism_buf.descr) # json encoding of (dtype, shape, order)
+    f.write(ctypes.string_at(ism_buf.data, size=len(ism_buf.data))) # ism_buf.data is uint8, so len == byte-size
+    if compresslevel is not None:
+        f.close()
+    return io_buf.getvalue()
 
 def _client_unpack_ism_data(buf):
-    data = gzip.decompress(buf)
-    header_end = data.find(b'\0')
-    dtype, shape, order = json.loads(data[:header_end].decode('ascii'))
-    return numpy.ndarray(shape, dtype=dtype, order=order, buffer=data, offset=header_end+1)
+    try:
+        data = gzip.decompress(buf)
+    except OSError:
+        data = bytes(buf)
+    header_len = struct.unpack('<H', data[:2])[0]
+    dtype, shape, order = json.loads(data[2:header_len+2].decode('ascii'))
+    return numpy.ndarray(shape, dtype=dtype, order=order, buffer=data, offset=header_len+2)
 
 def _server_get_node():
     return platform.node()
 
-def client_get_data_getter(rpc_client):
-    is_local = rpc_client('_ism_buffer_utils._server_get_node') == platform.node()
+def client_get_data_getter(rpc_client, force_remote=False):
+    if force_remote:
+        is_local = False
+    else:
+        is_local = rpc_client('_ism_buffer_utils._server_get_node') == platform.node()
     if is_local: # on same machine -- use ISM buffer directly
-        def get_data(name, release=True):
+        def get_data(name):
             array = ism_buffer.open(name).asarray()
-            if release:
-                rpc_client('_ism_buffer_utils._server_release_array', name)
+            rpc_client('_ism_buffer_utils._server_release_array', name)
             return array
     else: # pipe data over network
-        def get_data(name, release=True):
-            data = rpc_client('_ism_buffer_utils._server_pack_ism_data', name)
-            if release:
+        class GetData:
+            def __init__(self):
+                self.compresslevel = 2
+            def set_network_compression(self, compresslevel=2):
+                """Set the amount of compression applied to images streamed over the network:
+                None = send raw bytes, or 0-9 indicates gzip compression level."""
+                self.compresslevel = compresslevel
+            def __call__(self, name):
+                data = rpc_client('_ism_buffer_utils._server_pack_ism_data', name, self.compresslevel)
                 rpc_client('_ism_buffer_utils._server_release_array', name)
-            return _client_unpack_ism_data(data)
+                return _client_unpack_ism_data(data)
+        get_data = GetData()
     return is_local, get_data
     

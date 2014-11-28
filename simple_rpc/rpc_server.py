@@ -163,9 +163,11 @@ class ZMQServer(RPCServer):
             reply_type = 'bindata'
         else:
             reply_type = 'json'
+
+        if reply_type == 'error' or reply_type == 'json':
             try:
                 reply = zmq.utils.jsonapi.dumps(reply)
-            except:
+            except TypeError:
                 reply_type = 'error'
                 reply = zmq.utils.jsonapi.dumps('Could not JSON-serialize return value.')
         self.socket.send_string(reply_type, flags=zmq.SNDMORE)
@@ -178,8 +180,8 @@ class Namespace:
 class Interrupter(threading.Thread):
     """Interrupter runs in a background thread and creates KeyboardInterrupt
     events in the main thread when requested to do so."""
-    def __init__(self):
-        super().__init__(name='InterruptServer', verbose=False, daemon=True)
+    def __init__(self, verbose=False):
+        super().__init__(name='InterruptServer', daemon=True)
         self.running = True
         self.armed = False
         self.verbose = verbose
@@ -198,7 +200,7 @@ class Interrupter(threading.Thread):
         
 
 class ZMQInterrupter(Interrupter):
-    def __init__(self, port, context=None):
+    def __init__(self, port, context=None, verbose=False):
         """InterruptServer subclass that uses ZeroMQ PUSH/PULL to communicate with clients.
         Arguments:
             port: a string ZeroMQ port identifier, like ''tcp://127.0.0.1:5555''.
@@ -207,7 +209,7 @@ class ZMQInterrupter(Interrupter):
         self.context = context if context is not None else zmq.Context()
         self.socket = self.context.socket(zmq.PULL)
         self.socket.bind(port)
-        super().__init__()
+        super().__init__(verbose)
     
     def _receive(self):
         return str(self.socket.recv(), encoding='ascii')
