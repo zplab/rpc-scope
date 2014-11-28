@@ -135,7 +135,7 @@ def _init_camera(desired_camera):
                          desired_camera + '".')
     atexit.register(wrapper._at_core_lib.AT_Close, wrapper._at_camera_handle)
     
-def initialize(desired_camera='ZYLA-5.5-CL3'):
+def initialize(desired_camera):
     _init_core_lib('libatcore.so')
     _init_util_lib('libatutility.so')
     _init_camera(desired_camera)

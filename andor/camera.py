@@ -33,6 +33,7 @@ from . import lowlevel
 from .. import ism_buffer_utils
 from .. import enumerated_properties
 from ..simple_rpc import property_utils
+from .. import scope_configuration as config
 
 class ReadOnly_AT_Enum(enumerated_properties.ReadonlyDictProperty):
     def __init__(self, feature):
@@ -100,7 +101,7 @@ class Camera(property_utils.PropertyDevice):
         super().__init__(property_server, property_prefix)
         self._callback_properties = {}
 
-        lowlevel.initialize() # safe to call this multiple times
+        lowlevel.initialize(config.Camera.MODEL) # safe to call this multiple times
         self._live_mode = False
         self.return_to_default_state()
         

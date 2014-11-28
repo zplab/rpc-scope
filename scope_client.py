@@ -1,5 +1,8 @@
 import functools
 import zmq
+import time
+import collections
+import numpy
 
 from .simple_rpc import rpc_client, property_client
 from . import scope_configuration as config
@@ -66,6 +69,8 @@ class LiveStreamer:
         self.image_ready_callback = image_ready_callback
         self.image_received = False
         self.live = False
+        self.last_times = collections.deque(maxlen=10)
+        self._last_time = time.time()
         scope_properties.subscribe('scope.camera.live_mode', self._live_change, valueonly=True)
         scope_properties.subscribe('scope.camera.live_frame', self._live_update, valueonly=True)
     
@@ -73,12 +78,22 @@ class LiveStreamer:
         assert self.image_received
         # get image before re-enabling image-receiving because if this is over the network, it could take a while
         image = self.scope.camera.live_image()
+        t = time.time()
+        self.last_times.append(t - self._last_time)
+        self._last_time = t
         self.image_received = False
         return image, self.frame_no
-        
+    
+    def get_fps(self):
+        if not self.live:
+            return
+        return 1/numpy.mean(self.last_times)
+    
     def _live_change(self, live):
         # called in property_client's thread: note we can't do RPC calls
         self.live = live
+        self.last_times.clear()
+        self._last_time = time.time()
         
     def _live_update(self, frame_no):
         # called in property client's thread: note we can't do RPC calls
