@@ -3,16 +3,16 @@ import collections
 
 class RPCClient:
     """Client for simple remote procedure calls. RPC calls can be dispatched
-    in three ways, given a client object 'client', and the desire to call 
+    in three ways, given a client object 'client', and the desire to call
     the server-side function foo.bar.baz(x, y, z=5):
     (1) client('foo.bar.baz', x, y, z=5)
     (2) foobarbaz = client.proxy_function('foo.bar.baz')
         foobarbaz(x, y, z=5)
     (3) namespace = client.proxy_namespace()
         namespace.foo.bar.baz(x, y, z=5)
-        
+
     The last option provides much richer proxy functions complete with docstrings
-    and appropriate argument names, defaults, etc., for run-time introspection. 
+    and appropriate argument names, defaults, etc., for run-time introspection.
     In contrast, client.proxy_function() merely returns a simplistic function that
     takes *args and **kwargs parameters.
     """
@@ -29,10 +29,10 @@ class RPCClient:
 
     def _send(self, command, args, kwargs):
         raise NotImplementedError()
-    
+
     def _receive_reply(self):
         raise NotImplementedError()
-    
+
     def _send_interrupt(self, message):
         raise NotImplementedError()
 
@@ -42,12 +42,12 @@ class RPCClient:
             return self.__call__(command, *args, **kwargs)
         func.__name__ = func.__qualname__ = command
         return func
-    
+
     def proxy_namespace(self):
         """Use the RPC server's __DESCRIBE__ functionality to reconstitute a
         faxscimile namespace on the client side with well-described functions
         that can be seamlessly called."""
-        
+
         # group functions by their namespace
         server_namespaces = collections.defaultdict(list)
         for qualname, doc, argspec in self('__DESCRIBE__'):
@@ -57,7 +57,7 @@ class RPCClient:
             # make sure that intermediate (and possibly-empty) namespaces are also in the dict
             for i in range(len(parents)):
                 server_namespaces[parents[:i]] # for a defaultdict, just looking up the entry adds it
-        
+
         # for each namespace that contains functions:
         # 1: see if there are any get/set pairs to turn into properties, and
         # 2: make a class for that namespace with the given properties and functions
@@ -83,7 +83,7 @@ class RPCClient:
                 setattr(ClientNamespace, name, accessor_pair.get_property())
             client_namespaces[parents] = ClientNamespace()
 
-        
+
         # now assemble these namespaces into the correct hierarchy, fetching intermediate
         # namespaces from the proxy_namespaces dict as required.
         root = client_namespaces[()]
@@ -98,9 +98,9 @@ class RPCClient:
                 except AttributeError:
                     new_namespace = client_namespaces.pop(parents[:i+1])
                     setattr(namespace, element, new_namespace)
-                    namespace = new_namespace            
+                    namespace = new_namespace
         return root
-                
+
     class _accessor_pair:
         def __init__(self):
             self.getter = None
@@ -128,7 +128,7 @@ class ZMQClient(RPCClient):
 
     def _send(self, command, args, kwargs):
         self.socket.send_json((command, args, kwargs))
-    
+
     def _receive_reply(self):
         reply_type = self.socket.recv_string()
         assert(self.socket.getsockopt(zmq.RCVMORE))

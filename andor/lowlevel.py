@@ -97,7 +97,7 @@ _AT_HANDLE_SYSTEM = 1
 def _init_core_lib(corepath):
     if wrapper._at_core_lib is not None:
         return
-        
+
     wrapper._at_core_lib = ctypes.CDLL(corepath)
     wrapper._setup_core_functions()
     wrapper._at_core_lib.AT_InitialiseLibrary()
@@ -106,7 +106,7 @@ def _init_core_lib(corepath):
 def _init_util_lib(utilpath):
     if wrapper._at_util_lib is not None:
         return
-        
+
     wrapper._at_util_lib = ctypes.CDLL(utilpath)
     wrapper._setup_util_functions()
     wrapper._at_util_lib.AT_InitialiseUtilityLibrary()
@@ -115,7 +115,7 @@ def _init_util_lib(utilpath):
 def _init_camera(desired_camera):
     if wrapper._at_camera_handle is not None:
         return
-    
+
     devices_attached = wrapper._at_core_lib.AT_GetInt(_AT_HANDLE_SYSTEM, "DeviceCount")
     if devices_attached == 0:
         raise AndorError('No Andor SDK3 devices detected. Is the camera turned on?')
@@ -130,11 +130,11 @@ def _init_camera(desired_camera):
     if actual_camera != desired_camera:
         wrapper._at_core_lib.AT_Close(wrapper._at_camera_handle)
         wrapper._at_camera_handle = None
-        raise AndorError('Model name of Andor device 0, "' + actual_camera + 
+        raise AndorError('Model name of Andor device 0, "' + actual_camera +
                          '", does not match the desired camera model name, "' +
                          desired_camera + '".')
     atexit.register(wrapper._at_core_lib.AT_Close, wrapper._at_camera_handle)
-    
+
 def initialize(desired_camera):
     _init_core_lib('libatcore.so')
     _init_util_lib('libatutility.so')

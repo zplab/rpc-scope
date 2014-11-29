@@ -110,11 +110,11 @@ class IL(_ShutterDevice):
         self.get_filter_cube = self._filter_cube.get_value
         self.get_filter_cube_values = self._filter_cube.get_recognized_values
         self._update_property('filter_cube', self.get_filter_cube())
-    
+
     def set_filter_cube(self, cube):
         self._update_property('filter_cube', cube)
         self._filter_cube.set_value(cube)
-        
+
 
 class TL(_ShutterDevice):
     '''IL represents an interface into elements used in Transmitted Light (Brighftield and DIC) mode.'''

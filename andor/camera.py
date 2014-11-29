@@ -104,7 +104,7 @@ class Camera(property_utils.PropertyDevice):
         lowlevel.initialize(config.Camera.MODEL) # safe to call this multiple times
         self._live_mode = False
         self.return_to_default_state()
-        
+
         # Expose some certain camera properties presented by the Andor API more or less directly,
         # the only transformation being translation of enumeration indexes to descriptive strings
         # for convenience
@@ -119,7 +119,7 @@ class Camera(property_utils.PropertyDevice):
         self._add_andor_enum('SimplePreAmpGainControl', 'sensor_gain')
         self._add_andor_enum('TriggerMode', 'trigger_mode')
         self._add_andor_enum('TemperatureStatus', 'temperature_status', readonly=True)
-        
+
         # Directly expose certain plain camera properties from Andor API
         self._add_andor_property('AccumulateCount', 'accumulate_count', 'Int')
         self._add_andor_property('AOIHeight', 'aoi_height', 'Int')
@@ -152,7 +152,7 @@ class Camera(property_utils.PropertyDevice):
 
         update_exp = self._add_property('exposure_time', self.get_exposure_time())
         self._callback_properties['ExposureTime'] = (self.get_exposure_time, update_exp) # we use special case getters and setters below
-        
+
         if property_server:
             self._c_callback = lowlevel.FeatureCallback(self._andor_callback)
             for at_feature in self._callback_properties.keys():
@@ -169,7 +169,7 @@ class Camera(property_utils.PropertyDevice):
 
 
     def _add_andor_enum(self, at_feature, py_name, readonly=False):
-        """Expose a camera setting presented by the Andor API via GetEnumIndex, 
+        """Expose a camera setting presented by the Andor API via GetEnumIndex,
         SetEnumIndex, and GetEnumStringByIndex as an enumerated property."""
         if readonly:
             enum = ReadOnly_AT_Enum(at_feature)
@@ -202,14 +202,14 @@ class Camera(property_utils.PropertyDevice):
                 return None
         setattr(self, 'get_'+py_name, getter)
         self._callback_properties[at_feature] = (getter, self._add_property(py_name, getter()))
-        
+
         if not readonly:
             andor_setter = getattr(lowlevel, 'Set'+at_type)
             def setter(value):
                 with self._live_guarded():
                     andor_setter(at_feature, value)
             setattr(self, 'set_'+py_name, setter)
-    
+
     def _andor_callback(self, camera_handle, at_feature, context):
         getter, update = self._callback_properties[at_feature]
         update(getter())
@@ -219,7 +219,7 @@ class Camera(property_utils.PropertyDevice):
         if self._property_server:
             for at_feature in self._callback_properties.keys():
                 lowlevel.UnregisterFeatureCallback(at_feature, self._c_callback, 0)
-    
+
     @contextlib.contextmanager
     def _live_guarded(self):
         live = self._live_mode
@@ -230,11 +230,11 @@ class Camera(property_utils.PropertyDevice):
         finally:
             if live:
                 self.set_live_mode(True)
-    
+
     def get_exposure_time(self):
         """Return exposure time in ms"""
         return 1000 * lowlevel.GetFloat('ExposureTime')
-        
+
     def set_exposure_time(self, ms):
         sec = ms / 1000
         live = self._live_mode
@@ -254,8 +254,8 @@ class Camera(property_utils.PropertyDevice):
                 # changed exposure time without pausing live... update sleep time
                 self._live_trigger.sleep_time = self._calculate_live_sleep_time()
                 # ... and clear recent FPS data
-                self._live_reader.last_times.clear() 
-    
+                self._live_reader.last_times.clear()
+
     def get_aoi(self):
         """Convenience wrapper around the aoi_left, aoi_top, aoi_width, aoi_height
         properties.  When setting this property, None elements and omitted entries
@@ -270,7 +270,7 @@ class Camera(property_utils.PropertyDevice):
     def _delta_sort_key(self, kv):
         key, value = kv
         return value - getattr(self, 'get_'+key)()
-        
+
     def set_aoi(self, aoi_dict):
         assert set(aoi_dict.keys()).issubset({'aoi_left', 'aoi_top', 'aoi_width', 'aoi_height'})
         # Although this property gives the appearence of setting multiple AOI parameters simultaneously,
@@ -280,7 +280,7 @@ class Camera(property_utils.PropertyDevice):
         # Consider that {'aoi_left' : 2001, 'aoi_width' : 500} specifies horizontal AOI parameters that
         # are valid together.  However, if aoi_left is greater than 2061 before the change, aoi_left
         # must be updated before aoi_width.
-        # 
+        #
         # Performing AOI updates in ascending order of signed parameter value change ensures that setting
         # a collection of AOI parameters that are together legal does not require transitioning through
         # an illegal state.
@@ -323,7 +323,7 @@ class Camera(property_utils.PropertyDevice):
         lowlevel.Command('AcquisitionStart')
         self._live_reader = LiveReader(input_buffer, convert_buffer, self._update_live_frame)
         self._live_trigger = LiveTrigger(sleep_time, self._live_reader)
-    
+
     def _calculate_live_sleep_time(self):
         readout_time = self.get_readout_time()
         if self.get_exposure_time() / 1000 <= readout_time:
@@ -350,16 +350,16 @@ class Camera(property_utils.PropertyDevice):
         # This avoids the race condition where live mode is turned off right before
         # a client tries to grab the image.
         self.pop_state()
-    
+
     def get_live_fps(self):
         if not self._live_mode:
             return
         return 1/numpy.mean(self._live_reader.last_times)
-        
+
     def _make_input_output_buffers(self, name):
         width, height, stride = self.get_aoi_width(), self.get_aoi_height(), self.get_aoi_stride()
         input_encoding = self.get_pixel_encoding()
-        output_array = ism_buffer_utils.server_create_array(name, shape=(width, height), dtype=numpy.uint16, 
+        output_array = ism_buffer_utils.server_create_array(name, shape=(width, height), dtype=numpy.uint16,
             order='Fortran')
         input_buffer = lowlevel.make_buffer()
         def convert_buffer():
@@ -381,10 +381,10 @@ class Camera(property_utils.PropertyDevice):
         name = self.next_image(read_timeout)
         self.end_image_sequence_acquisition()
         return name
-    
+
     def send_software_trigger(self):
         lowlevel.Command('SoftwareTrigger')
-    
+
     def start_image_sequence_acquisition(self, frame_count, trigger_mode='Internal', **camera_params):
         if frame_count == 1:
             namebase = 'acquire@'+str(time.time())
@@ -406,18 +406,18 @@ class Camera(property_utils.PropertyDevice):
         convert_buffer()
         ism_buffer_utils.server_register_array(name, output_array)
         return name
-        
+
     def end_image_sequence_acquisition(self):
         lowlevel.Command('AcquisitionStop')
         lowlevel.Flush()
         self.pop_state()
         self.set_live_mode(self._sequence_acquisition_state.live)
         del self._sequence_acquisition_state
-            
+
     def set_state(self, **state):
         for k, v in state.items():
             getattr(self, 'set_'+k)(v)
-    
+
     def push_state(self, **state):
         old_state = {k: getattr(self, 'get_'+k)() for k in state.keys()}
         self._state_stack.append(old_state)
@@ -426,7 +426,7 @@ class Camera(property_utils.PropertyDevice):
         # overlap mode has complex dependencies, so it generally shouldn't be set until the very end
         if overlap is not None and lowlevel.IsWritable('Overlap'):
             self.set_overlap_enabled(overlap)
-        
+
     def pop_state(self):
         old_state = self._state_stack.pop()
         overlap = old_state.pop('overlap_enabled', None)
@@ -444,7 +444,7 @@ class LiveModeThread(threading.Thread):
     def __init__(self):
         super().__init__(daemon=True)
         self.running = True
-        # Without stopping any running live-mode threads at exit, the 
+        # Without stopping any running live-mode threads at exit, the
         # weakref.finalize() machinery will tear apart the ISM_Buffer
         # array used by the LiveReader, leading to segfaults.
         # By registering this atexit AFTER the ISM_Buffer is constructed,
@@ -452,7 +452,7 @@ class LiveModeThread(threading.Thread):
         # the ISM_Buffer finalization process.
         atexit.register(self._exit_stop)
         self.start()
-    
+
     def stop(self):
         self.running = False
         atexit.unregister(self._exit_stop)
@@ -460,22 +460,22 @@ class LiveModeThread(threading.Thread):
     def _exit_stop(self):
         self.running = False
         self.join()
-    
+
     def run(self):
         while self.running:
             self.loop()
         atexit.unregister(self.stop)
-    
+
     def loop(self):
         raise NotImplementedError()
-    
+
 class LiveTrigger(LiveModeThread):
     def __init__(self, sleep_time, live_reader):
         self.sleep_time = sleep_time
         self.trigger_count = 0 # number of triggers
         self.live_reader = live_reader
         super().__init__()
-        
+
     def loop(self):
         time.sleep(self.sleep_time)
         if self.trigger_count - self.live_reader.image_count > 10:
@@ -497,7 +497,7 @@ class LiveReader(LiveModeThread):
         self.ready = threading.Event()
         super().__init__()
         self.ready.wait() # don't return from init until a buffer is queued
-    
+
     def loop(self):
         t = time.time()
         lowlevel.queue_buffer(self.input_buffer)

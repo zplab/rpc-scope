@@ -8,7 +8,7 @@ def wait_high(pin):
 
 def wait_low(pin):
     return _make_command('wl', pin)
-    
+
 def wait_change(pin):
     return _make_command('wc', pin)
 
@@ -20,7 +20,7 @@ def read_digital(pin):
 
 def read_analog(pin):
     return _make_command('ra', pin)
-    
+
 def delay_ms(delay):
     return _make_command('dm', delay)
 
@@ -41,7 +41,7 @@ def set_high(pin):
 
 def set_low(pin):
     return _make_command('sl', pin)
-    
+
 def set_tristate(pin):
     return _make_command('st', pin)
 

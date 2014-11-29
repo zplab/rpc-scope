@@ -20,7 +20,7 @@ class PropertyClient(threading.Thread):
         self.prefix_callbacks = trie.trie()
         super().__init__(name='PropertyClient', daemon=daemon)
         self.start()
-    
+
     def run(self):
         """Thread target: do not call directly."""
         self.running = True
@@ -42,27 +42,27 @@ class PropertyClient(threading.Thread):
         """Register a callback to be called any time the named property is updated.
         If valueonly is True, the callback will be called as: callback(new_value);
         if valueonly is False, it will be called as callback(property_name, new_value).
-        
+
         Multiple callbacks can be registered for a single property_name.
         """
         self.callbacks[property_name].append((callback, valueonly))
-    
+
     def subscribe_prefix(self, property_prefix, callback):
-        """Register a callback to be called any time a named property which is 
+        """Register a callback to be called any time a named property which is
         prefixed by the property_prefix parameter is updated. The callback is
         called as callback(property_name, new_value).
-        
+
         Example: if property_prefix is 'camera.', then the callback will be called
         when 'camera.foo' or 'camera.bar' or any such property name is updated.
         An empty prefix ('') will match everything.
-        
+
         Multiple callbacks can be registered for a single property_prefix.
         """
         if property_prefix not in self.prefix_callbacks:
             self.prefix_callbacks[property_prefix] = []
         self.prefix_callbacks[property_prefix].append((callback, False))
-        
-    
+
+
     def _receive_update(self):
         """Receive an update from the server"""
         raise NotImplementedError()

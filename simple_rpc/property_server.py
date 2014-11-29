@@ -5,29 +5,29 @@ import queue
 class PropertyServer(threading.Thread):
     """Server for publishing changes to properties (i.e. (key, value) pairs) to
     other clients.
-    
+
     There are three options for informing the server that a value has changed:
     (1) The add_property() method returns a callback that can be called with
         the new value.
     (2) The update_property() method can be called directly with the property
         name and new value.
-    (3) The property_decorator() method can be used to generate a custom 
+    (3) The property_decorator() method can be used to generate a custom
         property decorator that auto-updates, e.g.:
-        
+
         server = PropertyServer()
-        
+
         class Foo:
             def __init__(self):
                 self._x = 5
-            
+
             @server.property_decorator('Foo.x')
             def x(self):
                 return self._x
-            
+
             @x.setter
             def x(self, value):
                 self._x = value
-        
+
     """
     def __init__(self, verbose=False):
         super().__init__(daemon=True)
@@ -36,19 +36,19 @@ class PropertyServer(threading.Thread):
         self.task_queue = queue.Queue()
         self.running = True
         self.start()
-    
+
     def run(self):
         while self.running:
             property_name, value = self.task_queue.get() # block until something's in the queue
             self._publish_update(property_name, value)
-    
+
     def rebroadcast_properties(self):
-        """Re-send an update about all known property values. Useful for 
+        """Re-send an update about all known property values. Useful for
         clients that have just connected and want to learn about the current
         state."""
         for property_name, value in self.properties.items():
             self.task_queue.put((property_name, value))
-    
+
     def add_property(self, property_name, value):
         """Add a named property and provide an initial value.
         Returns a callback to call when the property's value has changed."""
@@ -74,7 +74,7 @@ class PropertyServer(threading.Thread):
                 super().__set__(obj, value)
                 propertyserver.update_property(property_name, value)
         return serverproperty
-        
+
     def _publish_update(self, property_name, value):
         raise NotImplementedError()
 

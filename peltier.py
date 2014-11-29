@@ -21,12 +21,12 @@ class Peltier(property_utils.PropertyDevice):
             self._timer_running = True
             self._timer_thread = threading.Thread(target=self._timer_update_temp, daemon=True)
             self._timer_thread.start()
-            
+
     def _timer_update_temp(self):
         while self._timer_running:
             self._update_property('temperature', self.get_temperature())
             time.sleep(self._sleep_time)
-           
+
     def _read(self):
         return self._serial_port.read_until(b'\r')[:-1].decode('ascii')
 
@@ -51,7 +51,7 @@ class Peltier(property_utils.PropertyDevice):
         """return (hours, minutes, seconds) tuple"""
         timer = self._call_response('b')
         return int(timer[:2]), int(timer[2:4]), int(timer[4:])
-    
+
     def get_auto_off_mode(self):
         """return true if auto-off mode is on"""
         return self._call_response('c').endswith('On')

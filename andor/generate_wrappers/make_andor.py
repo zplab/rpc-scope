@@ -167,7 +167,7 @@ def generate_code(outfile):
                 in_arg_names = ''
             wrapper_code = wrapper_text.format(wrapper_name, in_arg_names, indent(doc), function_name, in_arg_names)
             wrapper_funcs.append(wrapper_code)
-                
+
     util_setup = []
     for proto in util_protos:
         function_name, in_args, out_args, func_code = output_ctypes.create_library_prototype(proto, '_at_util_lib', additional_defs)
@@ -183,13 +183,13 @@ def generate_code(outfile):
                 in_arg_names = ''
             wrapper_code = wrapper_text.format(wrapper_name, in_arg_names, indent(doc), function_name, in_arg_names)
             wrapper_funcs.append(wrapper_code)
-        
-    
+
+
     core_setup = '\n\n'.join(core_setup)
     wrapper_funcs = '\n'.join(wrapper_funcs)
     util_setup = '\n\n'.join(util_setup)
     output_code = code.format(wrapper_funcs, indent(core_setup), indent(util_setup))
-    
+
     with open(outfile, 'w') as f:
         f.write(output_code)
 

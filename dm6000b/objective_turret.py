@@ -97,7 +97,7 @@ class ObjectiveTurret(stand.DM6000Device):
 
     def get_all_objectives(self):
         '''Returns a list of objective magnifications.  List index corresponds to objective position.  None values
-        in the list represent empty objective turret positions.  For example, [None, 10, 5] indicates that there 
+        in the list represent empty objective turret positions.  For example, [None, 10, 5] indicates that there
         is no objective at position 0, a 10x objective at position 1, and a 5x objective at objective turret position
         2.'''
         return self._mags
@@ -141,7 +141,7 @@ class ObjectiveTurret(stand.DM6000Device):
                 }
                 for objpar_idx, objpar_name in self._PER_METHOD_PROPERTIES:
                     meth_objpars = reversed(self._get_objpar(p, objpar_idx))
-                    details[objpar_name] = { microscopy_method_names.NAMES[meth_idx]: int(meth_objpar) 
+                    details[objpar_name] = { microscopy_method_names.NAMES[meth_idx]: int(meth_objpar)
                                                  for meth_idx, meth_objpar in enumerate(meth_objpars)}
                 method_mask = list(self.send_message(GET_OBJPAR, p, 4, async=False).response.split(' ')[2])
                 method_mask.reverse()

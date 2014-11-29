@@ -12,7 +12,7 @@ class Stand:
 
 class Camera:
     MODEL = 'ZYLA-5.5-CL3'
-    
+
 class IOTool:
     SERIAL_PORT = '/dev/ttyIOTool'
     LUMENCOR_PINS = {
@@ -34,7 +34,7 @@ class IOTool:
     TL_ENABLE_PIN = 'E6'
     TL_PWM_PIN = 'D7'
     TL_PWM_MAX = 255
-    
+
     FOOTPEDAL_PIN = 'B4'
     FOOTPEDAL_CLOSED_TTL_STATE = False
     FOOTPEDAL_BOUNCE_DELAY_MS = 100
@@ -46,4 +46,3 @@ class SpectraX:
 class Peltier:
     SERIAL_PORT = '/dev/ttyPeltier'
     SERIAL_BAUD = 2400
-    

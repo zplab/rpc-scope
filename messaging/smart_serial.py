@@ -62,7 +62,7 @@ class Serial(serialposix.PosixSerial):
                 # which is a tad silly.
                 if isinstance(e, SerialException):
                     raise
-                    
+
                 # ignore EAGAIN errors. all other errors are shown
                 if e.errno != errno.EAGAIN:
                     raise SerialException('read failed: %s' % (e,))
@@ -74,10 +74,10 @@ class Serial(serialposix.PosixSerial):
         except KeyboardInterrupt as k:
             self.read_buffer = read_buffer
             raise k
-    
+
     def read_all_buffered(self):
         return self.read(self.inWaiting())
-    
+
     def read_until(self, match):
         """Read bytes from the serial until the sequence of bytes specified in
            'match' is read out. If a timeout is set and match hasn't been made,
@@ -118,7 +118,7 @@ class Serial(serialposix.PosixSerial):
                 # which is a tad silly.
                 if isinstance(e, SerialException):
                     raise
-                
+
                 # ignore EAGAIN errors. all other errors are shown
                 if e.errno != errno.EAGAIN:
                     raise SerialException('read failed: %s' % (e,))

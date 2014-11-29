@@ -46,7 +46,7 @@ class Stage(stand.DM6000Device):
         self._update_property('x', x)
         self._update_property('y', y)
         self._update_property('z', z)
-    
+
     def set_position(self, xyz):
         """Set x, y, and z position to respective elements of xyz tuple/iterable.
         Any may be None to indicate no motion is requested. Units are in mm."""
@@ -54,27 +54,27 @@ class Stage(stand.DM6000Device):
         self.set_x(x)
         self.set_y(y)
         self.set_z(z)
-    
+
     def _set_pos(self, value, conversion_factor, command):
         if value is None: return
         counts = int(round(value / conversion_factor))
         response = self.send_message(command, counts, intent="move stage to position")
-    
+
     def set_x(self, x):
         "Set x-axis position in mm"
         self._set_pos(x, self._x_mm_per_count, POS_ABS_X)
         self._update_property('x', x)
-    
+
     def set_y(self, y):
         "Set y-axis position in mm"
         self._set_pos(y, self._y_mm_per_count, POS_ABS_Y)
         self._update_property('y', y)
-    
+
     def set_z(self, z):
         "Set z-axis position in mm"
         self._set_pos(z, self._z_mm_per_count, POS_ABS_Z)
         self._update_property('z', z)
-    
+
 
     def get_position(self):
         """Return (x,y,z) position, in mm."""
@@ -84,7 +84,7 @@ class Stage(stand.DM6000Device):
         counts = int(self.send_message(command, async=False, intent="get stage position").response)
         mm = counts * conversion_factor
         return mm
-    
+
     def get_x(self):
         """Get x-axis position in mm."""
         return self._get_pos(self._x_mm_per_count, GET_POS_X)
@@ -96,7 +96,7 @@ class Stage(stand.DM6000Device):
     def get_z(self):
         """Get z-axis position in mm."""
         return self._get_pos(self._z_mm_per_count, GET_POS_Z)
-        
+
     def reinit_x(self):
         """Reinitialize x axis to correct for drift or "stuck" stage". Executes synchronously."""
         self.send_message(INIT_X, async=False, intent="init stage x axis")

@@ -23,7 +23,7 @@ class IOTool:
         self.commands = commands
         self._serial_port.setTimeout(None) # change to infinite time-out once initialized and in known-good state,
         # so that waiting for IOTool replies won't cause timeouts
-    
+
     def execute(self, *commands):
         self._assert_empty_buffer()
         responses = []
@@ -40,38 +40,38 @@ class IOTool:
         buffered = self._serial_port.read_all_buffered()
         if buffered:
             raise RuntimeError('Unexpected IOTool output: {}'.format(str(buffered, encoding='ascii')))
-    
+
     def store_program(self, *commands):
         all_commands = ['program'] + list(commands) + ['end']
         responses = self.execute(*all_commands)
         errors = ['{}: {}'.format(command, response) for command, response in zip(all_commands, responses) if response is not None]
         if errors:
             raise RuntimeError('Program errors:\n'+'\n'.join(errors))
-    
+
     def start_program(self, *commands, iters=1):
         if commands:
             self.store_program(*commands)
         else:
             self._assert_empty_buffer()
         self._serial_port.write('run {}\n'.format(iters).encode('ascii'))
-    
+
     def wait_for_serial_char(self):
         self._serial_port.read(1)
-    
+
     def _wait_for_program_done(self):
         return self._serial_port.read_until(b'>')[:-1]
-    
+
     def wait_for_program_done(self):
         try:
             return self._wait_for_program_done()
         except KeyboardInterrupt as k:
             self.stop_program()
             raise k
-        
+
     def stop_program(self):
         self.stop()
         self._wait_for_program_done()
-        
+
     def stop(self):
         self._serial_port.write(b'!')
-    
+

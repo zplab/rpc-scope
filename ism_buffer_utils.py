@@ -17,7 +17,7 @@ def server_create_array(name, shape, dtype, order):
 
 def server_register_array(name, array):
     _ism_buffer_registry[name].append(array)
-    
+
 def _release_array(name):
     return _ism_buffer_registry[name].pop()
 
@@ -76,4 +76,3 @@ def client_get_data_getter(rpc_client, force_remote=False):
                 return _client_unpack_ism_data(data)
         get_data = GetData()
     return is_local, get_data
-    

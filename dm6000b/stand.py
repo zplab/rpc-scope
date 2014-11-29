@@ -36,7 +36,7 @@ class DM6000Device(message_device.LeicaAsyncDevice, property_utils.PropertyDevic
         # access to the property_server etc.
         property_utils.PropertyDevice.__init__(self, property_server, property_prefix)
         message_device.LeicaAsyncDevice.__init__(self, message_manager)
-            
+
 class Stand(DM6000Device):
     def get_all_microscopy_methods(self):
         """Returns a dict of microscopy method names to bool values indicating whether the associated

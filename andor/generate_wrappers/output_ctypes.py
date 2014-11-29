@@ -3,7 +3,7 @@ Functions to take a list of C-style function prototypes and output
 ctypes-based bindings for those functions.
 
 Only type information (and optional annotations as below) will be parsed.
-Note that 'extern', pre-processor macros, typedefs, struct definitions and 
+Note that 'extern', pre-processor macros, typedefs, struct definitions and
 anything other than bare function prototypes cannot be parsed. Any 'const'
 keywords will be stripped and ignored, so beware.
 
@@ -13,7 +13,7 @@ or position as usual with python functions.
 This library can deal with C base types. Any typedefs, structs, and similar
 must be defined separately and passed in as an 'additional_definitions' dict.
 
-For example, if ARRAY_T is a typedef for void * and acts as an opaque type, 
+For example, if ARRAY_T is a typedef for void * and acts as an opaque type,
 the annotated function prototype:
 ARRAY_T subarray(ARRAY_T input, int start, int_end);
 will parse properly only if an additional_definitions parameter of:
@@ -24,9 +24,9 @@ This library can create pointers to base and defined types as required, so it
 knows how to deal with 'int **' or 'ARRAY_T *' if ARRAY_T is defined as above.
 
 Arguments in functon prototypes can be annotated with a trailing '[output]' to
-indicate that they are pointers passed in by reference and filled in by the 
+indicate that they are pointers passed in by reference and filled in by the
 function. The parmeters marked as output do not need to be provided to the
-python call of the function, and the value of the pointer for output 
+python call of the function, and the value of the pointer for output
 parameter(s) will be returned in a tuple following the function's return
 value, if any. (If there is only one return value and/or output parameter,
 only a single value will be returned, not wrapped in a tuple.)
@@ -59,9 +59,9 @@ def check_error(result, func, arguments):
     if result != size_requested:
         raise RuntimeError('Array library could not create array.')
     return result, array_t_ptr.value
-    
+
 array_library = ctypes.CDLL('/path/to/libarray.so')
-generate_ctypes.process_prototypes(protos.strip().split('\\n'), array_library, 
+generate_ctypes.process_prototypes(protos.strip().split('\\n'), array_library,
     additional_definitions=locals())
 
 size_allocated, array = array_library.make_array(20)
@@ -98,7 +98,7 @@ arg_decl = pyparsing.Group(type_decl + identifier + pyparsing.Optional(intent))
 error_check = _lbrk + identifier + _rbrk
 function_decl = pyparsing.Group(type_decl + pyparsing.Optional(error_check) + identifier)
 function_prototype = ( function_decl + _lpar +
-    pyparsing.Group(pyparsing.Optional(pyparsing.delimitedList(arg_decl, ',')))  + 
+    pyparsing.Group(pyparsing.Optional(pyparsing.delimitedList(arg_decl, ',')))  +
     _rpar + pyparsing.Optional(_semi) )
 
 base_types = {
@@ -150,9 +150,9 @@ import ctypes
 def create_library_prototype(prototype, library, additional_definitions={}):
     """Given a single annotated C function prototypes (see module docstring),
     for syntax), a ctypes library, and an optional dict of non-base type
-    definitions, load that function from the library with proper 
+    definitions, load that function from the library with proper
     type-checking and return the function."""
-    
+
     function_name, return_type, arg_types, param_flags, errcheck, errcheck_def, in_args, out_args = parse_prototype(prototype, additional_definitions)
     prototype_name = '_prototype_{}'.format(function_name)
     prototype = '{} = ctypes.CFUNCTYPE({}{})'.format(prototype_name, return_type, ', '.join(('',) + arg_types))
@@ -190,15 +190,15 @@ def parse_prototype(prototype, additional_definitions={}):
     results = function_prototype.parseString(prototype)
     function_decl = results[0]
     args = results[1]
-    
+
     #deal with the return type and error check function if present
     return_type, function_name = function_decl[0], function_decl[-1]
     py_return_type = resolve_type(return_type, additional_definitions)
     errcheck = None
     if len(function_decl) == 3:
         errcheck = function_decl[1]
-    
-    # process the arguments 
+
+    # process the arguments
     arg_types, param_flags = [], []
     in_args, out_args = [], []
     out_arg_indices = []
@@ -228,7 +228,7 @@ def parse_prototype(prototype, additional_definitions={}):
         out_args = [('c_return_value', py_return_type)] + out_args
     else:
         errcheck_def = None
-        
+
     return function_name, py_return_type, tuple(arg_types), tuple(param_flags), errcheck, errcheck_def, in_args, out_args
 
 def resolve_type(parsed_type, additional_definitions):
@@ -236,7 +236,7 @@ def resolve_type(parsed_type, additional_definitions):
     defined by the user in additional_definitions (with pointers automatically
     added as necessary).
     """
-    
+
     base_type = parsed_type[0]
     pointers = len(parsed_type[1:])
     if len(base_type) > 1:
@@ -245,7 +245,7 @@ def resolve_type(parsed_type, additional_definitions):
     else:
         # otherwise just grab the string from the one-element list
         base_type = base_type[0]
-    
+
     py_type = None
     if pointers:
         # ctypes has special names for some basic pointer types like
@@ -259,7 +259,7 @@ def resolve_type(parsed_type, additional_definitions):
         elif ptr_name in additional_definitions:
             py_type = additional_definitions[ptr_name]
             pointers -= 1
-            
+
     if not py_type:
         try:
             py_type = base_types[base_type]
@@ -272,22 +272,22 @@ def resolve_type(parsed_type, additional_definitions):
 def construct_docstring(function_name, in_args, out_args):
     """Construct a docstring based on parsed-out function data and the
     resolved python types."""
-    
+
     in_args = [(arg_name, translate_arg_type(arg_type)) for arg_name, arg_type in in_args]
     out_args = [(arg_name, translate_arg_type(arg_type)) for arg_name, arg_type in out_args]
 
     docstring = ['{}({})'.format(function_name, ', '.join(arg_name for arg_name, arg_type in in_args))]
     if out_args:
         docstring[0] += ' -> {}'.format(', '.join(arg_name for arg_name, arg_type in out_args))
-   
+
     if in_args or out_args:
         docstring.append('')
-    
+
     if in_args:
         docstring.append('Parameters:')
         for arg_name, arg_type in in_args:
             docstring.append('    {}: {}'.format(arg_name, arg_type))
-    
+
     if out_args:
         if len(out_args) == 1:
             # only output is a single output argument

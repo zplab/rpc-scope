@@ -12,7 +12,7 @@ class Autofocus:
     def __init__(self, camera, stage):
         self._camera = camera
         self._stage = stage
-    
+
     def autofocus(self, start, end, steps, metric='brenner'):
         metric = METRICS[metric]
         read_timeout = self._camera.get_exposure_time()

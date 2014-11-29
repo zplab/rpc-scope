@@ -59,7 +59,7 @@ class ReadonlySetProperty:
 
 class SetProperty(ReadonlySetProperty):
     __doc__ = ReadonlySetProperty.__doc__
-    
+
     def set_value(self, value):
         if value not in self._valid_set:
             raise ValueError('value must be one of {}.'.format(sorted(self.get_recognized_values())))
@@ -104,7 +104,7 @@ class ReadonlyDictProperty:
 
 class DictProperty(ReadonlyDictProperty):
     __doc__ = ReadonlyDictProperty.__doc__
-    
+
     def set_value(self, value):
         if value not in self._usr_to_hw:
             raise ValueError('value must be one of {}.'.format(sorted(self.get_recognized_values())))

@@ -30,7 +30,7 @@ LAMP_SPECS = {
 }
 
 LAMP_NAMES = set(LAMP_DAC_COMMANDS.keys())
-    
+
 class SpectraX(property_utils.PropertyDevice):
     def __init__(self, iotool, property_server=None, property_prefix=''):
         super().__init__(property_server, property_prefix)
@@ -53,15 +53,15 @@ class SpectraX(property_utils.PropertyDevice):
             self._timer_running = True
             self._timer_thread = threading.Thread(target=self._timer_update_temp, daemon=True)
             self._timer_thread.start()
-        
+
         self.lamp_enable(**{lamp:False for lamp in LAMP_NAMES})
         self.lamp_intensity(**{lamp:255 for lamp in LAMP_NAMES})
-            
+
     def _timer_update_temp(self):
         while self._timer_running:
             self._update_property('temperature', self.get_temperature())
             time.sleep(self._sleep_time)
-    
+
     def _lamp_intensity(self, lamp, value):
         assert 0 <= value <= 255
         inverted = 255 - value
@@ -73,10 +73,10 @@ class SpectraX(property_utils.PropertyDevice):
         dac_bytes[5] = intensity_bytes & 0x00FF
         self._serial_port.write(bytes(dac_bytes))
         self._update_property(lamp+'.intensity', value)
-    
+
     def lamp_intensity(self, **lamps):
         """Set intensity of named lamp to a given value.
-        
+
         The keyword argument names must be valid lamp names. The values must be
         in the range [0, 255], or None to do nothing. (Lamps not specified as
         arguments are also not altered)."""
@@ -86,7 +86,7 @@ class SpectraX(property_utils.PropertyDevice):
 
     def lamp_enable(self, **lamps):
         """Turn off or on named lamps.
-        
+
         The keyword argument names must be valid lamp names. The values must be
         either True to enable that lamp, False to disable, or None to do nothing.
         (Lamps not specified as arguments are also not altered)."""
@@ -94,15 +94,14 @@ class SpectraX(property_utils.PropertyDevice):
         for lamp, enable in lamps.items():
             if enable is not None:
                 self._update_property(lamp+'.enabled', enable)
-    
+
     def get_lamp_specs(self):
         """Return a dict mapping lamp names to tuples of (peak_wavelength, bandwidth), in nm,
         where bandwidth is the minimum width required to contain 75% of the spectral intensity
         of the lamp output."""
         return LAMP_SPECS
-    
+
     def get_temperature(self):
         self._serial_port.write(b'\x53\x91\x02\x50')
         r = self._serial_port.read(2)
         return ((r[0] << 3) | (r[1] >> 5)) * 0.125
-        

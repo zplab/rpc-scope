@@ -7,16 +7,16 @@ import signal
 
 class RPCServer:
     """Dispatch remote calls to callable objects in a local namespace.
-    
+
     Calls take the form of command names with a separate arg list and kwarg dict.
     Command names are of the form 'foo.bar.baz', which will be looked up as:
     namespace.foo.bar.baz
     where 'namespace' is the top-level namespace provided to the server on initialization.
     Results from the calls are returned.
-    
+
     The 'interrupter' parameter must be an instance of Interrupter, which can be used
     to simulate control-c interrupts during RPC calls.
-    
+
     Introspection can be used to provide clients a description of available commands.
     The special '__DESCRIBE__' command returns a list of command descriptions,
     which are triples of (command_name, command_doc, arg_info):
@@ -46,21 +46,21 @@ class RPCServer:
                 print("\t args: {}".format(args))
                 print("\t kwargs: {}".format(kwargs))
             self.process_command(command, args, kwargs)
-        
+
     def process_command(self, command, args, kwargs):
         """Dispatch a command or deal with special keyword commands.
-        Currently, only __DESCRIBE__ is supported. 
+        Currently, only __DESCRIBE__ is supported.
         """
         if command == '__DESCRIBE__':
             self.describe()
         else:
             self.call(command, args, kwargs)
-    
+
     def describe(self):
         descriptions = []
         self.gather_descriptions(descriptions, self.namespace)
         self._reply(descriptions)
-    
+
     @staticmethod
     def gather_descriptions(descriptions, namespace, prefix=''):
         """Recurse through a namespace, adding descriptions of callable objects encountered
@@ -81,7 +81,7 @@ class RPCServer:
                 argdict = argspec.__dict__
                 argdict.pop('annotations')
                 if argdict['defaults']:
-                    defaults = dict(zip(reversed(argdict['args']), reversed(argdict['defaults']))) 
+                    defaults = dict(zip(reversed(argdict['args']), reversed(argdict['defaults'])))
                 else:
                     defaults = {}
                 argdict['defaults'] = defaults
@@ -94,7 +94,7 @@ class RPCServer:
                 except AttributeError:
                     continue
                 RPCServer.gather_descriptions(descriptions, subnamespace, prefixed_name)
-    
+
     def call(self, command, args, kwargs):
         """Call the named command with *args and **kwargs"""
         py_command = self.lookup(command)
@@ -107,13 +107,13 @@ class RPCServer:
             self.interrupter.armed = False
             if self.verbose:
                 print("\t response: {}".format(response))
-            
+
         except (Exception, KeyboardInterrupt) as e:
             exception_str = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
             self._reply(exception_str, error=True)
         else:
             self._reply(response)
-    
+
     def lookup(self, name):
         """Look up a name in the namespace, allowing for multiple levels e.g. foo.bar.baz"""
         # could just eval, but since command is coming from the network, that's a bad idea.
@@ -155,7 +155,7 @@ class ZMQServer(RPCServer):
         except:
             self._reply(error='Could not unpack command, arguments, and keyword arguments from JSON message.')
         return command, args, kwargs
-    
+
     def _reply(self, reply, error=False):
         if error:
             reply_type = 'error'
@@ -186,7 +186,7 @@ class Interrupter(threading.Thread):
         self.armed = False
         self.verbose = verbose
         self.start()
-    
+
     def run(self):
         while self.running:
             message = self._receive()
@@ -197,7 +197,7 @@ class Interrupter(threading.Thread):
 
     def _receive(self):
         raise NotImplementedError()
-        
+
 
 class ZMQInterrupter(Interrupter):
     def __init__(self, port, context=None, verbose=False):
@@ -210,6 +210,6 @@ class ZMQInterrupter(Interrupter):
         self.socket = self.context.socket(zmq.PULL)
         self.socket.bind(port)
         super().__init__(verbose)
-    
+
     def _receive(self):
         return str(self.socket.recv(), encoding='ascii')

@@ -22,10 +22,10 @@ class Namespace:
 class Scope(message_device.AsyncDeviceNamespace):
     def __init__(self, property_server=None, verbose=False):
         super().__init__()
-        
+
         if property_server:
             self.rebroadcast_properties = property_server.rebroadcast_properties
-        
+
         try:
             manager = message_manager.LeicaMessageManager(config.Stand.SERIAL_PORT, config.Stand.SERIAL_BAUD, verbose=verbose)
             self.stand = stand.Stand(manager, property_server, property_prefix='scope.stand.')
@@ -37,18 +37,18 @@ class Scope(message_device.AsyncDeviceNamespace):
         except SerialException as e:
             has_scope = False
             _print_exception('Could not connect to microscope:', e)
-        
+
         try:
             self.iotool = io_tool.IOTool()
             has_iotool = True
         except SerialException as e:
             has_iotool = False
             _print_exception('Could not connect to IOTool box:', e)
-        
+
         if not has_scope and has_iotool:
             self.il = Namespace()
             self.tl = Namespace()
-            
+
         if has_iotool:
             try:
                 self.il.spectra_x = spectra_x.SpectraX(self.iotool, property_server, property_prefix='scope.il.spectra_x.')
@@ -58,17 +58,17 @@ class Scope(message_device.AsyncDeviceNamespace):
                 _print_exception('Could not connect to Spectra X:', e)
             self.tl.lamp = tl_lamp.TL_Lamp(self.iotool, property_server, property_prefix='scope.tl.lamp.')
             self.footpedal = footpedal.Footpedal(self.iotool)
-        
+
         try:
             self.camera = camera.Camera(property_server, property_prefix='scope.camera.')
             has_camera = True
         except camera.lowlevel.AndorError as e:
             has_camera = False
             _print_exception('Could not connect to camera:', e)
-    
+
         if has_camera and has_iotool and has_spectra_x:
             self.camera.acquisition_sequencer = acquisition_sequencer.AcquisitionSequencer(self.camera, self.iotool, self.il.spectra_x)
-    
+
         if has_scope and has_camera:
             self.camera.autofocus = autofocus.Autofocus(self.camera, self.stage)
 
