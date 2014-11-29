@@ -35,7 +35,7 @@ GET_MIN_POS_OBJ = 76038
 GET_MAX_POS_OBJ = 76039
 
 class ObjectiveTurret(stand.DM6000Device):
-    '''Note that objective position is reported as 0 when the objective turret is between positions.  The objective
+    '''Note that objective position is reported as 0 when the objective turret is between positions. The objective
     turret is between positions when it is in the process of responding to a position change request and also when
     manually placed there by physical intervention.'''
     def _setup_device(self):
@@ -62,7 +62,7 @@ class ObjectiveTurret(stand.DM6000Device):
             response = self.send_message(POS_ABS_OBJ, position, intent="change objective turret position")
 
     def get_position(self):
-        '''Current objective turret position.  Note that 0 is special and indicates that the objective turret is
+        '''Current objective turret position. Note that 0 is special and indicates that the objective turret is
         between objective positions.'''
         return int(self.send_message(GET_POS_OBJ, async=False, intent="get current objective turret position").response)
 
@@ -78,8 +78,8 @@ class ObjectiveTurret(stand.DM6000Device):
         response = self.send_message(POS_ABS_OBJ, mag_positions[0], intent="change objective turret position")
 
     def get_magnification(self):
-        '''The current objective's magnification.  I.e., the magnification of the objective at the currently selected
-        objective turret position.  Note that if the objective turret is between positions or is set to an empty position,
+        '''The current objective's magnification. I.e., the magnification of the objective at the currently selected
+        objective turret position. Note that if the objective turret is between positions or is set to an empty position,
         this value will be None.'''
         mag = self.send_message(GET_OBJPAR, self.get_position(), 1, async=False, intent="get magnification of objective at current position").response.split(' ')[2]
         if mag == '-':
@@ -88,7 +88,7 @@ class ObjectiveTurret(stand.DM6000Device):
             return int(mag)
 
     def get_immersion_or_dry(self):
-        '''Returns 'I' or 'D' depending on whether the dm6000b is in immersion or dry mode.  Setting this property to 'T'
+        '''Returns 'I' or 'D' depending on whether the dm6000b is in immersion or dry mode. Setting this property to 'T'
         causes the dm6000b to toggle between 'I' and 'D'.'''
         return self.send_message(GET_IMM_DRY, async=False, intent="get current objective medium").response
 
@@ -96,8 +96,8 @@ class ObjectiveTurret(stand.DM6000Device):
         response = self.send_message(SET_IMM_DRY, medium, intent="change to objective medium")
 
     def get_all_objectives(self):
-        '''Returns a list of objective magnifications.  List index corresponds to objective position.  None values
-        in the list represent empty objective turret positions.  For example, [None, 10, 5] indicates that there
+        '''Returns a list of objective magnifications. List index corresponds to objective position. None values
+        in the list represent empty objective turret positions. For example, [None, 10, 5] indicates that there
         is no objective at position 0, a 10x objective at position 1, and a 5x objective at objective turret position
         2.'''
         return self._mags
@@ -119,9 +119,9 @@ class ObjectiveTurret(stand.DM6000Device):
                               (17, 'DIC turret fine position'))
 
     def get_objectives_details(self):
-        '''Returns a list of objective parameter dicts / None values.  List index corresponds to objective position.  None values
-        in the list represent empty objective turret positions.  Querying this property causes internal scope components to audibly
-        do things.  It is therefore advisable to avoid querying this property from a script that runs regularly.'''
+        '''Returns a list of objective parameter dicts / None values. List index corresponds to objective position. None values
+        in the list represent empty objective turret positions. Querying this property causes internal scope components to audibly
+        do things. It is therefore advisable to avoid querying this property from a script that runs regularly.'''
         objectives = [None for i in range(self._maxp + 1)]
         for p in range(self._minp, self._maxp+1):
             mag = self.send_message(GET_OBJPAR, p, 1).response.split(' ')[2]

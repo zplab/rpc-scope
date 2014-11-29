@@ -30,10 +30,10 @@ class ReadonlySetProperty:
     typically retrieved from and passed to the hardware as is.
 
     A hypothetical example of such a property: a mirror in a beam path has a filter magazine
-    from which one filter may be deployed at a time.  The mirror controller has a simple
+    from which one filter may be deployed at a time. The mirror controller has a simple
     serial interface protocol permitting reading of the names of the filters in the magazine,
     deployment of a filter identified by name, and retrieval of the name of the currently
-    deployed filter.  The same strings by which the user identifies filters are recognized
+    deployed filter. The same strings by which the user identifies filters are recognized
     by the mirror controller hardware itself.'''
 
     def __init__(self):
@@ -41,7 +41,7 @@ class ReadonlySetProperty:
 
     def get_recognized_values(self):
         '''The list of recognized values that may be assumed by .value, and in the case
-        of a read/write attribute, assigned to .value.  Assigning anything not appearing
+        of a read/write attribute, assigned to .value. Assigning anything not appearing
         in this list to a writeable attribute's .value causes a ValueError exception to
         be raised.'''
         return self._valid_set
@@ -76,11 +76,11 @@ class ReadonlyDictProperty:
     friendly values identified to the user by more meaningful names.
 
     A hypothetical example of such a property: a mirror in a beam path has a filter magazine
-    from which one filter may be deployed at a time.  The mirror controller has a simple
+    from which one filter may be deployed at a time. The mirror controller has a simple
     serial interface protocol permitting reading of the names of the filters in the magazine
-    as an ordered list.  The 0-based index of each element is used in the filter change
+    as an ordered list. The 0-based index of each element is used in the filter change
     request command to identify the filter that should be deployed and is contained in the
-    reply to a currently deployed filter query.  The strings by which the user identifies
+    reply to a currently deployed filter query. The strings by which the user identifies
     filters are translated to/from integer values recognized by the mirror controller
     hardware.'''
 

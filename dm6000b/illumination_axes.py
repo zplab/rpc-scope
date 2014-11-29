@@ -31,7 +31,7 @@ from .. import enumerated_properties
 # Furthermore, the response does not include any parameters, making it difficult
 # (if responses are always received in order) or impossible (if they are not)
 # to match response to command without retaining state information and requested
-# changes to that state.  If such information were kept, a failure could then be
+# changes to that state. If such information were kept, a failure could then be
 # resolved to a specific request by comparing expected post-condition and actual
 # post-condition.
 # However, by not coalescing the messages, we are at least guaranteed to be able
@@ -74,7 +74,7 @@ class FilterCube(enumerated_properties.DictProperty):
         min_pos = int(self._il.send_message(GET_MIN_POS_IL_TURRET, async=False, intent="get IL turret minimum position").response)
         max_pos = int(self._il.send_message(GET_MAX_POS_IL_TURRET, async=False, intent="get IL turret maximum position").response)
         # NB: All positions in our filter cube turret are occupied and the manual does not describe the response to
-        # a name query for an empty position.  I assume that it is "-" or "", but this assumption may require correction
+        # a name query for an empty position. I assume that it is "-" or "", but this assumption may require correction
         # if we ever do come to have an empty position.
         d = {}
         for idx in range(min_pos, max_pos+1):

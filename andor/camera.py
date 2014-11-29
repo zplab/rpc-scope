@@ -191,9 +191,9 @@ class Camera(property_utils.PropertyDevice):
         '''Directly expose numeric or string camera setting.'''
         andor_getter = getattr(lowlevel, 'Get'+at_type)
         def getter():
-            # Value retrieval fails for certain properties, depending on camera state.  For
+            # Value retrieval fails for certain properties, depending on camera state. For
             # example, GetInt('FrameCount') fails with the Andor NOTIMPLEMENTED error code
-            # when CycleMode is Continuous.  A camera property getter response or change
+            # when CycleMode is Continuous. A camera property getter response or change
             # notification of value None may indicate that the property is not applicable
             # given the current camera state.
             try:
@@ -258,7 +258,7 @@ class Camera(property_utils.PropertyDevice):
 
     def get_aoi(self):
         """Convenience wrapper around the aoi_left, aoi_top, aoi_width, aoi_height
-        properties.  When setting this property, None elements and omitted entries
+        properties. When setting this property, None elements and omitted entries
         cause the corresponding aoi_* property to be left unmodified."""
         return {
             'aoi_left' : self.get_aoi_left(),
@@ -278,7 +278,7 @@ class Camera(property_utils.PropertyDevice):
         # to (even temporarily) specify an illegal AOI.
         #
         # Consider that {'aoi_left' : 2001, 'aoi_width' : 500} specifies horizontal AOI parameters that
-        # are valid together.  However, if aoi_left is greater than 2061 before the change, aoi_left
+        # are valid together. However, if aoi_left is greater than 2061 before the change, aoi_left
         # must be updated before aoi_width.
         #
         # Performing AOI updates in ascending order of signed parameter value change ensures that setting

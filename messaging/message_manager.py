@@ -166,7 +166,7 @@ class LeicaMessageManager(SerialMessageManager):
         if response[0] == '$':
             if self.verbose and response_key not in ('$83023',):
                 # Unexpected notifications are quite common, and if the dm6000b has communicated with MicroManager or the Leica
-                # Windows software since last power cycled, they may be overwhelming in number.  Therefore, these are appropriately
+                # Windows software since last power cycled, they may be overwhelming in number. Therefore, these are appropriately
                 # confined to verbose mode.
                 print('received UNEXPECTED notification from Leica device: {} with response key: {}'.format(response, response_key))
         else:

@@ -8,7 +8,7 @@ from . import wrapper
 from .wrapper import *
 
 # Provided for reference purposes, the FeatureStrings list contains all the "feature strings"
-# listed in the Andor SDK documentation.  The value given for the Feature argument to functions
+# listed in the Andor SDK documentation. The value given for the Feature argument to functions
 # provided by this module should be a string appearing in this list.
 FeatureStrings = [
     'AccumulateCount',
@@ -120,9 +120,9 @@ def _init_camera(desired_camera):
     if devices_attached == 0:
         raise AndorError('No Andor SDK3 devices detected. Is the camera turned on?')
     # Even on the scope machine, the default Andor configuration includes two
-    # virtual cameras, for a total of three camera devices.  A hardware camera
+    # virtual cameras, for a total of three camera devices. A hardware camera
     # will take device index 0, provided you have only one hardware camera, and
-    # we are very clearly working under this assumption.  We might then test
+    # we are very clearly working under this assumption. We might then test
     # this assumption by querying the camera's name and ensuring that it matches
     # the name of our hardware camera:
     wrapper._at_camera_handle = wrapper._at_core_lib.AT_Open(0)
