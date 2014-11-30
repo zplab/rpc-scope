@@ -81,12 +81,12 @@ def client_get_data_getter(rpc_client, force_remote=False):
     if force_remote:
         is_local = False
     else:
-        is_local = rpc_client('_ism_buffer_utils._server_get_node') == platform.node()
+        is_local = rpc_client('_transfer_ism_buffer._server_get_node') == platform.node()
 
     if is_local: # on same machine -- use ISM buffer directly
         def get_data(name):
             array = ism_buffer.open(name).asarray()
-            rpc_client('_ism_buffer_utils._server_release_array', name)
+            rpc_client('_transfer_ism_buffer._server_release_array', name)
             return array
     else: # pipe data over network
         class GetData:
@@ -101,7 +101,7 @@ def client_get_data_getter(rpc_client, force_remote=False):
                 self.compresslevel = compresslevel
 
             def __call__(self, name):
-                data = rpc_client('_ism_buffer_utils._server_pack_ism_data', name, self.compresslevel)
+                data = rpc_client('_transfer_ism_buffer._server_pack_ism_data', name, self.compresslevel)
                 return _client_unpack_ism_data(data)
         get_data = GetData()
     return is_local, get_data
