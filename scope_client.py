@@ -46,13 +46,11 @@ def wrap_images_getter(namespace, func_name, get_data):
         return [get_data(name) for name in function()]
     setattr(namespace, func_name, wrapped)
 
-def rpc_client_main(rpc_port=None, rpc_interrupt_port=None, context=None):
-    if rpc_port is None:
-        rpc_port = config.Server.RPC_PORT
-    if rpc_interrupt_port is None:
-        rpc_interrupt_port = config.Server.RPC_INTERRUPT_PORT
+def rpc_client_main(host=None, context=None):
+    rpc_addr = config.Server.rpc_addr(host)
+    interrupt_addr = config.Server.interrupt_addr(host)
 
-    client = rpc_client.ZMQClient(rpc_port, rpc_interrupt_port, context)
+    client = rpc_client.ZMQClient(rpc_addr, interrupt_addr, context)
     scope = client.proxy_namespace()
     is_local, get_data = transfer_ism_buffer.client_get_data_getter(client)
     scope._get_data = get_data
@@ -68,18 +66,17 @@ def rpc_client_main(rpc_port=None, rpc_interrupt_port=None, context=None):
             wrap_images_getter(scope.camera.acquisition_sequencer, 'run', get_data)
     return scope
 
-def property_client_main(property_port=None, context=None):
-    if property_port is None:
-        property_port = config.Server.PROPERTY_PORT
-    scope_properties = property_client.ZMQClient(property_port, context)
+def property_client_main(host, context=None):
+    property_addr = config.Server.property_addr(host)
+    scope_properties = property_client.ZMQClient(property_addr, context)
     return scope_properties
 
 
-def client_main(rpc_port=None, rpc_interrupt_port=None, property_port=None, context=None, subscribe_all=True):
+def client_main(host=None, context=None, subscribe_all=False):
     if context is None:
         context = zmq.Context()
-    scope = rpc_client_main(rpc_port, rpc_interrupt_port, context)
-    scope_properties = property_client_main(property_port, context)
+    scope = rpc_client_main(host, context)
+    scope_properties = property_client_main(host, context)
     if subscribe_all:
         # have the property client subscribe to all properties. Even with a no-op callback,
         # this causes the client to keep its internal 'properties' dictionary up-to-date

@@ -138,17 +138,17 @@ class RPCError(RuntimeError):
     pass
 
 class ZMQClient(RPCClient):
-    def __init__(self, rpc_port, interrupt_port, context=None):
+    def __init__(self, rpc_addr, interrupt_addr, context=None):
         """RPCClient subclass that uses ZeroMQ REQ/REP to communicate.
         Arguments:
-            rpc_port, interrupt_port: a string ZeroMQ port identifier, like ''tcp://127.0.0.1:5555''.
+            rpc_addr, interrupt_addr: a string ZeroMQ port identifier, like ''tcp://127.0.0.1:5555''.
             context: a ZeroMQ context to share, if one already exists.
         """
         self.context = context if context is not None else zmq.Context()
         self.socket = self.context.socket(zmq.REQ)
-        self.socket.connect(rpc_port)
+        self.socket.connect(rpc_addr)
         self.interrupt_socket = self.context.socket(zmq.PUSH)
-        self.interrupt_socket.connect(interrupt_port)
+        self.interrupt_socket.connect(interrupt_addr)
 
     def _send(self, command, args, kwargs):
         self.socket.send_json((command, args, kwargs))

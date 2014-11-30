@@ -30,25 +30,22 @@ from . import scope
 from . import scope_configuration as config
 from .util import transfer_ism_buffer
 
-def server_main(rpc_port=None, rpc_interrupt_port=None, property_port=None, verbose=False, context=None):
-    if rpc_port is None:
-        rpc_port = config.Server.RPC_PORT
-    if rpc_interrupt_port is None:
-        rpc_interrupt_port = config.Server.RPC_INTERRUPT_PORT
-    if property_port is None:
-        property_port = config.Server.PROPERTY_PORT
+def server_main(verbose=False, context=None):
+    rpc_addr = config.Server.rpc_addr()
+    interrupt_addr = config.Server.interrupt_addr()
+    property_addr = config.Server.property_addr()
 
     if context is None:
         context = zmq.Context()
 
-    property_update_server = property_server.ZMQServer(property_port, context=context, verbose=verbose)
+    property_update_server = property_server.ZMQServer(property_addr, context=context, verbose=verbose)
 
     scope_controller = scope.Scope(property_update_server, verbose=verbose)
     # add transfer_ism_buffer as hidden elements of the namespace, which RPC clients can use for seamless buffer sharing
     scope_controller._transfer_ism_buffer = transfer_ism_buffer
 
-    interrupter = rpc_server.ZMQInterrupter(rpc_interrupt_port, context=context, verbose=verbose)
-    scope_server = rpc_server.ZMQServer(scope_controller, interrupter, rpc_port, context=context, verbose=verbose)
+    interrupter = rpc_server.ZMQInterrupter(interrupt_addr, context=context, verbose=verbose)
+    scope_server = rpc_server.ZMQServer(scope_controller, interrupter, rpc_addr, context=context, verbose=verbose)
 
     print('******************\nScope Server Ready\n******************')
     try:

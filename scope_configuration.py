@@ -1,11 +1,28 @@
-# todo: make this read in from a config file somehow, somewhere
-HOST = '127.0.0.1'
-#HOST = '*'
+# to change configuration values from these defaults, simply import this
+# file and modify the relevant attributes before importing other scope
+# modules.
 
 class Server:
-    RPC_PORT = 'tcp://{}:6000'.format(HOST)
-    RPC_INTERRUPT_PORT = 'tcp://{}:6001'.format(HOST)
-    PROPERTY_PORT = 'tcp://{}:6002'.format(HOST)
+    HOST = 'tcp://127.0.0.1'
+    #HOST = '*'
+    RPC_PORT = '6000'
+    RPC_INTERRUPT_PORT = '6001'
+    PROPERTY_PORT = '6002'
+
+    def rpc_addr(self, host=None):
+        if host is None:
+            host = self.HOST
+        return host + ':' + self.RPC_PORT
+
+    def interrupt_addr(self, host=None):
+        if host is None:
+            host = self.HOST
+        return host + ':' + self.RPC_INTERRUPT_PORT
+
+    def property_addr(self, host=None):
+        if host is None:
+            host = self.HOST
+        return host + ':' + self.PROPERTY_PORT
 
 class Stand:
     SERIAL_PORT = '/dev/ttyScope'
