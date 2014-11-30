@@ -28,7 +28,7 @@ import platform
 from .simple_rpc import rpc_server, property_server
 from .device import scope
 from .device import scope_configuration as config
-from .device.util import ism_buffer_utils
+from .device.util import transfer_ism_buffer
 
 def server_main(rpc_port=None, rpc_interrupt_port=None, property_port=None, verbose=False, context=None):
     if rpc_port is None:
@@ -44,8 +44,8 @@ def server_main(rpc_port=None, rpc_interrupt_port=None, property_port=None, verb
     property_update_server = property_server.ZMQServer(property_port, context=context, verbose=verbose)
 
     scope_controller = scope.Scope(property_update_server, verbose=verbose)
-    # add ism_buffer_utils as hidden elements of the namespace, which RPC clients can use for seamless buffer sharing
-    scope_controller._ism_buffer_utils = ism_buffer_utils
+    # add transfer_ism_buffer as hidden elements of the namespace, which RPC clients can use for seamless buffer sharing
+    scope_controller._transfer_ism_buffer = transfer_ism_buffer
 
     interrupter = rpc_server.ZMQInterrupter(rpc_interrupt_port, context=context, verbose=verbose)
     scope_server = rpc_server.ZMQServer(scope_controller, interrupter, rpc_port, context=context, verbose=verbose)

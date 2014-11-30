@@ -23,18 +23,18 @@
 # Authors: Erik Hvatum, Zach Pincus
 
 from ...messaging import message_device
-from ..util import property_utils
+from ..util import property_device
 from . import microscopy_method_names
 
 GET_ALL_METHODS = 70026
 GET_ACT_METHOD = 70028
 SET_ACT_METHOD = 70029
 
-class DM6000Device(message_device.LeicaAsyncDevice, property_utils.PropertyDevice):
+class DM6000Device(message_device.LeicaAsyncDevice, property_device.PropertyDevice):
     def __init__(self, message_manager, property_server=None, property_prefix=''):
         # init LeicaAsyncDevice last because that calls the subclasses _setup_device() method, which might need
         # access to the property_server etc.
-        property_utils.PropertyDevice.__init__(self, property_server, property_prefix)
+        property_device.PropertyDevice.__init__(self, property_server, property_prefix)
         message_device.LeicaAsyncDevice.__init__(self, message_manager)
 
 class Stand(DM6000Device):

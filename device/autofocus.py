@@ -23,7 +23,7 @@
 # Authors: Zach Pincus
 
 import numpy
-from .util import ism_buffer_utils
+from .util import transfer_ism_buffer
 
 def brenner(array, z):
     x_diffs = (array[2:, :] - array[:-2, :])**2
@@ -48,7 +48,7 @@ class Autofocus:
             self._stage.set_z(z)
             self._camera.send_software_trigger()
             name = self._camera.next_image(read_timeout_ms)
-            array = ism_buffer_utils._release_array(name)
+            array = transfer_ism_buffer._release_array(name)
             focus_values.append((metric(array, z), z))
         self._camera.end_image_sequence_acquisition()
         focus_values.sort()

@@ -26,7 +26,7 @@ import threading
 import time
 
 from ..messaging import smart_serial
-from .util import property_utils
+from .util import property_device
 from . import scope_configuration as config
 
 def _make_dac_bytes(IIC_Addr, bit):
@@ -55,7 +55,7 @@ LAMP_SPECS = {
 
 LAMP_NAMES = set(LAMP_DAC_COMMANDS.keys())
 
-class SpectraX(property_utils.PropertyDevice):
+class SpectraX(property_device.PropertyDevice):
     def __init__(self, iotool, property_server=None, property_prefix=''):
         super().__init__(property_server, property_prefix)
         self._serial_port = smart_serial.Serial(config.SpectraX.SERIAL_PORT, baudrate=config.SpectraX.SERIAL_BAUD, timeout=1)

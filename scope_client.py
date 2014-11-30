@@ -29,8 +29,8 @@ import collections
 import numpy
 
 from .simple_rpc import rpc_client, property_client
-from . import scope_configuration as config
-from . import ism_buffer_utils
+from .device import scope_configuration as config
+from .device.util import transfer_ism_buffer
 
 def wrap_image_getter(namespace, func_name, get_data):
     function = getattr(namespace, func_name)
@@ -54,7 +54,7 @@ def rpc_client_main(rpc_port=None, rpc_interrupt_port=None, context=None):
 
     client = rpc_client.ZMQClient(rpc_port, rpc_interrupt_port, context)
     scope = client.proxy_namespace()
-    is_local, get_data = ism_buffer_utils.client_get_data_getter(client)
+    is_local, get_data = transfer_ism_buffer.client_get_data_getter(client)
     scope._get_data = get_data
     scope._is_local = is_local
     if not is_local:

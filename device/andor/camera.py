@@ -31,9 +31,9 @@ import collections
 import atexit
 
 from . import lowlevel
-from ..util import ism_buffer_utils
+from ..util import transfer_ism_buffer
 from ..util import enumerated_properties
-from ..util import property_utils
+from ..util import property_device
 from .. import scope_configuration as config
 
 class ReadOnly_AT_Enum(enumerated_properties.ReadonlyDictProperty):
@@ -58,7 +58,7 @@ class AT_Enum(ReadOnly_AT_Enum, enumerated_properties.DictProperty):
     def _write(self, value):
         lowlevel.SetEnumIndex(self._feature, value)
 
-class Camera(property_utils.PropertyDevice):
+class Camera(property_device.PropertyDevice):
     """This class provides an abstraction of the raw Andor API ctypes shim found in
     rpc_acquisition.andor.lowlevel."""
 
@@ -321,7 +321,7 @@ class Camera(property_utils.PropertyDevice):
         # was stored in. The scope_client code will transparently retrieve the
         # image bytes based on this name, either via the ISM_Buffer mechanism if
         # the client is on the same machine, or over the network.
-        ism_buffer_utils.server_register_array(self._live_buffer_name, self._live_array)
+        transfer_ism_buffer.server_register_array(self._live_buffer_name, self._live_array)
         return self._live_buffer_name
 
     def _enable_live(self):
@@ -399,7 +399,7 @@ class Camera(property_utils.PropertyDevice):
         Returns input_buffer, output_array, convert_buffer"""
         width, height, stride = self.get_aoi_width(), self.get_aoi_height(), self.get_aoi_stride()
         input_encoding = self.get_pixel_encoding()
-        output_array = ism_buffer_utils.server_create_array(name, shape=(width, height), dtype=numpy.uint16,
+        output_array = transfer_ism_buffer.server_create_array(name, shape=(width, height), dtype=numpy.uint16,
             order='Fortran')
         input_buffer = lowlevel.make_buffer()
         def convert_buffer():
@@ -483,7 +483,7 @@ class Camera(property_utils.PropertyDevice):
         name, output_array, convert_buffer = next(self._sequence_acquisition_state.acquire_data)
         lowlevel.WaitBuffer(read_timeout_ms)
         convert_buffer()
-        ism_buffer_utils.server_register_array(name, output_array)
+        transfer_ism_buffer.server_register_array(name, output_array)
         # Return the name of the shared memory buffer that the image
         # was stored in. The scope_client code will transparently retrieve the
         # image bytes based on this name, either via the ISM_Buffer mechanism if
