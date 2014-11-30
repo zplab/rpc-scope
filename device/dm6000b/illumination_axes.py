@@ -23,7 +23,7 @@
 # Authors: Erik Hvatum, Zach Pincus
 
 from . import stand
-from .. import enumerated_properties
+from ..util import enumerated_properties
 
 # TL and IL shutters
 SET_SHUTTER_LAMP = 77032

@@ -25,8 +25,8 @@
 import threading
 import time
 
-from .messaging import smart_serial
-from .simple_rpc import property_utils
+from ..messaging import smart_serial
+from .util import property_utils
 from . import scope_configuration as config
 
 class Peltier(property_utils.PropertyDevice):

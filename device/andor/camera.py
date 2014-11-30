@@ -31,9 +31,9 @@ import collections
 import atexit
 
 from . import lowlevel
-from .. import ism_buffer_utils
-from .. import enumerated_properties
-from ..simple_rpc import property_utils
+from ..util import ism_buffer_utils
+from ..util import enumerated_properties
+from ..util import property_utils
 from .. import scope_configuration as config
 
 class ReadOnly_AT_Enum(enumerated_properties.ReadonlyDictProperty):

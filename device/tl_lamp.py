@@ -22,7 +22,7 @@
 #
 # Authors: Zach Pincus
 
-from .simple_rpc import property_utils
+from .util import property_utils
 
 class TL_Lamp(property_utils.PropertyDevice):
     def __init__(self, iotool, property_server=None, property_prefix=''):

@@ -23,7 +23,7 @@
 # Authors: Zach Pincus
 
 import numpy
-from . import ism_buffer_utils
+from .util import ism_buffer_utils
 
 def brenner(array, z):
     x_diffs = (array[2:, :] - array[:-2, :])**2

@@ -24,7 +24,7 @@
 
 import time
 
-from ..messaging import smart_serial
+from ...messaging import smart_serial
 from . import commands
 from .. import scope_configuration as config
 

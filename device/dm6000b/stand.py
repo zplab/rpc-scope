@@ -22,8 +22,8 @@
 #
 # Authors: Erik Hvatum, Zach Pincus
 
-from ..messaging import message_device
-from ..simple_rpc import property_utils
+from ...messaging import message_device
+from ..util import property_utils
 from . import microscopy_method_names
 
 GET_ALL_METHODS = 70026

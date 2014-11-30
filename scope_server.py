@@ -26,9 +26,9 @@ import zmq
 import platform
 
 from .simple_rpc import rpc_server, property_server
-from . import scope
-from . import scope_configuration as config
-from . import ism_buffer_utils
+from .device import scope
+from .device import scope_configuration as config
+from .device.util import ism_buffer_utils
 
 def server_main(rpc_port=None, rpc_interrupt_port=None, property_port=None, verbose=False, context=None):
     if rpc_port is None:

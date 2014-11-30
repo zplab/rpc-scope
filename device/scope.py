@@ -24,7 +24,7 @@
 
 from serial import SerialException
 
-from .messaging import message_manager, message_device
+from ..messaging import message_manager, message_device
 from .dm6000b import stand, stage, objective_turret, illumination_axes
 from .andor import camera
 from .io_tool import io_tool
