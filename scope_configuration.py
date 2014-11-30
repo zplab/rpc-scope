@@ -1,3 +1,4 @@
+# todo: make this read in from a config file somehow, somewhere
 HOST = '127.0.0.1'
 #HOST = '*'
 
