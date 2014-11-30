@@ -25,9 +25,9 @@
 import threading
 import time
 
-from ..messaging import smart_serial
-from .util import property_device
-from . import scope_configuration as config
+from ..util import smart_serial
+from ..util import property_device
+from .. import scope_configuration as config
 
 class Peltier(property_device.PropertyDevice):
     def __init__(self, property_server=None, property_prefix=''):

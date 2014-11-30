@@ -24,7 +24,7 @@
 
 import threading
 import collections
-from . import smart_serial
+from ..util import smart_serial
 
 class MessageManager(threading.Thread):
     """Base class for managing messages and responses sent to/from a

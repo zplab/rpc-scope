@@ -22,7 +22,7 @@
 #
 # Authors: Zach Pincus
 
-from .. import scope_configuration as _config
+from ... import scope_configuration as _config
 
 def _make_command(*elements):
     return ' '.join(map(str, elements))

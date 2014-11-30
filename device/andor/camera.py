@@ -31,10 +31,10 @@ import collections
 import atexit
 
 from . import lowlevel
-from ..util import transfer_ism_buffer
-from ..util import enumerated_properties
-from ..util import property_device
-from .. import scope_configuration as config
+from ...util import transfer_ism_buffer
+from ...util import enumerated_properties
+from ...util import property_device
+from ... import scope_configuration as config
 
 class ReadOnly_AT_Enum(enumerated_properties.ReadonlyDictProperty):
     def __init__(self, feature):

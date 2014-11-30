@@ -29,8 +29,8 @@ import collections
 import numpy
 
 from .simple_rpc import rpc_client, property_client
-from .device import scope_configuration as config
-from .device.util import transfer_ism_buffer
+from . import scope_configuration as config
+from .util import transfer_ism_buffer
 
 def wrap_image_getter(namespace, func_name, get_data):
     function = getattr(namespace, func_name)

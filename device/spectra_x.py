@@ -25,9 +25,9 @@
 import threading
 import time
 
-from ..messaging import smart_serial
-from .util import property_device
-from . import scope_configuration as config
+from ..util import smart_serial
+from ..util import property_device
+from .. import scope_configuration as config
 
 def _make_dac_bytes(IIC_Addr, bit):
     dac_bytes = bytearray(b'\x53\x00\x03\x00\x00\x00\x50')

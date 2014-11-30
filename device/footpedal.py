@@ -23,7 +23,7 @@
 # Authors: Zach Pincus
 
 import time
-from . import scope_configuration as config
+from .. import scope_configuration as config
 
 class Footpedal:
     def __init__(self, iotool):

@@ -24,16 +24,16 @@
 
 from serial import SerialException
 
-from ..messaging import message_manager, message_device
-from .dm6000b import stand, stage, objective_turret, illumination_axes
-from .andor import camera
-from .io_tool import io_tool
-from . import spectra_x
-from . import tl_lamp
-from . import acquisition_sequencer
-from . import autofocus
-from . import peltier
-from . import footpedal
+from .messaging import message_manager, message_device
+from .device.dm6000b import stand, stage, objective_turret, illumination_axes
+from .device.andor import camera
+from .device.io_tool import io_tool
+from .device import spectra_x
+from .device import tl_lamp
+from .device import acquisition_sequencer
+from .device import autofocus
+from .device import peltier
+from .device import footpedal
 
 from . import scope_configuration as config
 

@@ -23,7 +23,7 @@
 # Authors: Erik Hvatum, Zach Pincus
 
 from ...messaging import message_device
-from ..util import property_device
+from ...util import property_device
 from . import microscopy_method_names
 
 GET_ALL_METHODS = 70026
