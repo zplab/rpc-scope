@@ -1,3 +1,27 @@
+# The MIT License (MIT)
+#
+# Copyright (c) 2014 WUSTL ZPLAB
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+# Authors: Zach Pincus
+
 import functools
 import zmq
 import time
@@ -69,7 +93,7 @@ class LiveStreamer:
         self.image_ready_callback = image_ready_callback
         self.image_received = False
         self.live = False
-        self.last_times = collections.deque(maxlen=10)
+        self.latest_intervals = collections.deque(maxlen=10)
         self._last_time = time.time()
         scope_properties.subscribe('scope.camera.live_mode', self._live_change, valueonly=True)
         scope_properties.subscribe('scope.camera.live_frame', self._live_update, valueonly=True)
@@ -79,7 +103,7 @@ class LiveStreamer:
         # get image before re-enabling image-receiving because if this is over the network, it could take a while
         image = self.scope.camera.live_image()
         t = time.time()
-        self.last_times.append(t - self._last_time)
+        self.latest_intervals.append(t - self._last_time)
         self._last_time = t
         self.image_received = False
         return image, self.frame_no
@@ -87,12 +111,12 @@ class LiveStreamer:
     def get_fps(self):
         if not self.live:
             return
-        return 1/numpy.mean(self.last_times)
+        return 1/numpy.mean(self.latest_intervals)
 
     def _live_change(self, live):
         # called in property_client's thread: note we can't do RPC calls
         self.live = live
-        self.last_times.clear()
+        self.latest_intervals.clear()
         self._last_time = time.time()
 
     def _live_update(self, frame_no):

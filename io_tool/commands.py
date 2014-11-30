@@ -1,3 +1,27 @@
+# The MIT License (MIT)
+#
+# Copyright (c) 2014 WUSTL ZPLAB
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+# Authors: Zach Pincus
+
 from .. import scope_configuration as _config
 
 def _make_command(*elements):
@@ -58,9 +82,13 @@ def goto(index):
     return _make_command('go', index)
 
 def spectra_x_lamps(**lamps):
-    """Input keyword arguments must be lamp names specified in LUMENCOR_PINS
-    keys. The values are either True to enable that lamp, False to disable,
-    or None to do nothing (unspecified lamps are also not altered)."""
+    """Produce a sequence of IOTool commands to enable and disable given
+    Spectra X lamps.
+
+    Keyword arguments must be lamp names, as specified in
+    scope_configuration.LUMENCOR_PINS. The values specified must be True to
+    enable that lamp, False to disable, or None to do nothing (unspecified
+    lamps are also not altered)."""
     commands = []
     for lamp, enable in lamps.items():
         if enable is None:
@@ -73,7 +101,11 @@ def spectra_x_lamps(**lamps):
     return commands
 
 def transmitted_lamp(enable=None, intensity=None):
-    """enable: True (lamp on), False (lamp off), or None (no change).
+    """Produce a sequence of IOTool commands to enable/disable and control the
+    intensity of the TL lamp.
+
+    Parameters
+    enable: True (lamp on), False (lamp off), or None (no change).
     intensity: None (no change) or value in the range [0, 255] for min to max.
     """
     commands = []

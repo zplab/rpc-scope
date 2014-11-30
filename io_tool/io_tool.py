@@ -1,3 +1,27 @@
+# The MIT License (MIT)
+#
+# Copyright (c) 2014 WUSTL ZPLAB
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+# Authors: Zach Pincus
+
 import time
 
 from ..messaging import smart_serial
@@ -7,6 +31,10 @@ from .. import scope_configuration as config
 _ECHO_OFF = b'\x80\xFF'
 
 class IOTool:
+    """Class to control IOTool box. See https://github.com/zachrahan/IOTool for
+    documentation about the IOTool microcontroller firmware itself, but in this
+    case the microcontroller is used to drive and time TTL/PWM signals to various
+    microscope hardware."""
     def __init__(self):
         self._serial_port = smart_serial.Serial(config.IOTool.SERIAL_PORT, timeout=1)
         try:
@@ -25,6 +53,7 @@ class IOTool:
         # so that waiting for IOTool replies won't cause timeouts
 
     def execute(self, *commands):
+        """Run a series of commands on the IOTool microcontroller."""
         self._assert_empty_buffer()
         responses = []
         for command in commands:
@@ -37,11 +66,14 @@ class IOTool:
         return responses
 
     def _assert_empty_buffer(self):
+        """Verify that there is no IOTool output that should have been read previously."""
         buffered = self._serial_port.read_all_buffered()
         if buffered:
             raise RuntimeError('Unexpected IOTool output: {}'.format(str(buffered, encoding='ascii')))
 
     def store_program(self, *commands):
+        """Send a list of commands to IOTool to run as a program, but do not
+        run the program yet."""
         all_commands = ['program'] + list(commands) + ['end']
         responses = self.execute(*all_commands)
         errors = ['{}: {}'.format(command, response) for command, response in zip(all_commands, responses) if response is not None]
@@ -49,6 +81,9 @@ class IOTool:
             raise RuntimeError('Program errors:\n'+'\n'.join(errors))
 
     def start_program(self, *commands, iters=1):
+        """Run a program a given number of times. If no commands are given here,
+        a program should have been stored previously with store_program().
+        """
         if commands:
             self.store_program(*commands)
         else:
@@ -56,12 +91,23 @@ class IOTool:
         self._serial_port.write('run {}\n'.format(iters).encode('ascii'))
 
     def wait_for_serial_char(self):
+        """If a program uses the char_transmit command to send a signal to the
+        host computer, this function can be used to wait to receive that signal."""
         self._serial_port.read(1)
+
+    def send_serial_char(self, char):
+        """If a program uses the char_receive command to wait for a signal from
+        the host computer, this function can be used to send that signal."""
+        self._serial_port.write(char.encode('ascii'))
 
     def _wait_for_program_done(self):
         return self._serial_port.read_until(b'>')[:-1]
 
     def wait_for_program_done(self):
+        """Wait for a program started with start_program() to terminate, and
+        return any serial data produced by that program. A keyboard interrupt
+        while waiting will force-terminate the program on the IOTool device, via
+        stop_program()"""
         try:
             return self._wait_for_program_done()
         except KeyboardInterrupt as k:
@@ -69,9 +115,12 @@ class IOTool:
             raise k
 
     def stop_program(self):
+        """Force-terminate a running program on the IOTool device, and wait to
+        confirm that it actually stops."""
         self.stop()
         self._wait_for_program_done()
 
     def stop(self):
+        """Force-terminate a running program on the IOTool device."""
         self._serial_port.write(b'!')
 

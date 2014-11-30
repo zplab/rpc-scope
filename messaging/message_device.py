@@ -25,55 +25,6 @@
 import threading
 import collections
 
-class AsyncDeviceNamespace:
-    """Simple container class for building a hierarchy of AsyncDevice-like
-    objects which have wait() and set_async() methods. This container
-    implements wait() and set_async() methods that simply call the same on
-    every object placed into its namespace.
-
-    Toy example:
-        scope = AsyncDeviceNamespace()
-        scope.stage = LeicaDM6000Stage()
-        scope.condensor = LeicaDM6000Condensor()
-        scope.set_async(True)
-        scope.stage.set_position(10,10,10)
-        scope.condensor.set_field(7)
-        scope.wait()
-    """
-    def __init__(self):
-        self._children = set()
-
-    @staticmethod
-    def _is_async_capable(value):
-        return all(map(lambda attr: hasattr(value, attr), ('wait', 'set_async', 'get_async')))
-
-    def __setattr__(self, name, value):
-        if self._is_async_capable(value):
-            self._children.add(name)
-        super().__setattr__(name, value)
-
-    def __delattr__(self, name):
-        if self._is_async_capable(value):
-            self._children.remove(name)
-        super().__delattr__(name)
-
-    def wait(self):
-        for child in self._children:
-            getattr(self, child).wait()
-
-    def set_async(self, async):
-        for child in self._children:
-            getattr(self, child).set_async(async)
-
-    def get_async(self):
-        asyncs = [getattr(self, child).get_async() for child in self._children]
-        if all(async == True for async in asyncs):
-            return True
-        elif all(async == False for async in asyncs):
-            return False
-        else:
-            return "child devices have mixed async status"
-
 class Response:
     """A container for a value to be provided by a background thread at some
     point in the future.
@@ -225,8 +176,8 @@ class LeicaAsyncDevice(AsyncDevice):
         *params: a list of params to be coerced to strings and listed after command, separated by spaces
         async: if not None, override the async instance variable.
         intent: should be helpful text describing the intent of the command.
-        coalesce: see AsyncDevice.send_message documentaiton.
-        If  a nonzero error code is returned, a LeicaError will be raised with
+        coalesce: see AsyncDevice.send_message documentation.
+        If a nonzero error code is returned, a LeicaError will be raised with
         the intent text when the response's wait() method is called.
 
         """
@@ -238,3 +189,55 @@ class LeicaAsyncDevice(AsyncDevice):
     def _generate_response_key(self, message):
         # return the message's function unit ID and command ID
         return message[:2] + message[3:5]
+
+class AsyncDeviceNamespace:
+    """Simple container class for building a hierarchy of AsyncDevice-like
+    objects which have wait() and set_async() methods. This container
+    implements wait() and set_async() methods that simply call the same on
+    every object placed into its namespace.
+
+    Toy example:
+        scope = AsyncDeviceNamespace()
+        scope.stage = LeicaDM6000Stage()
+        scope.condensor = LeicaDM6000Condensor()
+        scope.set_async(True)
+        scope.stage.set_position(10,10,10)
+        scope.condensor.set_field(7)
+        scope.wait()
+    """
+    def __init__(self):
+        self._children = set()
+
+    @staticmethod
+    def _is_async_capable(obj):
+        for async_func in ('wait', 'set_async', 'get_async'):
+            if not hasattr(obj, async_func):
+                return False
+        return True
+
+    def __setattr__(self, name, value):
+        if self._is_async_capable(value):
+            self._children.add(name)
+        super().__setattr__(name, value)
+
+    def __delattr__(self, name):
+        if self._is_async_capable(value):
+            self._children.remove(name)
+        super().__delattr__(name)
+
+    def wait(self):
+        for child in self._children:
+            getattr(self, child).wait()
+
+    def set_async(self, async):
+        for child in self._children:
+            getattr(self, child).set_async(async)
+
+    def get_async(self):
+        asyncs = [getattr(self, child).get_async() for child in self._children]
+        if all(async == True for async in asyncs):
+            return True
+        elif all(async == False for async in asyncs):
+            return False
+        else:
+            return "child devices have mixed async status"

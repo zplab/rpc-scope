@@ -1,3 +1,27 @@
+# The MIT License (MIT)
+#
+# Copyright (c) 2014 WUSTL ZPLAB
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+# Authors: Zach Pincus
+
 import json
 import numpy
 import struct
@@ -6,6 +30,7 @@ import io
 import ctypes
 import platform
 import collections
+import time
 
 import ism_buffer
 
@@ -37,6 +62,7 @@ def _server_pack_ism_data(name, compresslevel):
     f.write(ctypes.string_at(ism_buf.data, size=len(ism_buf.data))) # ism_buf.data is uint8, so len == byte-size
     if compresslevel is not None:
         f.close()
+    _release_array(name) # the array is now packed up so the server doesn't need to keep it anymore
     return io_buf.getvalue()
 
 def _client_unpack_ism_data(buf):
@@ -56,6 +82,7 @@ def client_get_data_getter(rpc_client, force_remote=False):
         is_local = False
     else:
         is_local = rpc_client('_ism_buffer_utils._server_get_node') == platform.node()
+
     if is_local: # on same machine -- use ISM buffer directly
         def get_data(name):
             array = ism_buffer.open(name).asarray()
@@ -64,15 +91,17 @@ def client_get_data_getter(rpc_client, force_remote=False):
     else: # pipe data over network
         class GetData:
             def __init__(self):
+                # TODO: figure out a good way to auto-determine the compression level
                 self.compresslevel = 2
+
             def set_network_compression(self, compresslevel=2):
                 """Set the amount of compression applied to images streamed over the network:
                 None = send raw bytes, or 0-9 indicates gzip compression level.
                 None is best for a wired local connection; 2 is best for a wifi connection."""
                 self.compresslevel = compresslevel
+
             def __call__(self, name):
                 data = rpc_client('_ism_buffer_utils._server_pack_ism_data', name, self.compresslevel)
-                rpc_client('_ism_buffer_utils._server_release_array', name)
                 return _client_unpack_ism_data(data)
         get_data = GetData()
     return is_local, get_data

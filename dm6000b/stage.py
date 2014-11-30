@@ -75,7 +75,6 @@ class Stage(stand.DM6000Device):
         self._set_pos(z, self._z_mm_per_count, POS_ABS_Z)
         self._update_property('z', z)
 
-
     def get_position(self):
         """Return (x,y,z) position, in mm."""
         return self.get_x(), self.get_y(), self.get_z()
@@ -97,14 +96,22 @@ class Stage(stand.DM6000Device):
         """Get z-axis position in mm."""
         return self._get_pos(self._z_mm_per_count, GET_POS_Z)
 
+    def reinit(self):
+        self.reinit_x()
+        self.reinit_y()
+        self.reinit_z()
+
     def reinit_x(self):
         """Reinitialize x axis to correct for drift or "stuck" stage". Executes synchronously."""
         self.send_message(INIT_X, async=False, intent="init stage x axis")
+        self._update_property('x', self.get_x())
 
     def reinit_y(self):
         """Reinitialize y axis to correct for drift or "stuck" stage". Executes synchronously."""
         self.send_message(INIT_Y, async=False, intent="init stage y axis")
+        self._update_property('y', self.get_y())
 
     def reinit_z(self):
         """Reinitialize z axis to correct for drift or "stuck" stage". Executes synchronously."""
         self.send_message(INIT_Z, async=False, intent="init stage z axis")
+        self._update_property('z', self.get_z())

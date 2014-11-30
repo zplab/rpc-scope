@@ -25,8 +25,10 @@
 from . import stand
 from .. import enumerated_properties
 
-
-# 77032 is an unusual command in that two outstanding instances issued with
+# TL and IL shutters
+SET_SHUTTER_LAMP = 77032
+GET_SHUTTER_LAMP = 77033
+# NB: 77032 is an unusual command in that two outstanding instances issued with
 # different values for their first parameter are answered separately.
 # Furthermore, the response does not include any parameters, making it difficult
 # (if responses are always received in order) or impossible (if they are not)
@@ -34,13 +36,10 @@ from .. import enumerated_properties
 # changes to that state. If such information were kept, a failure could then be
 # resolved to a specific request by comparing expected post-condition and actual
 # post-condition.
-# However, by not coalescing the messages, we are at least guaranteed to be able
+# However, if we do not not coalescing the messages (see the MessageManager.send_message()
+# documentation for details) we are at least guaranteed to be able
 # to wait for the same number of responses as messages sent, even if we can't
 # match up the precise message and responses. This should be good enough.
-
-# TL and IL shutters
-SET_SHUTTER_LAMP = 77032
-GET_SHUTTER_LAMP = 77033
 
 # filter cube positions
 POS_ABS_IL_TURRET = 78022
@@ -104,7 +103,7 @@ class _ShutterDevice(stand.DM6000Device):
 class IL(_ShutterDevice):
     '''IL represents an interface into elements used in Incident Light (Fluorescence) mode.'''
     _shutter_idx = 1
-    # TODO: add DIC fine shearing, IL aperture control (size 0-6 or whatever / circle vs. square), maybe
+    # TODO(?): if needed, add DIC fine shearing, IL aperture control (size 0-6 or whatever / circle vs. square).
     def _setup_device(self):
         self._filter_cube = FilterCube(self)
         self.get_filter_cube = self._filter_cube.get_value
@@ -129,4 +128,4 @@ class TL(_ShutterDevice):
     def set_condenser_retracted(self, retracted):
         response = self.send_message(POS_ABS_KOND, int(not retracted), intent="set condenser position")
 
-    # TODO: add control over field and aperture diaphragms, maybe
+    # TODO(?): if needed, add control over field and aperture diaphragms
