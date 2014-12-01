@@ -25,9 +25,7 @@
 import json
 import numpy
 import struct
-import gzip
-import io
-import ctypes
+import zlib
 import platform
 import collections
 import time
@@ -37,47 +35,99 @@ import ism_buffer
 _ism_buffer_registry = collections.defaultdict(list)
 
 def server_create_array(name, shape, dtype, order):
+    """Create a numpy array view onto an ISM_Buffer shared memory region
+    identified by the given name.
+
+    The array retains a reference to the original ISM_Buffer object, so the
+    shared memory region will be retained until the returned array is
+    deallocated. If a separate process opens the named ISM_Buffer before the
+    array goes away, then the ISM_Buffer will stay open (due to its own internal
+    refcount).
+    """
     array = ism_buffer.new(name, shape, dtype, order).asarray()
     return array
 
-def server_register_array(name, array):
+def server_register_array_for_transfer(name, array):
+    """Register a named, ISM_Buffer-backed array with the server that is going
+    to be transfered to another process. Once the other process obtains the
+    ISM_Buffer, it must call the appropriate get_data() function (provided by
+    client_get_data_getter()), which will ensure that the _release_array()
+    function gets called."""
     _ism_buffer_registry[name].append(array)
 
 def _release_array(name):
+    """Remove the named, ISM_Buffer-backed array from the transfer registry,
+    allowing it to be deallocated if nobody else on the server process is
+    retaining any references. Return the named array."""
     return _ism_buffer_registry[name].pop()
 
 def _server_release_array(name):
-    """For calling over RPC: doesn't try to return the array"""
+    """Remove the named, ISM_Buffer-backed array from the transfer registry,
+    allowing it to be deallocated if nobody else on the server process is
+    retaining any references. Does not return the named array, so this function
+    is safe to call over RPC (which does not know how to send numpy arrays)."""
     _release_array(name)
 
-def _server_pack_ism_data(name, compresslevel):
-    ism_buf = ism_buffer.open(name)
-    io_buf = io.BytesIO()
-    if compresslevel is None:
-        f = io_buf
-    else:
-        f = gzip.GzipFile(fileobj=io_buf, mode='wb', compresslevel=compresslevel)
-    f.write(struct.pack('<H', len(ism_buf.descr)))
-    f.write(ism_buf.descr) # json encoding of (dtype, shape, order)
-    f.write(ctypes.string_at(ism_buf.data, size=len(ism_buf.data))) # ism_buf.data is uint8, so len == byte-size
-    if compresslevel is not None:
-        f.close()
-    _release_array(name) # the array is now packed up so the server doesn't need to keep it anymore
-    return io_buf.getvalue()
+def _server_pack_data(name, compressor='blosc', **compressor_args):
+    """Pack the data in the named ISM_Buffer into bytes for transfer over
+    the network (or other serialization).
+    Valid compressor values are:
+      - None: pack raw image bytes
+      - 'blosc': use the fast, modern BLOSC compression library
+      - 'zlib': use older, more widely supported zlib compression
+    compressor_args are passed to zlib.compress() or blosc.compress() directly."""
 
-def _client_unpack_ism_data(buf):
-    try:
-        data = gzip.decompress(buf)
-    except OSError:
-        data = bytes(buf)
-    header_len = struct.unpack('<H', data[:2])[0]
-    dtype, shape, order = json.loads(data[2:header_len+2].decode('ascii'))
-    return numpy.ndarray(shape, dtype=dtype, order=order, buffer=data, offset=header_len+2)
+    array = _release_array(name) # get the array and release it from the list of to-be-transfered arrays
+    dtype_str = numpy.lib.format.dtype_to_descr(array.dtype)
+    descr = json.dumps((dtype_str, array.shape, array.order)).encode('ascii')
+    output = bytearray(struct.pack('<H', len(descr))) # put the len of the descr in a 2-byte uint16
+    output += descr
+    if compressor is None:
+        output += memoryview(array.flatten())
+    elif compressor == 'zlib':
+        output += zlib.compress(memoryview(array.flatten()), **compressor_args)
+    elif compressor == 'blosc':
+        import blosc
+        # because blosc.compress can't handle a memoryview, we need to use blosc.compress_ptr
+        output += blosc.compress_ptr(array.ctypes.data, array.size, typesize=array.dtype.itemsize, **compressor_args)
+    else:
+        raise RuntimeError('un-recognized compressor')
+    return output
+
+def _client_unpack_ism_data(buf, compressor='blosc'):
+    """Unpack (on the client side) data packed (on the server side) by _server_pack_ism_data().
+    The compressor name passed to _server_pack_ism_data() must also be passed
+    to this function."""
+    # buf comes from a ZMQ zero-copy memoryview, which unfortunately currently
+    # is stored as an un-sliceable 0-dim buffer. So we have to make a copy.
+    # Also, blosc.decompress can't yet handle a memoryview object either, so
+    # we'd need it as a bytes object at that point anyway.
+    # TODO: try removing the bytes(buf) line in mid-2015 to see if they have accepted my patches to fix these issues.
+    buf = bytes(buf)
+    header_len = struct.unpack_from('<H', buf[:2])[0]
+    dtype, shape, order = json.loads(bytes(buf[2:header_len+2]).decode('ascii'))
+    array_buf = buf[header_len+2:]
+    if compressor is None:
+        data = array_buf
+    elif compressor == 'zlib':
+        data = zlib.decompress(array_buf)
+    elif compressor == 'blosc':
+        import blosc
+        data = blosc.decompress(array_buf)
+    return numpy.ndarray(shape, dtype=dtype, order=order, buffer=data)
 
 def _server_get_node():
     return platform.node()
 
 def client_get_data_getter(rpc_client, force_remote=False):
+    """Return a callable, get_data(), which given an ISM_Buffer name, returns
+    a numpy array containing the data from that buffer. If the server and client
+    are on the same host (as determined by comparing platform.node() on both),
+    then get_data() will give an array that is a view onto the ISM_Buffer. This
+    is a fast, zero-copy operation. If the server and client are on different
+    hosts, then the data will be packed and serialized over RPC. In this case,
+    get_data() will have a method, 'set_network_compression()' to allow the
+    amount of compression applied to the packed data to be tuned."""
     if force_remote:
         is_local = False
     else:
@@ -91,17 +141,29 @@ def client_get_data_getter(rpc_client, force_remote=False):
     else: # pipe data over network
         class GetData:
             def __init__(self):
-                # TODO: figure out a good way to auto-determine the compression level
-                self.compresslevel = 2
+                # TODO: figure out a good way to auto-determine the compression level for zlib
+                self.compressor_args = {}
+                try:
+                    import blosc
+                    self.compressor = 'blosc'
+                except ImportError:
+                    self.compressor = 'zlib'
+                    self.compressor_args['level'] = 2
 
-            def set_network_compression(self, compresslevel=2):
-                """Set the amount of compression applied to images streamed over the network:
-                None = send raw bytes, or 0-9 indicates gzip compression level.
-                None is best for a wired local connection; 2 is best for a wifi connection."""
-                self.compresslevel = compresslevel
+            def set_network_compression(self, compressor, **compressor_args):
+                """Set the type of compression applied to images sent over the
+                network.
+
+                Valid compressor values are:
+                  - None: pack raw image bytes
+                  - 'blosc': use the fast, modern BLOSC compression library
+                  - 'zlib': use older, more widely supported zlib compression
+                compressor_args are passed to zlib.compress() or blosc.compress() directly."""
+                self.compressor = compressor
+                self.compressor_args = compressor_args
 
             def __call__(self, name):
-                data = rpc_client('_transfer_ism_buffer._server_pack_ism_data', name, self.compresslevel)
-                return _client_unpack_ism_data(data)
+                data = rpc_client('_transfer_ism_buffer._server_pack_ism_data', name, self.compressor, **self.compressor_args)
+                return _client_unpack_ism_data(data, self.compressor)
         get_data = GetData()
     return is_local, get_data

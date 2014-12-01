@@ -183,10 +183,12 @@ class ZMQServer(RPCServer):
     def _reply(self, reply, error=False):
         if error:
             reply_type = 'error'
-        elif isinstance(reply, bytes):
-            reply_type = 'bindata'
         else:
-            reply_type = 'json'
+            try:
+                reply = memoryview(reply)
+                reply_type = 'bindata'
+            except TypeError:
+                reply_type = 'json'
 
         if reply_type == 'error' or reply_type == 'json':
             try:

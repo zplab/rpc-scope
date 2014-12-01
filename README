@@ -103,7 +103,7 @@ receives it and increments its reference count. This is accomplished as follows:
 First, on the server, a named ISM_Buffer is created (in transfer_ism_buffer.py),
 and a numpy array that is a view onto that shared memory is created. Any
 function that returns an "image" to the client must first register the
-ISM_Buffer by name (via transfer_ism_buffer.server_register_array()) which causes
+ISM_Buffer by name (via transfer_ism_buffer.server_register_array_for_transfer()) which causes
 the server to keep a reference to the ISM_Buffer-backed array around. Then the
 ISM_Buffer's name is returned to the client, which the client can use to create
 its own ISM_Buffer view onto that memory. Once this is accomplished, the client

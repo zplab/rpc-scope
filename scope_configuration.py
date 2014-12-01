@@ -3,8 +3,10 @@
 # modules.
 
 class Server:
-    HOST = 'tcp://127.0.0.1'
-    #HOST = '*'
+    LOCALHOST = 'tcp://127.0.0.1'
+    PUBLICHOST = 'tcp://*'
+    HOST = LOCALHOST
+
     RPC_PORT = '6000'
     RPC_INTERRUPT_PORT = '6001'
     PROPERTY_PORT = '6002'

@@ -321,7 +321,7 @@ class Camera(property_device.PropertyDevice):
         # was stored in. The scope_client code will transparently retrieve the
         # image bytes based on this name, either via the ISM_Buffer mechanism if
         # the client is on the same machine, or over the network.
-        transfer_ism_buffer.server_register_array(self._live_buffer_name, self._live_array)
+        transfer_ism_buffer.server_register_array_for_transfer(self._live_buffer_name, self._live_array)
         return self._live_buffer_name
 
     def _enable_live(self):
@@ -483,7 +483,7 @@ class Camera(property_device.PropertyDevice):
         name, output_array, convert_buffer = next(self._sequence_acquisition_state.acquire_data)
         lowlevel.WaitBuffer(read_timeout_ms)
         convert_buffer()
-        transfer_ism_buffer.server_register_array(name, output_array)
+        transfer_ism_buffer.server_register_array_for_transfer(name, output_array)
         # Return the name of the shared memory buffer that the image
         # was stored in. The scope_client code will transparently retrieve the
         # image bytes based on this name, either via the ISM_Buffer mechanism if

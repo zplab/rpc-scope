@@ -54,4 +54,10 @@ def server_main(verbose=False, context=None):
         return
 
 if __name__ == '__main__':
+    import sys
+    if len(sys.argv) == 2:
+        if sys.argv[1] == 'public':
+            config.Server.HOST = config.Server.PUBLICHOST
+        else:
+            config.Server.HOST = sys.argv[1]
     server_main()
