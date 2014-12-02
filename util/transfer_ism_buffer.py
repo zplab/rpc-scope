@@ -94,9 +94,9 @@ def _server_pack_data(name, compressor='blosc', **compressor_args):
         raise RuntimeError('un-recognized compressor')
     return output
 
-def _client_unpack_ism_data(buf, compressor='blosc'):
-    """Unpack (on the client side) data packed (on the server side) by _server_pack_ism_data().
-    The compressor name passed to _server_pack_ism_data() must also be passed
+def _client_unpack_data(buf, compressor='blosc'):
+    """Unpack (on the client side) data packed (on the server side) by _server_pack_data().
+    The compressor name passed to _server_pack_data() must also be passed
     to this function."""
     # buf comes from a ZMQ zero-copy memoryview, which unfortunately currently
     # is stored as an un-sliceable 0-dim buffer. So we have to make a copy.
@@ -163,7 +163,7 @@ def client_get_data_getter(rpc_client, force_remote=False):
                 self.compressor_args = compressor_args
 
             def __call__(self, name):
-                data = rpc_client('_transfer_ism_buffer._server_pack_ism_data', name, self.compressor, **self.compressor_args)
-                return _client_unpack_ism_data(data, self.compressor)
+                data = rpc_client('_transfer_ism_buffer._server_pack_data', name, self.compressor, **self.compressor_args)
+                return _client_unpack_data(data, self.compressor)
         get_data = GetData()
     return is_local, get_data
