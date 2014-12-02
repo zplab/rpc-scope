@@ -90,9 +90,9 @@ def _server_pack_data(name, compressor='blosc', **compressor_args):
     output = bytearray(struct.pack('<H', len(descr))) # put the len of the descr in a 2-byte uint16
     output += descr
     if compressor is None:
-        output += memoryview(array.flatten())
+        output += memoryview(array.flatten(order=order))
     elif compressor == 'zlib':
-        output += zlib.compress(memoryview(array.flatten()), **compressor_args)
+        output += zlib.compress(array.flatten(order=order)), **compressor_args)
     elif compressor == 'blosc':
         import blosc
         # because blosc.compress can't handle a memoryview, we need to use blosc.compress_ptr
@@ -148,7 +148,6 @@ def client_get_data_getter(rpc_client, force_remote=False):
     else: # pipe data over network
         class GetData:
             def __init__(self):
-                # TODO: figure out a good way to auto-determine the compression level for zlib
                 self.compressor_args = {}
                 try:
                     import blosc
