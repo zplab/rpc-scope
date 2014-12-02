@@ -79,7 +79,14 @@ def _server_pack_data(name, compressor='blosc', **compressor_args):
 
     array = _release_array(name) # get the array and release it from the list of to-be-transfered arrays
     dtype_str = numpy.lib.format.dtype_to_descr(array.dtype)
-    descr = json.dumps((dtype_str, array.shape, array.order)).encode('ascii')
+    if array.flags.f_contiguous:
+        order = 'F'
+    elif array.flags.c_contiguous:
+        order = 'C'
+    else:
+        array = numpy.asfortranarray(array)
+        order = 'F'
+    descr = json.dumps((dtype_str, array.shape, order)).encode('ascii')
     output = bytearray(struct.pack('<H', len(descr))) # put the len of the descr in a 2-byte uint16
     output += descr
     if compressor is None:
