@@ -396,7 +396,7 @@ class Camera(property_device.PropertyDevice):
         if not self._live_reader.latest_intervals:
             # no intervals yet
             return 0
-        return float(1/numpy.mean(self._live_reader.latest_intervals))
+        return 1/numpy.mean(self._live_reader.latest_intervals)
 
     def _make_input_output_buffers(self, name):
         """Allocate a memory region to receive images from the camera (input_buffer),
