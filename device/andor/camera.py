@@ -170,7 +170,7 @@ class Camera(property_device.PropertyDevice):
     def return_to_default_state(self):
         """Set the camera to its default, baseline state. Always a good idea to do before doing anything else."""
         with self._live_guarded():
-            if self.is_acquiring():
+            if lowlevel.GetBool('CameraAcquiring'):
                 lowlevel.Command('AcquisitionStop')
             lowlevel.Flush()
             for feature, setter, value in self._CAMERA_DEFAULTS:

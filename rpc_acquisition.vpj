@@ -4,69 +4,7 @@
 	VendorName="SlickEdit"
 	TemplateName="Python - Empty Project"
 	WorkingDir=".">
-	<Files>
-		<Folder
-			Name="andor"
-			Filters="">
-			<F N="andor/__init__.py"/>
-			<F N="andor/andor_image.py"/>
-			<F N="andor/andor_image_client.py"/>
-			<F N="andor/andor_image_server.py"/>
-			<F N="andor/camera.py"/>
-			<F N="andor/common.py"/>
-			<F N="andor/lowlevel.py"/>
-			<F N="andor/wrapper.py"/>
-		</Folder>
-		<Folder
-			Name="dm6000b"
-			Filters="">
-			<F N="dm6000b/__init__.py"/>
-			<F N="dm6000b/illumination_axes.py"/>
-			<F N="dm6000b/microscopy_method_names.py"/>
-			<F N="dm6000b/objective_turret.py"/>
-			<F N="dm6000b/stage.py"/>
-			<F N="dm6000b/stand.py"/>
-		</Folder>
-		<Folder
-			Name="io_tool"
-			Filters="">
-			<F N="io_tool/__init__.py"/>
-			<F N="io_tool/commands.py"/>
-			<F N="io_tool/io_tool.py"/>
-			<F N="io_tool/pedal_waiter.py"/>
-		</Folder>
-		<Folder
-			Name="messaging"
-			Filters="">
-			<F N="messaging/__init__.py"/>
-			<F N="messaging/message_device.py"/>
-			<F N="messaging/message_manager.py"/>
-			<F N="messaging/smart_serial.py"/>
-		</Folder>
-		<Folder
-			Name="simple_rpc"
-			Filters="">
-			<F N="simple_rpc/__init__.py"/>
-			<F N="simple_rpc/property_client.py"/>
-			<F N="simple_rpc/property_server.py"/>
-			<F N="simple_rpc/rpc_client.py"/>
-			<F N="simple_rpc/rpc_server.py"/>
-			<F N="simple_rpc/trie.py"/>
-		</Folder>
-		<F N="__init__.py"/>
-		<F N="acquisition_sequencer.py"/>
-		<F N="autofocus.py"/>
-		<F N="enumerated_properties.py"/>
-		<F N="footpedal.py"/>
-		<F N="ism_buffer_utils.py"/>
-		<F N="peltier.py"/>
-		<F N="scope.py"/>
-		<F N="scope_client.py"/>
-		<F N="scope_configuration.py"/>
-		<F N="scope_server.py"/>
-		<F N="spectra_x.py"/>
-		<F N="tl_lamp.py"/>
-	</Files>
+	<CustomFolders></CustomFolders>
 	<Config
 		Name="Debug"
 		DebugCallbackName="pydbgp"
@@ -126,5 +64,68 @@
 				Name="show_hidden"
 				Value="0"/>
 		</List>
+		<Includes></Includes>
 	</Config>
+	<Files AutoFolders="DirectoryView">
+		<Folder Name="device">
+			<Folder Name="andor">
+				<Folder Name="generate_wrappers">
+					<F N="device/andor/generate_wrappers/make_andor.py"/>
+					<F N="device/andor/generate_wrappers/output_ctypes.py"/>
+					<F N="device/andor/generate_wrappers/pyparsing.py"/>
+				</Folder>
+				<F N="device/andor/__init__.py"/>
+				<F N="device/andor/camera.py"/>
+				<F N="device/andor/common.py"/>
+				<F N="device/andor/lowlevel.py"/>
+				<F N="device/andor/wrapper.py"/>
+			</Folder>
+			<Folder Name="dm6000b">
+				<F N="device/dm6000b/__init__.py"/>
+				<F N="device/dm6000b/illumination_axes.py"/>
+				<F N="device/dm6000b/microscopy_method_names.py"/>
+				<F N="device/dm6000b/objective_turret.py"/>
+				<F N="device/dm6000b/stage.py"/>
+				<F N="device/dm6000b/stand.py"/>
+			</Folder>
+			<Folder Name="io_tool">
+				<F N="device/io_tool/__init__.py"/>
+				<F N="device/io_tool/commands.py"/>
+				<F N="device/io_tool/io_tool.py"/>
+			</Folder>
+			<F N="device/__init__.py"/>
+			<F N="device/acquisition_sequencer.py"/>
+			<F N="device/autofocus.py"/>
+			<F N="device/footpedal.py"/>
+			<F N="device/peltier.py"/>
+			<F N="device/spectra_x.py"/>
+			<F N="device/tl_lamp.py"/>
+		</Folder>
+		<Folder Name="messaging">
+			<F N="messaging/__init__.py"/>
+			<F N="messaging/message_device.py"/>
+			<F N="messaging/message_manager.py"/>
+		</Folder>
+		<Folder Name="simple_rpc">
+			<F N="simple_rpc/__init__.py"/>
+			<F N="simple_rpc/property_client.py"/>
+			<F N="simple_rpc/property_server.py"/>
+			<F N="simple_rpc/rpc_client.py"/>
+			<F N="simple_rpc/rpc_server.py"/>
+			<F N="simple_rpc/trie.py"/>
+		</Folder>
+		<Folder Name="util">
+			<F N="util/__init__.py"/>
+			<F N="util/enumerated_properties.py"/>
+			<F N="util/property_device.py"/>
+			<F N="util/smart_serial.py"/>
+			<F N="util/transfer_ism_buffer.py"/>
+		</Folder>
+		<F N="__init__.py"/>
+		<F N="rpc_acquisition.vpj"/>
+		<F N="scope.py"/>
+		<F N="scope_client.py"/>
+		<F N="scope_configuration.py"/>
+		<F N="scope_server.py"/>
+	</Files>
 </Project>

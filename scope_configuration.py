@@ -11,20 +11,23 @@ class Server:
     RPC_INTERRUPT_PORT = '6001'
     PROPERTY_PORT = '6002'
 
-    def rpc_addr(self, host=None):
+    @classmethod
+    def rpc_addr(cls, host=None):
         if host is None:
-            host = self.HOST
-        return host + ':' + self.RPC_PORT
+            host = cls.HOST
+        return host + ':' + cls.RPC_PORT
 
-    def interrupt_addr(self, host=None):
+    @classmethod
+    def interrupt_addr(cls, host=None):
         if host is None:
-            host = self.HOST
-        return host + ':' + self.RPC_INTERRUPT_PORT
+            host = cls.HOST
+        return host + ':' + cls.RPC_INTERRUPT_PORT
 
-    def property_addr(self, host=None):
+    @classmethod
+    def property_addr(cls, host=None):
         if host is None:
-            host = self.HOST
-        return host + ':' + self.PROPERTY_PORT
+            host = cls.HOST
+        return host + ':' + cls.PROPERTY_PORT
 
 class Stand:
     SERIAL_PORT = '/dev/ttyScope'

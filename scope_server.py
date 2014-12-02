@@ -47,7 +47,7 @@ def server_main(verbose=False, context=None):
     interrupter = rpc_server.ZMQInterrupter(interrupt_addr, context=context, verbose=verbose)
     scope_server = rpc_server.ZMQServer(scope_controller, interrupter, rpc_addr, context=context, verbose=verbose)
 
-    print('******************\nScope Server Ready\n******************')
+    print('Scope Server Ready (Listening on {})'.format(config.Server.HOST))
     try:
         scope_server.run()
     except KeyboardInterrupt:
