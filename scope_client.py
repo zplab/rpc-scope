@@ -90,7 +90,7 @@ class LiveStreamer:
         self.scope = scope
         self.image_ready_callback = image_ready_callback
         self.image_received = threading.Event()
-        self.live = False
+        self.live = scope.camera.live_mode
         self.latest_intervals = collections.deque(maxlen=10)
         self._last_time = time.time()
         scope_properties.subscribe('scope.camera.live_mode', self._live_change, valueonly=True)
