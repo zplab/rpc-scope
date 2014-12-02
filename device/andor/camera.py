@@ -459,7 +459,7 @@ class Camera(property_device.PropertyDevice):
         state.
 
         """
-        if hasattr(self, self._sequence_acquisition_state):
+        if hasattr(self, '_sequence_acquisition_state'):
             raise RuntimeError('Already acquiring an image sequence.')
         if frame_count == 1:
             namebase = 'acquire@'+str(time.time())
