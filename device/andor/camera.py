@@ -264,7 +264,9 @@ class Camera(property_device.PropertyDevice):
                 self.set_live_mode(True)
             else:
                 # changed exposure time without pausing live... update sleep time
-                self._live_trigger.trigger_interval = self._calculate_live_trigger_interval()
+                trigger_interval = self._calculate_live_trigger_interval()
+                self._live_trigger.trigger_interval = trigger_interval
+                self._live_reader.set_timeout(trigger_interval)
                 # ... and clear recent FPS data
                 self._live_reader.latest_intervals.clear()
 
@@ -609,10 +611,13 @@ class LiveReader(LiveModeThread):
         self.latest_intervals = collections.deque(maxlen=10) # cyclic buffer containing intervals between recent image reads (for FPS calculations)
         self.image_count = 0 # number of frames retrieved
         self.ready = threading.Event()
+        self.set_timeout(trigger_interval)
         self.timeout_count = 0
-        self.timeout = int(1000 * trigger_interval) * 3 # convert to ms and triple for safety margin
         super().__init__()
         self.ready.wait() # don't return from init until a buffer is queued
+
+    def set_timeout(self, trigger_interval):
+        self.timeout = int(1000 * trigger_interval) * 3 # convert to ms and triple for safety margin
 
     def loop(self):
         t = time.time()
