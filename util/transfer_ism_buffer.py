@@ -153,6 +153,7 @@ def client_get_data_getter(rpc_client, force_remote=False):
                 try:
                     import blosc
                     self.compressor = 'blosc'
+                    self.compressor_args['cname'] = 'lz4'
                 except ImportError:
                     self.compressor = 'zlib'
                     self.compressor_args['level'] = 2
