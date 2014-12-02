@@ -354,7 +354,8 @@ class Camera(property_device.PropertyDevice):
     def _calculate_live_trigger_interval(self):
         """Determine how long to wait between sending acquisition triggers in
         live mode, based on data from the andor API and also knowledge from the
-        camera manual about how many cycles things take in differen camera modes."""
+        camera manual about how many cycles things take in different camera modes.
+        Returns trigger interval in seconds."""
         readout_time = self.get_readout_time()
         if self.get_exposure_time() / 1000 <= readout_time:
             # It may be a bug in the andor library that get_frame_rate() is wrong
@@ -390,7 +391,10 @@ class Camera(property_device.PropertyDevice):
     def get_live_fps(self):
         if not self._live_mode:
             return
-        return 1/numpy.mean(self._live_reader.latest_intervals)
+        if not self._live_reader.latest_intervals:
+            # no intervals yet
+            return 0
+        return float(1/numpy.mean(self._live_reader.latest_intervals))
 
     def _make_input_output_buffers(self, name):
         """Allocate a memory region to receive images from the camera (input_buffer),
@@ -606,7 +610,7 @@ class LiveReader(LiveModeThread):
         self.image_count = 0 # number of frames retrieved
         self.ready = threading.Event()
         self.timeout_count = 0
-        self.timeout = trigger_interval * 3
+        self.timeout = int(1000 * trigger_interval) * 3 # convert to ms and triple for safety margin
         super().__init__()
         self.ready.wait() # don't return from init until a buffer is queued
 

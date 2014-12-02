@@ -27,6 +27,7 @@ import zmq
 import time
 import collections
 import numpy
+import threading
 
 from .simple_rpc import rpc_client, property_client
 from . import scope_configuration as config
@@ -88,7 +89,7 @@ class LiveStreamer:
     def __init__(self, scope, scope_properties, image_ready_callback):
         self.scope = scope
         self.image_ready_callback = image_ready_callback
-        self.image_received = False
+        self.image_received = threading.Event()
         self.live = False
         self.latest_intervals = collections.deque(maxlen=10)
         self._last_time = time.time()
@@ -96,13 +97,13 @@ class LiveStreamer:
         scope_properties.subscribe('scope.camera.live_frame', self._live_update, valueonly=True)
 
     def get_image(self):
-        assert self.image_received
+        self.image_received.wait()
         # get image before re-enabling image-receiving because if this is over the network, it could take a while
         image = self.scope.camera.live_image()
         t = time.time()
         self.latest_intervals.append(t - self._last_time)
         self._last_time = t
-        self.image_received = False
+        self.image_received.clear()
         return image, self.frame_no
 
     def get_fps(self):
@@ -121,7 +122,7 @@ class LiveStreamer:
         # if we've already received an image, but nobody on the main thread
         # has called get_image() to retrieve it, then just ignore subsequent
         # updates
-        if not self.image_received:
-            self.image_received = True
+        if not self.image_received.is_set():
+            self.image_received.set()
             self.frame_no = frame_no
             self.image_ready_callback()
