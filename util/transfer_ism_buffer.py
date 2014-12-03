@@ -92,7 +92,7 @@ def _server_pack_data(name, compressor='blosc', **compressor_args):
     if compressor is None:
         output += memoryview(array.flatten(order=order))
     elif compressor == 'zlib':
-        output += zlib.compress(array.flatten(order=order)), **compressor_args)
+        output += zlib.compress(array.flatten(order=order), **compressor_args)
     elif compressor == 'blosc':
         import blosc
         # because blosc.compress can't handle a memoryview, we need to use blosc.compress_ptr
