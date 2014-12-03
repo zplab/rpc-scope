@@ -1,20 +1,22 @@
-from PyQt5 import QtCore
+from PyQt5 import Qt
 
-from ??? import RisWidget
+from ris_widget import _ris_widget
 from . import scope_client
 
 def make_streamer(host=None, ris_widget=None):
     scope, scope_properties = scope_client.client_main(host)
     if ris_widget is None:
-        ris_widget = RisWidget.RisWidget()
+        ris_widget = _ris_widget.RisWidget()
     streamer = RisWidgetStreamer(ris_widget)
     return streamer
 
 def streamer_main(host=None):
+    params = []
+    app = Qt.QApplication(params)
     streamer = make_streamer(host)
-    # join the QT main thread
+    app.exec_()
 
-class RisWidgetStreamer(QtCore.QObject):
+class RisWidgetStreamer(Qt.QObject):
     RW_LIVE_STREAM_BINDING_LIVE_UPDATE_EVENT = 1001
 
     def __init__(self, ris_widget, scope, scope_properties):
@@ -33,7 +35,7 @@ class RisWidgetStreamer(QtCore.QObject):
     def post_live_update(self):
         # posting an event does not require calling thread to have an event loop,
         # unlike sending a signal
-        QtCore.QCoreApplication.postEvent(self, QtCore.QEvent(self.RW_LIVE_STREAM_BINDING_LIVE_UPDATE_EVENT))
+        Qt.QCoreApplication.postEvent(self, Qt.QEvent(self.RW_LIVE_STREAM_BINDING_LIVE_UPDATE_EVENT))
 
 if __name__ == '__main__':
     import argparse
