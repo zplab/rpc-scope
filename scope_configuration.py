@@ -2,9 +2,12 @@
 # file and modify the relevant attributes before importing other scope
 # modules.
 
+def _make_tcp_host(host, port):
+    return 'tcp://{}:{}'.format(host, port)
+
 class Server:
-    LOCALHOST = 'tcp://127.0.0.1'
-    PUBLICHOST = 'tcp://*'
+    LOCALHOST = '127.0.0.1'
+    PUBLICHOST = '*'
     HOST = LOCALHOST
 
     RPC_PORT = '6000'
@@ -15,19 +18,19 @@ class Server:
     def rpc_addr(cls, host=None):
         if host is None:
             host = cls.HOST
-        return host + ':' + cls.RPC_PORT
+        return _make_tcp_host(host, cls.RPC_PORT)
 
     @classmethod
     def interrupt_addr(cls, host=None):
         if host is None:
             host = cls.HOST
-        return host + ':' + cls.RPC_INTERRUPT_PORT
+        return _make_tcp_host(host, cls.RPC_INTERRUPT_PORT)
 
     @classmethod
     def property_addr(cls, host=None):
         if host is None:
             host = cls.HOST
-        return host + ':' + cls.PROPERTY_PORT
+        return _make_tcp_host(host, cls.PROPERTY_PORT)
 
 class Stand:
     SERIAL_PORT = '/dev/ttyScope'

@@ -54,10 +54,11 @@ def server_main(verbose=False, context=None):
         return
 
 if __name__ == '__main__':
-    import sys
-    if len(sys.argv) == 2:
-        if sys.argv[1] == 'public':
-            config.Server.HOST = config.Server.PUBLICHOST
-        else:
-            config.Server.HOST = sys.argv[1]
+    import argparse
+    parser = argparse.ArgumentParser(description="Run the microscope server")
+    parser.add_argument("--public", action='store_true', help="Allow network connections to the server [default: allow only local connections]")
+    parser.parse_args()
+    if parser.public:
+        config.Server.HOST = config.Server.PUBLICHOST
+
     server_main()

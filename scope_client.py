@@ -73,7 +73,7 @@ def property_client_main(host, context=None):
     return scope_properties
 
 
-def client_main(host=None, context=None, subscribe_all=False, ris_widget=None):
+def client_main(host=None, context=None, subscribe_all=False):
     if context is None:
         context = zmq.Context()
     scope = rpc_client_main(host, context)
@@ -83,12 +83,7 @@ def client_main(host=None, context=None, subscribe_all=False, ris_widget=None):
         # this causes the client to keep its internal 'properties' dictionary up-to-date
         scope_properties.subscribe_prefix('', lambda x, y: None)
         scope.rebroadcast_properties()
-    if ris_widget is None:
-        return scope, scope_properties
-    ris_widget_live_stream_binding = RisWidgetLiveStreamBinding(ris_widget)
-    live_streamer = LiveStreamer(scope, scope_properties, ris_widget_live_stream_binding.post_live_update)
-    ris_widget_live_stream_binding._live_streamer = live_streamer
-    return scope, scope_properties, ris_widget_live_stream_binding
+    return scope, scope_properties
 
 class LiveStreamer:
     def __init__(self, scope, scope_properties, image_ready_callback):
@@ -131,29 +126,3 @@ class LiveStreamer:
             self.image_received.set()
             self.frame_no = frame_no
             self.image_ready_callback()
-
-try:
-    from PyQt5 import QtCore
-
-    class RisWidgetLiveStreamBinding(QtCore.QObject):
-        RW_LIVE_STREAM_BINDING_LIVE_UPDATE_EVENT = 1001
-
-        def __init__(self, ris_widget):
-            super().__init__(ris_widget)
-            self._rw = ris_widget
-            self._live_streamer = None
-
-        def event(self, e):
-            # Override of QObject.event C++ virtual function.  This is called by the main event loop.
-            if e.type() == self.RW_LIVE_STREAM_BINDING_LIVE_UPDATE_EVENT:
-                image, frame_no = self._live_streamer.get_image()
-                self._rw.showImage(image)
-                return True
-            return super().event(e)
-
-        def post_live_update(self):
-            # Does not require calling thread to have an event loop
-            QtCore.QCoreApplication.postEvent(self, QtCore.QEvent(self.RW_LIVE_STREAM_BINDING_LIVE_UPDATE_EVENT))
-
-except ImportError:
-    pass
