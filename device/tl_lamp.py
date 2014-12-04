@@ -34,12 +34,19 @@ class TL_Lamp(property_device.PropertyDevice):
     def set_enabled(self, enable):
         """Turn lamp on or off.
         """
+        self._enabled = enable
         self._iotool.execute(*self._iotool.commands.transmitted_lamp(enable=enable))
         self._update_property('enabled', enable)
 
+    def get_enabled(self):
+        return self._enabled
 
     def set_intensity(self, value):
         """Set intensity to any value in the range [0, 255] for min to max.
         """
+        self._intensity = value
         self._iotool.execute(*self._iotool.commands.transmitted_lamp(intensity=value))
         self._update_property('intensity', value)
+
+    def get_intensity(self):
+        return self._intensity

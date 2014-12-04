@@ -7,7 +7,8 @@ def make_streamer(host=None, ris_widget=None):
     scope, scope_properties = scope_client.client_main(host)
     if ris_widget is None:
         ris_widget = _ris_widget.RisWidget()
-    streamer = RisWidgetStreamer(ris_widget)
+        ris_widget.show()
+    streamer = RisWidgetStreamer(ris_widget, scope, scope_properties)
     return streamer
 
 def streamer_main(host=None):
@@ -41,4 +42,5 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description="Show a live-view window from the microscope camera")
     parser.add_argument("--host", help="Host computer to connect to [defaults to localhost]")
-    streamer_main(parser.host)
+    args = parser.parse_args()
+    streamer_main(args.host)

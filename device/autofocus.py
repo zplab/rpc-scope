@@ -20,8 +20,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-# Authors: Zach Pincus
+# Authors: Zach Pincus, Erik Hvatum
 
+from misc import image_fft
 import numpy
 from ..util import transfer_ism_buffer
 
@@ -30,16 +31,26 @@ def brenner(array, z):
     y_diffs = (array[:, 2:] - array[:, :-2])**2
     return x_diffs.sum() + y_diffs.sum()
 
-METRICS = {'brenner': brenner}
+_high_pass_filter = None
+def high_pass_brenner(array, z):
+    global _high_pass_filter
+    if _high_pass_filter is None or _high_pass_filter.shape != array.shape:
+        _high_pass_filter = image_fft.highpass_butterworth_nd(1/5, array.shape, 1, 2)
+        _high_pass_filter[0,0] = 0
+    hp_filtered = image_fft.filter_nd(array, _high_pass_filter).real
+    return brenner(hp_filtered, z)
+
+METRICS = {'brenner': brenner,
+           'high pass + brenner' : high_pass_brenner}
 
 class Autofocus:
     def __init__(self, camera, stage):
         self._camera = camera
         self._stage = stage
 
-    def autofocus(self, start, end, steps, metric='brenner'):
+    def autofocus(self, start, end, steps, metric='high pass + brenner'):
         metric = METRICS[metric]
-        read_timeout_ms = self._camera.get_exposure_time()
+        read_timeout_ms = max(int(self._camera.get_exposure_time()), 300)
         self._camera.start_image_sequence_acquisition(steps, trigger_mode='Software', pixel_readout_rate='280 MHz')
         focus_values = []
         async = self._stage.get_async()
