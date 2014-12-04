@@ -22,6 +22,8 @@
 #
 # Authors: Erik Hvatum, Zach Pincus
 
+import contextlib
+
 from ...messaging import message_device
 from ...util import property_device
 from . import microscopy_method_names
@@ -36,6 +38,45 @@ class DM6000Device(message_device.LeicaAsyncDevice, property_device.PropertyDevi
         # access to the property_server etc.
         property_device.PropertyDevice.__init__(self, property_server, property_prefix)
         message_device.LeicaAsyncDevice.__init__(self, message_manager)
+        self._state_stack = []
+
+    def set_state(self, **state):
+        """Set a number of device parameters at once using keyword arguments, e.g.
+        device.set_state(async=False, x=10)"""
+        for k, v in state.items():
+            getattr(self, 'set_'+k)(v)
+
+    def push_state(self, **state):
+        """Set a number of device parameters at once using keyword arguments, while
+        saving the old values of those parameters. pop_state() will restore those
+        previous values. push_state/pop_state pairs can be nested arbitrarily."""
+        old_state = {k: getattr(self, 'get_'+k)() for k in state.keys()}
+        self._state_stack.append(old_state)
+        # set async mode first for predictable results
+        async = state.pop('async', None)
+        if async is not None:
+            self.set_async(async)
+        self.set_state(**state)
+
+    def pop_state(self):
+        """Restore the most recent set of device parameters changed by a push_state()
+        call."""
+        old_state = self._state_stack.pop()
+        async = state.pop('async', None)
+        self.set_state(**old_state)
+        # unset async mode last for predictable results
+        if async is not None:
+            self.set_async(async)
+
+    @contextlib.contextmanager
+    def _pushed_state(self, **state):
+        """context manager to push and pop state around a with-block"""
+        self.push_state(**state)
+        try:
+            yield
+        finally:
+            self.pop_state()
+
 
 class Stand(DM6000Device):
     def get_all_microscopy_methods(self):

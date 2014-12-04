@@ -24,6 +24,7 @@
 
 from misc import image_fft
 import numpy
+import time
 from ..util import transfer_ism_buffer
 
 def brenner(array, z):
@@ -49,19 +50,72 @@ class Autofocus:
         self._stage = stage
 
     def autofocus(self, start, end, steps, metric='high pass + brenner'):
+        """Move the stage stepwise from start to end, taking an image at
+        each step. Apply the given autofocus metric and move to the best-focused
+        position."""
         metric = METRICS[metric]
-        read_timeout_ms = max(int(self._camera.get_exposure_time()), 300)
+        exp_time = self._camera.get_exposure_time()
         self._camera.start_image_sequence_acquisition(steps, trigger_mode='Software', pixel_readout_rate='280 MHz')
-        focus_values = []
-        async = self._stage.get_async()
-        self._stage.set_async(False)
-        for z in numpy.linspace(start, end, steps):
-            self._stage.set_z(z)
-            self._camera.send_software_trigger()
-            name = self._camera.next_image(read_timeout_ms)
+        focus_metrics = []
+        with self._stage._pushed_state(async=True):
+            z_positions = numpy.linspace(start, end, steps)
+            self._stage.set_z(start)
+            for next_step in range(1, steps+1): # step through with index of NEXT step. Will make sense when you read below
+                self._stage.wait()
+                self._camera.send_software_trigger()
+                # if there is a next z position, wait for the exposure to finish and
+                # get the stage moving there
+                if next_step < steps:
+                    time.sleep(exp_time / 1000) # exp_time is in ms, sleep is in sec
+                    self.stage.set_z(z_positions[next_step])
+                name = self._camera.next_image(read_timeout_ms=exp_time+1000)
+                array = transfer_ism_buffer._release_array(name)
+                focus_metrics.append(metric(array, z))
+            self._camera.end_image_sequence_acquisition()
+            focus_order = numpy.argsort(focus_metrics)
+            best_z = z_positions(focus_order[-1])
+            self._stage.set_z(best_z) # go to focal plane with highest score
+            self._stage.wait()
+            return best_z, zip(z_positions, focus_metrics)
+
+    def autofocus_continuous_move(self, start, end, speed, metric='brenner', fps_max=None):
+        """Move the stage from 'start' to 'end' at a constant speed, taking images
+        for autofocus constantly. If fps_max is None, take images as fast as
+        possible; otherwise take images as governed by fps_max. Apply the autofocus
+        metric to each image and move to the best-focused position."""
+        metric = METRICS[metric]
+        exp_time_sec = self._camera.get_exposure_time() * 1000
+        if fps_max is None:
+            sleep_time = exp_time_sec
+        else:
+            sleep_time = max(1/fps_max, exp_time_sec)
+        # ideal case: would use camera internal triggering, and use exposure events
+        # to read off the z-position at each acquisition start. But we don't have
+        # that as of Dec 2014, so we fake it with software triggers.
+        self._camera.start_image_sequence_acquisition(steps, trigger_mode='Software', pixel_readout_rate='280 MHz')
+        # move the stage to the start position BEFORE we slow down the speed
+        self._stage.set_z(start)
+        self._stage.wait() # no op if in sync mode, necessary in async mode
+        with self._stage._pushed_state(async=True, z_speed=speed):
+            self._stage.wait()
+            z_positions = []
+            self._stage.set_z(end)
+            while self._stage.has_pending(): # while stage-move event is still in progress
+                self._camera.send_software_trigger()
+                # just queue the images up on the camera head while we do this
+                z_positions.append(self._stage.get_z())
+                time.sleep(sleep_time)
+        self._stage.wait() # make sure all events are cleared out
+        focus_metrics = []
+        for z in z_positions:
+            name = self._camera.next_image(read_timeout_ms=1000)
             array = transfer_ism_buffer._release_array(name)
-            focus_values.append((metric(array, z), z))
+            focus_metrics.append(metric(array, z))
+        # now that we've retrieved all the images, end the acquisition
         self._camera.end_image_sequence_acquisition()
-        focus_values.sort()
-        self._stage.set_z(focus_values[-1][1]) # go to focal plane with highest score
-        self._stage.set_async(async)
+        focus_order = numpy.argsort(focus_metrics)
+        best_z = z_positions(focus_order[-1])
+        self._stage.set_z(best_z) # go to focal plane with highest score
+        self._stage.wait() # no op if in sync mode, necessary in async mode
+        return best_z, zip(z_positions, focus_metrics)
+

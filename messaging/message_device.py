@@ -70,9 +70,20 @@ class AsyncDevice:
             response = self._pending_responses.pop()
             response.wait()
 
+    def has_pending(self):
+        """Return true if there are any responses to async messages still pending."""
+        for response in self._pending_responses:
+            # if any response is not ready, we know we're still pending
+            if not response.ready.is_set():
+                return False
+        # all responses must be ready if we get to this point...
+        return True
+
     def set_async(self, async):
         """If in async mode, send_message() returns None immediately; otherwise
         it waits for the device to finish before returning the response value."""
+        if self._async and not async: # if setting async from True to False...
+            self.wait() # ... don't let any pending events still be outstanding
         self._async = async
 
     def get_async(self):

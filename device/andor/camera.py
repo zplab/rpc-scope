@@ -242,6 +242,46 @@ class Camera(property_device.PropertyDevice):
             if live:
                 self.set_live_mode(True)
 
+
+    def set_state(self, **state):
+        """Set a number of camera parameters at once using keyword arguments, e.g.
+        camera.set_state(exposure_time=50, frame_rate=10)"""
+        for k, v in state.items():
+            getattr(self, 'set_'+k)(v)
+
+    def push_state(self, **state):
+        """Set a number of camera parameters at once using keyword arguments, while
+        saving the old values of those parameters. pop_state() will restore those
+        previous values. push_state/pop_state pairs can be nested arbitrarily."""
+        old_state = {k: getattr(self, 'get_'+k)() for k in state.keys()}
+        self._state_stack.append(old_state)
+        overlap = state.pop('overlap_enabled', None)
+        self.set_state(**state)
+        # overlap mode has complex dependencies, so it generally shouldn't be set until the very end
+        # when presumably those dependencies are satisfied
+        if overlap is not None and lowlevel.IsWritable('Overlap'):
+            self.set_overlap_enabled(overlap)
+
+    def pop_state(self):
+        """Restore the most recent set of camera parameters changed by a push_state()
+        call."""
+        old_state = self._state_stack.pop()
+        overlap = old_state.pop('overlap_enabled', None)
+        # overlap mode has complex dependencies, so it generally should be unset first, before
+        # other changes make overlap mode no longer writable
+        if overlap is not None and lowlevel.IsWritable('Overlap'):
+            self.set_overlap_enabled(overlap)
+        self.set_state(**old_state)
+
+    @contextlib.contextmanager
+    def _pushed_state(self, **state):
+        """context manager to push and pop state around a with-block"""
+        self.push_state(**state)
+        try:
+            yield
+        finally:
+            self.pop_state()
+
     def get_exposure_time(self):
         """Return exposure time in ms"""
         return 1000 * lowlevel.GetFloat('ExposureTime')
@@ -503,36 +543,6 @@ class Camera(property_device.PropertyDevice):
         self.pop_state()
         self.set_live_mode(self._sequence_acquisition_state.live)
         del self._sequence_acquisition_state
-
-    def set_state(self, **state):
-        """Set a number of camera parameters at once using keyword arguments, e.g.
-        camera.set_state(exposure_time=50, frame_rate=10)"""
-        for k, v in state.items():
-            getattr(self, 'set_'+k)(v)
-
-    def push_state(self, **state):
-        """Set a number of camera parameters at once using keyword arguments, while
-        saving the old values of those parameters. pop_state() will restore those
-        previous values. push_state/pop_state pairs can be nested arbitrarily."""
-        old_state = {k: getattr(self, 'get_'+k)() for k in state.keys()}
-        self._state_stack.append(old_state)
-        overlap = state.pop('overlap_enabled', None)
-        self.set_state(**state)
-        # overlap mode has complex dependencies, so it generally shouldn't be set until the very end
-        # when presumably those dependencies are satisfied
-        if overlap is not None and lowlevel.IsWritable('Overlap'):
-            self.set_overlap_enabled(overlap)
-
-    def pop_state(self):
-        """Restore the most recent set of camera parameters changed by a push_state()
-        call."""
-        old_state = self._state_stack.pop()
-        overlap = old_state.pop('overlap_enabled', None)
-        # overlap mode has complex dependencies, so it generally should be unset first, before
-        # other changes make overlap mode no longer writable
-        if overlap is not None and lowlevel.IsWritable('Overlap'):
-            self.set_overlap_enabled(overlap)
-        self.set_state(**old_state)
 
 class SequenceAcquisitionState:
     def __init__(self, live, names, output_arrays, convert_buffers):
