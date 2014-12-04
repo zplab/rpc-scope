@@ -62,7 +62,7 @@ class DM6000Device(message_device.LeicaAsyncDevice, property_device.PropertyDevi
         """Restore the most recent set of device parameters changed by a push_state()
         call."""
         old_state = self._state_stack.pop()
-        async = state.pop('async', None)
+        async = old_state.pop('async', None)
         self.set_state(**old_state)
         # unset async mode last for predictable results
         if async is not None:

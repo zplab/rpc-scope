@@ -61,22 +61,24 @@ class Autofocus:
             z_positions = numpy.linspace(start, end, steps)
             self._stage.set_z(start)
             for next_step in range(1, steps+1): # step through with index of NEXT step. Will make sense when you read below
+#               t = time.time()
                 self._stage.wait()
+#               print(time.time() - t)
                 self._camera.send_software_trigger()
                 # if there is a next z position, wait for the exposure to finish and
                 # get the stage moving there
                 if next_step < steps:
                     time.sleep(exp_time / 1000) # exp_time is in ms, sleep is in sec
-                    self.stage.set_z(z_positions[next_step])
+                    self._stage.set_z(z_positions[next_step])
                 name = self._camera.next_image(read_timeout_ms=exp_time+1000)
                 array = transfer_ism_buffer._release_array(name)
-                focus_metrics.append(metric(array, z))
+                focus_metrics.append(metric(array, z_positions[next_step-1]))
             self._camera.end_image_sequence_acquisition()
             focus_order = numpy.argsort(focus_metrics)
-            best_z = z_positions(focus_order[-1])
+            best_z = z_positions[focus_order[-1]]
             self._stage.set_z(best_z) # go to focal plane with highest score
             self._stage.wait()
-            return best_z, zip(z_positions, focus_metrics)
+            return best_z, list(zip(z_positions, focus_metrics))
 
     def autofocus_continuous_move(self, start, end, speed, metric='brenner', fps_max=None):
         """Move the stage from 'start' to 'end' at a constant speed, taking images

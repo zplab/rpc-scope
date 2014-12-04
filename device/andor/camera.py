@@ -527,7 +527,15 @@ class Camera(property_device.PropertyDevice):
         If a timeout is provided, either an image will be returned within that time
         or an AndorError of TIMEDOUT will be raised."""
         name, output_array, convert_buffer = next(self._sequence_acquisition_state.acquire_data)
-        lowlevel.WaitBuffer(read_timeout_ms)
+        # Note that AT_WaitBuffer requires an integer argument and, if instead
+        # supplied with a float, will raise a TypeError exception
+        lowlevel.WaitBuffer(int(read_timeout_ms))
+        # If WaitBuffer generally fails for short exposures, it may be desirable
+        # replace the line above with: lowlevel.WaitBuffer(max(300, int(read_timeout_ms)))
+        # Alternatively, some other mechanism could achieve the same... for example,
+        # telling people to use a minimum value of 300, while still allowing 0 for the
+        # special case of wanting to retrieve only an image known to be ready, where
+        # the image's not being ready constitutes an error that should raise an exception.
         convert_buffer()
         transfer_ism_buffer.server_register_array_for_transfer(name, output_array)
         # Return the name of the shared memory buffer that the image
