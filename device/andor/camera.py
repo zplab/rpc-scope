@@ -29,6 +29,7 @@ import numpy
 import contextlib
 import collections
 import atexit
+import itertools
 
 from . import lowlevel
 from ...util import transfer_ism_buffer
@@ -165,6 +166,7 @@ class Camera(property_device.PropertyDevice):
 
         self._update_live_frame = self._add_property('live_frame', None)
         self._update_property('live_mode', False)
+        self._latest_live_array = None
         self._state_stack = []
 
     def return_to_default_state(self):
@@ -363,8 +365,9 @@ class Camera(property_device.PropertyDevice):
         # was stored in. The scope_client code will transparently retrieve the
         # image bytes based on this name, either via the ISM_Buffer mechanism if
         # the client is on the same machine, or over the network.
-        transfer_ism_buffer.server_register_array_for_transfer(self._live_buffer_name, self._live_array)
-        return self._live_buffer_name
+        name, array = self._latest_live_array
+        transfer_ism_buffer.server_register_array_for_transfer(name, array)
+        return name
 
     def _enable_live(self):
         """Turn on live-imaging mode. The basic strategy is to put the camera
@@ -380,17 +383,17 @@ class Camera(property_device.PropertyDevice):
         computer via the Andor queue / wait commands."""
         if self._live_mode:
             return
-        self._live_buffer_name = 'live@'+str(time.time())
         lowlevel.Flush()
         self.push_state(overlap_enabled=False, cycle_mode='Continuous', trigger_mode='Software', pixel_readout_rate='280 MHz')
         trigger_interval = self._calculate_live_trigger_interval()
-        input_buffer, self._live_array, convert_buffer = self._make_input_output_buffers(self._live_buffer_name)
+        namebase = 'live@-'+str(time.time())
+        buffer_maker = BufferFactory(namebase, frame_count=1, cycle=True)
         self._live_mode = True
         lowlevel.Command('AcquisitionStart')
         def update(frame_number):
-            convert_buffer()
+            self._latest_live_array = buffer_maker.convert_buffer()
             self._update_live_frame(frame_number)
-        self._live_reader = LiveReader(input_buffer, update, trigger_interval)
+        self._live_reader = LiveReader(buffer_maker.queue_buffer, update, trigger_interval)
         self._live_trigger = LiveTrigger(trigger_interval, self._live_reader)
 
     def _calculate_live_trigger_interval(self):
@@ -438,41 +441,14 @@ class Camera(property_device.PropertyDevice):
             return 0
         return 1/numpy.mean(self._live_reader.latest_intervals)
 
-    def _make_input_output_buffers(self, name):
-        """Allocate a memory region to receive images from the camera (input_buffer),
-        an numpy array (backed by an ISM_Buffer shared-memory array) to unpack the
-        input buffer into (output_array), and a convert_buffer() function to perform this unpacking.
-        Returns input_buffer, output_array, convert_buffer"""
-        width, height, stride = self.get_aoi_width(), self.get_aoi_height(), self.get_aoi_stride()
-        input_encoding = self.get_pixel_encoding()
-        output_array = transfer_ism_buffer.server_create_array(name, shape=(width, height), dtype=numpy.uint16,
-            order='Fortran')
-        input_buffer = lowlevel.make_buffer()
-        def convert_buffer():
-            lowlevel.ConvertBuffer(input_buffer, output_array.ctypes.data_as(lowlevel.uint8_p),
-                width, height, stride, input_encoding, 'Mono16')
-        return input_buffer, output_array, convert_buffer
-
-    def _make_input_output_buffer_sequence(self, namebase, count):
-        """Make a sequence of input_buffers, output_arrays, and convert_buffer functions (see
-        _make_input_output_buffers()), given a base name for the ISM_Buffer memmap files.
-        The names of each file are returned along with lists of the input_buffers, output_arrays,
-        and convert_buffer functions."""
-        if count == 1:
-            names = [namebase]
-        else:
-            names = [namebase + str(i) for i in range(count)]
-        input_buffers, output_arrays, convert_buffers = zip(*map(self._make_input_output_buffers, names))
-        return names, input_buffers, output_arrays, convert_buffers
-
     def acquire_image(self):
         """Acquire a single image from the camera, with its current settings.
         NB: This is a SLOW way to acquire multiple images. In that case,
         use the start_image_sequence_acquisition(), next_image(), and
         end_image_sequence_acquisition() functions, with software/internal/external
         triggering as appropriate."""
-        read_timeout_ms = int(self.get_exposure_time()) + 1000 # exposure time + 1 second
-        self.start_image_sequence_acquisition(1)
+        read_timeout_ms = self.get_exposure_time() + 1000 # exposure time + 1 second
+        self.start_image_sequence_acquisition(frame_count=1)
         name = self.next_image(read_timeout_ms)
         self.end_image_sequence_acquisition()
         return name
@@ -484,11 +460,17 @@ class Camera(property_device.PropertyDevice):
         set to 'Software'."""
         lowlevel.Command('SoftwareTrigger')
 
-    def start_image_sequence_acquisition(self, frame_count, trigger_mode='Internal', **camera_params):
+    def start_image_sequence_acquisition(self, frame_count=1, trigger_mode='Internal', **camera_params):
         """Start acquiring a sequence of a given number of images.
 
         Parameters
-            frame_count: the number of images that will be obtained.
+            frame_count: the number of images that will be obtained. If None,
+                the camera is placed into "continuous" acquisition mode. In this
+                case, if the camera is in "Internal" triggering mode, the camera
+                can easily fill its internal RAM with image data faster than the
+                user can retrieve images with next_image(), so care must be taken
+                to limit the frame rate or the amount of time that images are
+                acquired for.
             trigger_mode: Must be a valid trigger_mode string ('Internal', 'Software',
                 'External', or 'ExternalExposure'). Most uses will use one of:
                  - 'Internal' triggering, in which the camera acquires images either
@@ -497,7 +479,8 @@ class Camera(property_device.PropertyDevice):
                  - 'Software' triggering, where new acquisitions are triggered via
                 the send_software_trigger() command; or
                  - 'External', where new acquisitions are triggered via TTL pulses
-                (usually from the IOTool box).
+                (usually from the IOTool box); or
+                 - 'ExternalExposure', where TTL pulses determine the exposure time.
 
         After starting an image sequence, next_image() can be called to retrieve
         images from the camera, and after all images have been received,
@@ -511,14 +494,22 @@ class Camera(property_device.PropertyDevice):
             namebase = 'acquire@'+str(time.time())
         else:
             namebase = 'sequence@{}-'.format(time.time())
-        live = self._live_mode
+        if frame_count is None:
+            cycle_mode = 'Continuous'
+        else:
+            cycle_mode = 'Fixed'
+            camera_params['frame_count'] = frame_count
+        self._live_before_sequence_acquisition = self._live_mode
         self.set_live_mode(False)
         lowlevel.Flush()
-        self.push_state(cycle_mode='Fixed', frame_count=frame_count, trigger_mode=trigger_mode, **camera_params)
-        names, input_buffers, output_arrays, convert_buffers = self._make_input_output_buffer_sequence(namebase, frame_count)
-        for ib in input_buffers:
-            lowlevel.queue_buffer(ib)
-        self._sequence_acquisition_state = SequenceAcquisitionState(live, names, output_arrays, convert_buffers)
+        self.push_state(cycle_mode=cycle_mode, trigger_mode=trigger_mode, **camera_params)
+        self._buffer_maker = BufferFactory(namebase, frame_count=frame_count, cycle=False)
+        if frame_count is not None:
+            # if we have a known number of images to acquire, create and queue buffers for them now.
+            # however, don't queue up more than a gig or so of images
+            max_queue = int(1024**3 / self.get_image_byte_count())
+            for i in range(min(max_queue, frame_count)):
+                self._buffer_maker.queue_buffer()
         lowlevel.Command('AcquisitionStart')
 
     def next_image(self, read_timeout_ms=lowlevel.ANDOR_INFINITE):
@@ -526,17 +517,9 @@ class Camera(property_device.PropertyDevice):
         if the image has not yet been triggered or retrieved from the camera.
         If a timeout is provided, either an image will be returned within that time
         or an AndorError of TIMEDOUT will be raised."""
-        name, output_array, convert_buffer = next(self._sequence_acquisition_state.acquire_data)
-        # Note that AT_WaitBuffer requires an integer argument and, if instead
-        # supplied with a float, will raise a TypeError exception
-        lowlevel.WaitBuffer(int(read_timeout_ms))
-        # If WaitBuffer generally fails for short exposures, it may be desirable
-        # replace the line above with: lowlevel.WaitBuffer(max(300, int(read_timeout_ms)))
-        # Alternatively, some other mechanism could achieve the same... for example,
-        # telling people to use a minimum value of 300, while still allowing 0 for the
-        # special case of wanting to retrieve only an image known to be ready, where
-        # the image's not being ready constitutes an error that should raise an exception.
-        convert_buffer()
+        self._buffer_maker.queue_if_needed()
+        lowlevel.WaitBuffer(int(round(read_timeout_ms)))
+        name, output_array = self._buffer_maker.convert_buffer()
         transfer_ism_buffer.server_register_array_for_transfer(name, output_array)
         # Return the name of the shared memory buffer that the image
         # was stored in. The scope_client code will transparently retrieve the
@@ -549,8 +532,58 @@ class Camera(property_device.PropertyDevice):
         lowlevel.Command('AcquisitionStop')
         lowlevel.Flush()
         self.pop_state()
-        self.set_live_mode(self._sequence_acquisition_state.live)
-        del self._sequence_acquisition_state
+        self.set_live_mode(self._live_before_sequence_acquisition)
+        del self._buffer_maker
+
+
+UINT8_P = ctypes.POINTER(ctypes.c_uint8)
+
+class BufferFactory:
+    def __init__(self, namebase, frame_count=1, cycle=False):
+        width, height, stride = map(lowlevel.GetInt, ('AOIWidth', 'AOIHeight', 'AOIStride'))
+        input_encoding = Lowlevel.GetEnumStringByIndex(lowlevel.GetEnumIndex('PixelEncoding'))
+        self.convert_buffer_args = (width, height, stride, input_encoding, 'Mono16')
+        image_buffer_ctype = ctypes.c_uint8 * lowlevel.GetInt('ImageSizeBytes')
+        self.queued_buffers = collections.deque()
+        if cycle:
+            buffers = itertools.cycle([image_buffer_ctype() for i in range(frame_count)])
+        else:
+            self.buffers = self._new_buffer_iter(image_buffer_ctype, frame_count)
+        if frame_count == 1:
+            self.names = iter([namebase])
+        else:
+            self.names = self._name_iter(namebase)
+
+    def _new_buffer_iter(self, image_buffer_ctype, frame_count):
+        i = 0
+        while True:
+            i += 1
+            yield image_buffer_ctype()
+            if frame_count is not None and i == frame_count:
+                return
+
+    def _name_iter(self, namebase):
+        i = 0
+        while True:
+            yield namebase + str(i)
+            i += 1
+
+    def queue_buffer():
+        buf = next(self.buffers)
+        lowlevel.QueueBuffer(buf, len(buf))
+        self.queued_buffers.append(buf)
+
+    def queue_if_needed():
+        if not self.queued_buffers:
+            self.queue_buffer()
+
+    def convert_buffer():
+        name = next(self.names)
+        output_array = transfer_ism_buffer.server_create_array(name, shape=(width, height),
+            dtype=numpy.uint16, order='Fortran')
+        lowlevel.ConvertBuffer(self.queued_buffers.popleft(), output_array.ctypes.data_as(UINT8_P),
+            *self.convert_buffer_args)
+        return name, output_array
 
 class SequenceAcquisitionState:
     def __init__(self, live, names, output_arrays, convert_buffers):
@@ -617,14 +650,15 @@ class LiveTrigger(LiveModeThread):
 
 
 class LiveReader(LiveModeThread):
-    def __init__(self, input_buffer, update, trigger_interval):
-        """Repeatedly queue input_buffer, wait for it to be filled via the Andor API,
-        then call update(image_count) which (presumably) will deal with the buffer contents.
-        The argument image_count is the index of the frame retrieved since the start
-        of this round of live imaging.
-        NB: update() is called in this background thread, so any operations therein
-        must be thread-safe."""
-        self.input_buffer = input_buffer
+    def __init__(self, queue_buffer, update, trigger_interval):
+        """Repeatedly queue a buffer with the given queue_buffer() function,
+        wait for it to be filled via the Andor API, then call
+        update(image_count) which (presumably) will deal with the buffer
+        contents. The argument image_count is the index of the frame retrieved
+        since the start of this round of live imaging.
+        NB: update() is called in this background thread, so any operations
+        therein must be thread-safe."""
+        self.queue_buffer = queue_buffer
         self.update = update
         self.latest_intervals = collections.deque(maxlen=10) # cyclic buffer containing intervals between recent image reads (for FPS calculations)
         self.image_count = 0 # number of frames retrieved
@@ -639,7 +673,7 @@ class LiveReader(LiveModeThread):
 
     def loop(self):
         t = time.time()
-        lowlevel.queue_buffer(self.input_buffer)
+        self.queue_buffer()
         self.ready.set()
         try:
             # with no timeout, we would have to make sure to stop the reader thread before

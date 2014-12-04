@@ -1,3 +1,4 @@
+
 # The MIT License (MIT)
 #
 # Copyright (c) 2014 WUSTL ZPLAB
@@ -399,6 +400,16 @@ def ConvertBuffer(inputBuffer, outputBuffer, width, height, stride, inputPixelEn
         outputPixelEncoding: str"""
     return _at_util_lib.AT_ConvertBuffer(inputBuffer, outputBuffer, width, height, stride, inputPixelEncoding, outputPixelEncoding)
 
+def ConvertBufferUsingMetaData(inputBuffer, outputBuffer, imagesizebytes, outputPixelEncoding):
+    """ConvertBufferUsingMetaData(inputBuffer, outputBuffer, imagesizebytes, outputPixelEncoding)
+
+    Parameters:
+        inputBuffer: ctypes.POINTER(ctypes.c_uint8)
+        outputBuffer: ctypes.POINTER(ctypes.c_uint8)
+        imagesizebytes: ctypes.c_int64
+        outputPixelEncoding: str"""
+    return _at_util_lib.AT_ConvertBufferUsingMetaData(inputBuffer, outputBuffer, imagesizebytes, outputPixelEncoding)
+
 
 def _setup_core_functions():
     _prototype_AT_InitialiseLibrary = ctypes.CFUNCTYPE(ctypes.c_int)
@@ -541,6 +552,10 @@ def _setup_util_functions():
     _prototype_AT_ConvertBuffer = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.POINTER(ctypes.c_uint8), ctypes.POINTER(ctypes.c_uint8), ctypes.c_int64, ctypes.c_int64, ctypes.c_int64, ctypes.c_wchar_p, ctypes.c_wchar_p)
     _at_util_lib.AT_ConvertBuffer = _prototype_AT_ConvertBuffer(("AT_ConvertBuffer", _at_util_lib), ((1, 'inputBuffer'), (1, 'outputBuffer'), (1, 'width'), (1, 'height'), (1, 'stride'), (1, 'inputPixelEncoding'), (1, 'outputPixelEncoding')))
     _at_util_lib.AT_ConvertBuffer.errcheck = _at_errcheck
+
+    _prototype_AT_ConvertBufferUsingMetaData = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.POINTER(ctypes.c_uint8), ctypes.POINTER(ctypes.c_uint8), ctypes.c_int64, ctypes.c_wchar_p)
+    _at_util_lib.AT_ConvertBufferUsingMetaData = _prototype_AT_ConvertBufferUsingMetaData(("AT_ConvertBufferUsingMetaData", _at_util_lib), ((1, 'inputBuffer'), (1, 'outputBuffer'), (1, 'imagesizebytes'), (1, 'outputPixelEncoding')))
+    _at_util_lib.AT_ConvertBufferUsingMetaData.errcheck = _at_errcheck
 
     _prototype_AT_InitialiseUtilityLibrary = ctypes.CFUNCTYPE(ctypes.c_int)
     _at_util_lib.AT_InitialiseUtilityLibrary = _prototype_AT_InitialiseUtilityLibrary(("AT_InitialiseUtilityLibrary", _at_util_lib), ())

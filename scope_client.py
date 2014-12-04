@@ -98,13 +98,15 @@ class LiveStreamer:
 
     def get_image(self):
         self.image_received.wait()
+        # stash our latest frame number, as self.frame_no could change if further updates occur while processing...
+        frame_no = self.frame_no
         # get image before re-enabling image-receiving because if this is over the network, it could take a while
         image = self.scope.camera.live_image()
         t = time.time()
         self.latest_intervals.append(t - self._last_time)
         self._last_time = t
         self.image_received.clear()
-        return image, self.frame_no
+        return image, frame_no
 
     def get_fps(self):
         if not self.live:
@@ -118,11 +120,16 @@ class LiveStreamer:
         self._last_time = time.time()
 
     def _live_update(self, frame_no):
-        # called in property client's thread: note we can't do RPC calls
-        # if we've already received an image, but nobody on the main thread
+        # called in property client's thread: note we can't do RPC calls...
+        # Note: if we've already received an image, but nobody on the main thread
         # has called get_image() to retrieve it, then just ignore subsequent
-        # updates
+        # updates. However, always update the frame number so that get_image()
+        # can accurately report what the current frame is (in case the client
+        # cares to know if frames were dropped. There's a bit of a race-condition
+        # here if the frame is updated while get_image() is in action, but this
+        # is a pretty minimal issue and not worth adding locking around.
+
+        self.frame_no = frame_no
         if not self.image_received.is_set():
             self.image_received.set()
-            self.frame_no = frame_no
             self.image_ready_callback()

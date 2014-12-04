@@ -94,7 +94,7 @@ class Autofocus:
         # ideal case: would use camera internal triggering, and use exposure events
         # to read off the z-position at each acquisition start. But we don't have
         # that as of Dec 2014, so we fake it with software triggers.
-        self._camera.start_image_sequence_acquisition(steps, trigger_mode='Software', pixel_readout_rate='280 MHz')
+        self._camera.start_image_sequence_acquisition(frame_count=None, trigger_mode='Software', pixel_readout_rate='280 MHz')
         # move the stage to the start position BEFORE we slow down the speed
         self._stage.set_z(start)
         self._stage.wait() # no op if in sync mode, necessary in async mode

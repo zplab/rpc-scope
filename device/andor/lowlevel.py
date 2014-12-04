@@ -168,12 +168,3 @@ def initialize(desired_camera):
     _init_util_lib('libatutility.so')
     _init_camera(desired_camera)
 
-uint8_p = ctypes.POINTER(ctypes.c_uint8)
-def queue_buffer(buf):
-    """Convenience function for queuing a buffer produced by make_buffer()"""
-    QueueBuffer(buf, len(buf))
-
-def make_buffer():
-    """Create an memory buffer correctly sized to contain a current image frame."""
-    return (ctypes.c_uint8 * GetInt('ImageSizeBytes'))()
-
