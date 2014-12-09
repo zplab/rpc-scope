@@ -22,7 +22,7 @@
 #
 # Authors: Zach Pincus, Erik Hvatum
 
-from misc import image_fft
+from wautofocuser import wautofocuser
 import numpy
 import time
 from ..util import transfer_ism_buffer
@@ -35,11 +35,10 @@ def brenner(array, z):
 _high_pass_filter = None
 def high_pass_brenner(array, z):
     global _high_pass_filter
-    if _high_pass_filter is None or _high_pass_filter.shape != array.shape:
-        _high_pass_filter = image_fft.highpass_butterworth_nd(1/5, array.shape, 1, 2)
-        _high_pass_filter[0,0] = 0
-    hp_filtered = image_fft.filter_nd(array, _high_pass_filter).real
-    return brenner(hp_filtered, z)
+    if _high_pass_filter is None or array.shape != (_high_pass_filter.h, _high_pass_filter.w):
+        _high_pass_filter = wautofocuser.Highpass(10, array.shape[0], array.shape[1])
+    filtered_array = _high_pass_filter(array)
+    return brenner(filtered_array, z)
 
 METRICS = {'brenner': brenner,
            'high pass + brenner' : high_pass_brenner}
