@@ -81,6 +81,9 @@ def _setup_util_functions():
     {}
 """
 
+# Re-add the following (uncommented) line to the util_protos section if/when Andor gets around to implementing AT_ConvertBufferUsingMetaData on Linux:
+#int [_at_errcheck] AT_ConvertBufferUsingMetaData(AT_U8* inputBuffer, AT_U8* outputBuffer, AT_64 imagesizebytes, const AT_WC* outputPixelEncoding);
+
 core_protos = '''
 int [_at_errcheck] AT_InitialiseLibrary();
 int [_at_errcheck] AT_FinaliseLibrary();
@@ -119,9 +122,8 @@ int [_at_errcheck] AT_Flush(AT_H Hndl);'''.strip().split('\n')
 
 util_protos = '''
 int [_at_errcheck] AT_ConvertBuffer(AT_U8* inputBuffer, AT_U8* outputBuffer, AT_64 width, AT_64 height, AT_64 stride, const AT_WC* inputPixelEncoding, const AT_WC* outputPixelEncoding);
-int [_at_errcheck] AT_ConvertBufferUsingMetaData(AT_U8* inputBuffer, AT_U8* outputBuffer, AT_64 imagesizebytes, const AT_WC* outputPixelEncoding);
 int [_at_errcheck] AT_InitialiseUtilityLibrary();
-int [_at_errcheck] AT_FinaliseUtilityLibrary()
+int [_at_errcheck] AT_FinaliseUtilityLibrary();
 '''.strip().split('\n')
 
 additional_defs = {
