@@ -541,15 +541,16 @@ UINT8_P = ctypes.POINTER(ctypes.c_uint8)
 class BufferFactory:
     def __init__(self, namebase, frame_count=1, cycle=False):
         width, height, stride = map(lowlevel.GetInt, ('AOIWidth', 'AOIHeight', 'AOIStride'))
-        input_encoding = Lowlevel.GetEnumStringByIndex(lowlevel.GetEnumIndex('PixelEncoding'))
+        self.buffer_shape = (width, height)
+        input_encoding = lowlevel.GetEnumStringByIndex('PixelEncoding', lowlevel.GetEnumIndex('PixelEncoding'))
         self.convert_buffer_args = (width, height, stride, input_encoding, 'Mono16')
         image_buffer_ctype = ctypes.c_uint8 * lowlevel.GetInt('ImageSizeBytes')
         self.queued_buffers = collections.deque()
         if cycle:
-            buffers = itertools.cycle([image_buffer_ctype() for i in range(frame_count)])
+            self.buffers = itertools.cycle([image_buffer_ctype() for i in range(frame_count)])
         else:
             self.buffers = self._new_buffer_iter(image_buffer_ctype, frame_count)
-        if frame_count == 1:
+        if frame_count == 1 and not cycle:
             self.names = iter([namebase])
         else:
             self.names = self._name_iter(namebase)
@@ -568,18 +569,18 @@ class BufferFactory:
             yield namebase + str(i)
             i += 1
 
-    def queue_buffer():
+    def queue_buffer(self):
         buf = next(self.buffers)
         lowlevel.QueueBuffer(buf, len(buf))
         self.queued_buffers.append(buf)
 
-    def queue_if_needed():
+    def queue_if_needed(self):
         if not self.queued_buffers:
             self.queue_buffer()
 
-    def convert_buffer():
+    def convert_buffer(self):
         name = next(self.names)
-        output_array = transfer_ism_buffer.server_create_array(name, shape=(width, height),
+        output_array = transfer_ism_buffer.server_create_array(name, shape=self.buffer_shape,
             dtype=numpy.uint16, order='Fortran')
         lowlevel.ConvertBuffer(self.queued_buffers.popleft(), output_array.ctypes.data_as(UINT8_P),
             *self.convert_buffer_args)

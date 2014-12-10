@@ -36,8 +36,8 @@ _high_pass_filter = None
 def high_pass_brenner(array, z):
     global _high_pass_filter
     if _high_pass_filter is None or array.shape != (_high_pass_filter.h, _high_pass_filter.w):
-        _high_pass_filter = wautofocuser.Highpass(10, array.shape[0], array.shape[1])
-    filtered_array = _high_pass_filter(array)
+        _high_pass_filter = wautofocuser.Highpass(20, array.shape[0], array.shape[1])
+    filtered_array = _high_pass_filter(array.astype(numpy.float32) / 65535)
     return brenner(filtered_array, z)
 
 METRICS = {'brenner': brenner,
@@ -71,7 +71,7 @@ class Autofocus:
                     self._stage.set_z(z_positions[next_step])
                 name = self._camera.next_image(read_timeout_ms=exp_time+1000)
                 array = transfer_ism_buffer._release_array(name)
-                focus_metrics.append(metric(array, z_positions[next_step-1]))
+                focus_metrics.append(float(metric(array, z_positions[next_step-1])))
             self._camera.end_image_sequence_acquisition()
             focus_order = numpy.argsort(focus_metrics)
             best_z = z_positions[focus_order[-1]]
