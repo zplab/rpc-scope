@@ -35,7 +35,7 @@ def brenner(array, z):
 _high_pass_filter = None
 def high_pass_brenner(array, z):
     global _high_pass_filter
-    if _high_pass_filter is None or array.shape != (_high_pass_filter.h, _high_pass_filter.w):
+    if _high_pass_filter is None or array.shape != (_high_pass_filter.w, _high_pass_filter.h):
         _high_pass_filter = wautofocuser.Highpass(20, array.shape[0], array.shape[1])
     filtered_array = _high_pass_filter(array.astype(numpy.float32) / 65535)
     return brenner(filtered_array, z)
@@ -79,13 +79,13 @@ class Autofocus:
             self._stage.wait()
             return best_z, list(zip(z_positions, focus_metrics))
 
-    def autofocus_continuous_move(self, start, end, speed, metric='brenner', fps_max=None):
+    def autofocus_continuous_move(self, start, end, speed, metric='brenner', fps_max=None, ims=None):
         """Move the stage from 'start' to 'end' at a constant speed, taking images
         for autofocus constantly. If fps_max is None, take images as fast as
         possible; otherwise take images as governed by fps_max. Apply the autofocus
         metric to each image and move to the best-focused position."""
         metric = METRICS[metric]
-        exp_time_sec = self._camera.get_exposure_time() * 1000
+        exp_time_sec = self._camera.get_exposure_time() / 1000
         if fps_max is None:
             sleep_time = exp_time_sec
         else:
@@ -109,14 +109,21 @@ class Autofocus:
         self._stage.wait() # make sure all events are cleared out
         focus_metrics = []
         for z in z_positions:
+            print('getting image')
+            t0 = time.time()
             name = self._camera.next_image(read_timeout_ms=1000)
+            print('got image {}'.format(time.time() - t0))
             array = transfer_ism_buffer._release_array(name)
+            if ims is not None:
+                ims.append(array)
+            t1 = time.time()
             focus_metrics.append(metric(array, z))
+            print('got metric {}'.format(time.time() - t1))
         # now that we've retrieved all the images, end the acquisition
         self._camera.end_image_sequence_acquisition()
         focus_order = numpy.argsort(focus_metrics)
-        best_z = z_positions(focus_order[-1])
+        best_z = z_positions[focus_order[-1]]
         self._stage.set_z(best_z) # go to focal plane with highest score
         self._stage.wait() # no op if in sync mode, necessary in async mode
-        return best_z, zip(z_positions, focus_metrics)
+        return best_z, list(zip(z_positions, focus_metrics))
 

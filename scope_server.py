@@ -57,6 +57,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description="Run the microscope server")
     parser.add_argument("--public", action='store_true', help="Allow network connections to the server [default: allow only local connections]")
+    #TODO: add verbose option
     args = parser.parse_args()
     if args.public:
         config.Server.HOST = config.Server.PUBLICHOST
