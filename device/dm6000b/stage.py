@@ -46,8 +46,9 @@ class Stage(stand.DM6000Device):
         self._x_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_X, async=False).response) / 1000
         self._y_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_Y, async=False).response) / 1000
         self._z_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_Z, async=False).response) / 1000
-        self._z_speed_min = int(self.send_message(GET_MIN_SPEED_Z, async=False).response) * self._z_mm_per_count
-        self._z_speed_max = int(self.send_message(GET_MAX_SPEED_Z, async=False).response) * self._z_mm_per_count
+        self._z_speed_mm_per_second_per_unit = 0.1430278
+        self._z_speed_min = int(self.send_message(GET_MIN_SPEED_Z, async=False).response) * self._z_mm_per_count * self._z_speed_mm_per_second_per_unit
+        self._z_speed_max = int(self.send_message(GET_MAX_SPEED_Z, async=False).response) * self._z_mm_per_count * self._z_speed_mm_per_second_per_unit
         x, y, z = self.get_position()
         self._update_property('x', x)
         self._update_property('y', y)
@@ -129,10 +130,10 @@ class Stage(stand.DM6000Device):
     def get_z_speed(self):
         """Get z-axis speed in mm/second"""
         counts = int(self.send_message(GET_SPEED_Z, async=False, intent="get z speed").response)
-        return counts * self._z_mm_per_count
+        return counts * self._z_mm_per_count * self._z_speed_mm_per_second_per_unit
 
     def set_z_speed(self, speed):
         """Get z-axis speed in mm/second"""
         assert self._z_speed_min <= speed <= self._z_speed_max
-        counts = int(round(speed / self._z_mm_per_count))
+        counts = int(round(speed / self._z_mm_per_count / self._z_speed_mm_per_second_per_unit))
         self.send_message(SET_SPEED_Z, counts, intent="set z speed")

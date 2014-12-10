@@ -75,9 +75,9 @@ class AsyncDevice:
         for response in self._pending_responses:
             # if any response is not ready, we know we're still pending
             if not response.ready.is_set():
-                return False
+                return True
         # all responses must be ready if we get to this point...
-        return True
+        return False
 
     def set_async(self, async):
         """If in async mode, send_message() returns None immediately; otherwise
