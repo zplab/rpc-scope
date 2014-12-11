@@ -22,17 +22,26 @@
 #
 # Authors: Erik Hvatum <ice.rikh@gmail.com>
 
-from .device_widget import DeviceWidget
-from PyQt5 import Qt
+import os
+from pathlib import Path
+from PyQt5 import Qt, uic
 
-class SpectraX_Widget(DeviceWidget):
-    class ColorControlSet:
-        def __init__(self, toggle, slider, spin_box, set_enabled, set_power):
-            self.toggle = toggle
-            self.slider = slider
-            self.spin_box = spin_box
-            self.set_enabled = set_enabled
-            self.set_power = set_power
+class DeviceWidget(Qt.QWidget):
+    def __init__(self, scope, scope_properties, device_path, py_ui_fpath, parent):
+        super().__init__(parent)
+        self.scope = scope
+        self.scope_properties = scope_properties
 
-    def __init__(self, scope, scope_properties, device_path='il.spectra_x', parent=None):
-        super().__init__(scope, scope_properties, device_path, __file__, parent)
+        if py_ui_fpath is not None:
+            ui_sfpath = str(py_ui_fpath)
+            ui_fpath = Path(py_ui_fpath)
+            if ui_sfpath.endswith('.py'):
+                # Child class is being lazy and gave us its __file__ variable rather than its .ui filename/path
+                ui_fpath = ui_fpath.parent / (ui_fpath.parts[-1][:-3] + '.ui')
+                ui_sfpath = str(ui_fpath)
+            # Note that uic.loadUiType(..) returns a tuple containing two class types (the form class and the Qt base
+            # class).  The line below instantiates the form class.  It is assumed that the .ui file resides in the same
+            # directory as this .py file.
+            print(ui_sfpath)
+            self.ui = uic.loadUiType(ui_sfpath)[0]()
+            self.ui.setupUi(self)
