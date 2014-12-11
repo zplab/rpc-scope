@@ -26,7 +26,7 @@
 # predetermined or run-time determined sets of valid values.
 
 class ReadonlySetProperty:
-    '''Base class for any enumerated device property that is limited to a set of known values
+    """Base class for any enumerated device property that is limited to a set of known values
     typically retrieved from and passed to the hardware as is.
 
     A hypothetical example of such a property: a mirror in a beam path has a filter magazine
@@ -34,20 +34,20 @@ class ReadonlySetProperty:
     serial interface protocol permitting reading of the names of the filters in the magazine,
     deployment of a filter identified by name, and retrieval of the name of the currently
     deployed filter. The same strings by which the user identifies filters are recognized
-    by the mirror controller hardware itself.'''
+    by the mirror controller hardware itself."""
 
     def __init__(self):
         self._valid_set = self._get_valid_set()
 
     def get_recognized_values(self):
-        '''The list of recognized values that may be assumed by .value, and in the case
+        """The list of recognized values that may be assumed by .value, and in the case
         of a read/write attribute, assigned to .value. Assigning anything not appearing
         in this list to a writeable attribute's .value causes a ValueError exception to
-        be raised.'''
+        be raised."""
         return self._valid_set
 
     def get_value(self):
-        '''The current value.'''
+        """The current value."""
         return self._read()
 
     def _get_valid_set(self):
@@ -72,7 +72,7 @@ class SetProperty(ReadonlySetProperty):
 
 
 class ReadonlyDictProperty:
-    '''Base class for any enumerated device property that is limited to a set of non-user-
+    """Base class for any enumerated device property that is limited to a set of non-user-
     friendly values identified to the user by more meaningful names.
 
     A hypothetical example of such a property: a mirror in a beam path has a filter magazine
@@ -82,18 +82,18 @@ class ReadonlyDictProperty:
     request command to identify the filter that should be deployed and is contained in the
     reply to a currently deployed filter query. The strings by which the user identifies
     filters are translated to/from integer values recognized by the mirror controller
-    hardware.'''
+    hardware."""
 
     def __init__(self):
         self._hw_to_usr = self._get_hw_to_usr()
         self._usr_to_hw = {usr : hw for hw, usr in self._hw_to_usr.items()}
 
     def get_recognized_values(self):
-        '''The list of recognized values for this property.'''
-        return self._usr_to_hw.keys()
+        """The list of recognized values for this property."""
+        return list(self._usr_to_hw.keys())
 
     def get_value(self):
-        '''The current value.'''
+        """The current value."""
         return self._hw_to_usr[self._read()]
 
     def _get_hw_to_usr(self):

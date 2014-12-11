@@ -51,7 +51,7 @@ class ReadOnly_AT_Enum(enumerated_properties.ReadonlyDictProperty):
 
 class AT_Enum(ReadOnly_AT_Enum, enumerated_properties.DictProperty):
     def get_values_validity(self):
-        """Dict mapping value strings to True/False demending whether that value
+        """Dict mapping value strings to True/False depending on whether that value
         may be assigned without raising a NOTIMPLEMENTED AndorError, given the
         camera model and its current state."""
         return {feature: lowlevel.IsEnumIndexAvailable(self._feature, idx) for idx, feature in self._hw_to_usr.items()}

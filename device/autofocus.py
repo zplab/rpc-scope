@@ -115,7 +115,7 @@ class Autofocus:
         # move the stage to the start position BEFORE we slow down the speed
         self._stage.set_z(start)
         self._stage.wait() # no op if in sync mode, necessary in async mode
-        evaluator = ImageEvaluator(metric, ims, max_workers)
+        evaluator = ImageEvaluator(self._camera, metric, ims, max_workers)
         with self._stage._pushed_state(async=True, z_speed=speed):
             self._stage.wait()
             self._stage.set_z(end)
@@ -134,8 +134,9 @@ class Autofocus:
         self._stage.wait() # no op if in sync mode, necessary in async mode
         return best_z, list(zip(z_values, focus_metrics))
 
-def ImageEvaluator(Threading.thread):
-    def __init__(self, metric, ims, max_workers=1):
+class ImageEvaluator(threading.Thread):
+    def __init__(self, camera, metric, ims, max_workers=1):
+        self.camera = camera
         self.metric = metric
         self.ims = ims
         self.z_queue = queue.Queue()
@@ -148,7 +149,7 @@ def ImageEvaluator(Threading.thread):
 
     def timer(self, array, z):
         t = time.time()
-        value = metric(array, z)
+        value = float(self.metric(array, z))
         print('got metric {}'.format(time.time() - t))
         return value
 
@@ -169,10 +170,10 @@ def ImageEvaluator(Threading.thread):
             self.z_values.append(z_value)
             print('getting image')
             t = time.time()
-            name = self._camera.next_image(read_timeout_ms=1000)
+            name = self.camera.next_image(read_timeout_ms=1000)
             array = transfer_ism_buffer._release_array(name)
             if self.ims is not None:
                 self.ims.append(array)
             print('got image {}'.format(time.time() - t))
-            self.focus_futures.append(self.executor.submit(self.timer, (array, z)))
+            self.focus_futures.append(self.executor.submit(self.timer, array, z_value))
             self.z_queue.task_done()
