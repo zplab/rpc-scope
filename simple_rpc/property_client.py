@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-# Authors: Zach Pincus
+# Authors: Zach Pincus, Erik Hvatum <ice.rikh@gmail.com>
 
 import collections
 import threading
@@ -71,6 +71,25 @@ class PropertyClient(threading.Thread):
         """
         self.callbacks[property_name].append((callback, valueonly))
 
+    def unsubscribe(self, property_name, callback, valueonly=False):
+        """Unregister an exactly matching, previously registered callback.  If
+        the same callback function is registered multiple times with identical
+        property_name and valueonly parameters, only one registration is removed."""
+        if property_name is None:
+            raise ValueError('property_name parameter must not be None.')
+        try:
+            cbs = self.callbacks[property_name]
+        except KeyError:
+            raise KeyError('No subscription found for property name "{}".'.format(property_name))
+        try:
+            cb_idx = cbs.index((callback, valueonly))
+        except ValueError:
+            raise KeyError('At least one subscription was found for property name "{}", but none '.format(property_name) + \
+                           'have the specified callback and valueonly parameters.')
+        del cbs[cb_idx]
+        if not cbs:
+            del self.callbacks[property_name]
+
     def subscribe_prefix(self, property_prefix, callback):
         """Register a callback to be called any time a named property which is
         prefixed by the property_prefix parameter is updated. The callback is
@@ -86,6 +105,24 @@ class PropertyClient(threading.Thread):
             self.prefix_callbacks[property_prefix] = []
         self.prefix_callbacks[property_prefix].append((callback, False))
 
+    def unsubscribe_prefix(self, property_prefix, callback):
+        """Unregister an exactly matching, previously registered callback.  If
+        the same callback function is registered multiple times with identical
+        property_prefix parameters, only one registration is removed."""
+        if property_prefix is None:
+            raise ValueError('property_prefix parameter must not be None.')
+        try:
+            cbs = self.prefix_callbacks[property_prefix]
+        except KeyError:
+            raise KeyError('No subscription found for property prefix "{}".'.format(property_prefix))
+        try:
+            cb_idx = cbs.index((callback, False))
+        except ValueError:
+            raise KeyError('At least one subscription was found for property prefix "{}", but none '.format(property_prefix) + \
+                           'has the specified callback.')
+        del cbs[cb_idx]
+        if not cbs:
+            del self.prefix_callbacks[property_prefix]
 
     def _receive_update(self):
         """Receive an update from the server"""
@@ -109,10 +146,20 @@ class ZMQClient(PropertyClient):
         super().subscribe(property_name, callback, valueonly)
     subscribe.__doc__ = PropertyClient.subscribe.__doc__
 
+    def unsubscribe(self, property_name, callback, valueonly=True):
+        super().unsubscribe(property_name, callback, valueonly)
+        self.socket.setsockopt_string(zmq.UNSUBSCRIBE, property_name)
+    unsubscribe.__doc__ = PropertyClient.unsubscribe.__doc__
+
     def subscribe_prefix(self, property_prefix, callback):
         self.socket.setsockopt_string(zmq.SUBSCRIBE, property_prefix)
         super().subscribe_prefix(property_prefix, callback)
     subscribe_prefix.__doc__ = PropertyClient.subscribe_prefix.__doc__
+
+    def unsubscribe_prefix(self, property_prefix, callback):
+        super().unsubscribe_prefix(property_prefix, callback)
+        self.socket.setsockopt_string(zmq.UNSUBSCRIBE, property_prefix)
+    unsubscribe_prefix.__doc__ = PropertyClient.unsubscribe_prefix.__doc__
 
     def _receive_update(self):
         property_name = self.socket.recv_string()
