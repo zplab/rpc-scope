@@ -80,6 +80,7 @@ class SpectraX_Widget(DeviceWidget):
             self.scope.rebroadcast_properties()
 
     def property_change_slot(self, prop_path, prop_value, is_prop_update=True):
+        print('property_change_slot', prop_path, prop_value, is_prop_update)
         if prop_path not in self.subscribed_prop_paths:
             raise RuntimeError('Called for property "{}", which is not associated one of those of this device (all of which begin with "{}.").'.format(name, self.device_path))
         prop_path_parts = prop_path.split('.')
