@@ -41,7 +41,7 @@ _high_pass_filter = None
 def high_pass_brenner(array, z):
     global _high_pass_filter
     if _high_pass_filter is None or array.shape != (_high_pass_filter.w, _high_pass_filter.h):
-        _high_pass_filter = wautofocuser.Highpass(40, array.shape[0], array.shape[1])
+        _high_pass_filter = wautofocuser.Highpass(10, array.shape[0], array.shape[1])
     filtered_array = _high_pass_filter(array.astype(numpy.float32) / 65535)
     return brenner(filtered_array, z)
 
