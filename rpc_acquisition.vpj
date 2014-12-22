@@ -101,6 +101,14 @@
 			<F N="device/spectra_x.py"/>
 			<F N="device/tl_lamp.py"/>
 		</Folder>
+		<Folder Name="gui">
+			<Folder Name="device_widget">
+				<F N="gui/device_widget/__init__.py"/>
+				<F N="gui/device_widget/device_widget.py"/>
+				<F N="gui/device_widget/spectra_x_widget.py"/>
+			</Folder>
+			<F N="gui/__init__.py"/>
+		</Folder>
 		<Folder Name="messaging">
 			<F N="messaging/__init__.py"/>
 			<F N="messaging/message_device.py"/>
