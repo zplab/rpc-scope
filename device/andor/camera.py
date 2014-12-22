@@ -184,12 +184,10 @@ class Camera(property_device.PropertyDevice):
         SetEnumIndex, and GetEnumStringByIndex) as an "enumerated" property."""
         if readonly:
             enum = ReadOnly_AT_Enum(at_feature)
-            values_getter = enum.get_recognized_values
         else:
             enum = AT_Enum(at_feature)
-            values_getter = enum.get_values_validity
+            setattr(self, 'get_'+py_name+'_values', enum.get_values_validity)
         setattr(self, 'get_'+py_name, enum.get_value)
-        setattr(self, 'get_'+py_name+'_values', values_getter)
         self._callback_properties[at_feature] = (enum.get_value, self._add_property(py_name, enum.get_value()))
 
         if not readonly:
