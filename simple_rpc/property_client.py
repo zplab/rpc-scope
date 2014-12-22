@@ -25,7 +25,6 @@
 import collections
 import threading
 import traceback
-import weakref
 import zmq
 from . import trie
 
@@ -53,13 +52,7 @@ class PropertyClient(threading.Thread):
             property_name, value = self._receive_update()
             self.properties[property_name] = value
             for callbacks in [self.callbacks[property_name]] + list(self.prefix_callbacks.values(property_name)):
-                unsubs = []
-                for callback, valueonly, by_prefix, property_string in callbacks:
-                    if issubclass(type(callback), weakref.WeakMethod):
-                        if callback() is None:
-                            unsubs.append((callback, valueonly, by_prefix, property_string))
-                            continue
-                        callback = callback()
+                for callback, valueonly in callbacks:
                     try:
                         if valueonly:
                             callback(value)
@@ -68,11 +61,6 @@ class PropertyClient(threading.Thread):
                     except Exception as e:
                         print('Caught exception in PropertyClient callback:')
                         traceback.print_exception(type(e), e, e.__traceback__)
-                for callback, valueonly, by_prefix, property_string in unsubs:
-                    if by_prefix:
-                        self.unsubscribe_prefix(property_string, callback)
-                    else:
-                        self.unsubscribe(property_string, callback, valueonly)
 
     def subscribe(self, property_name, callback, valueonly=False):
         """Register a callback to be called any time the named property is updated.
@@ -81,12 +69,13 @@ class PropertyClient(threading.Thread):
 
         Multiple callbacks can be registered for a single property_name.
         """
-        self.callbacks[property_name].append((callback, valueonly, False, property_name))
+        self.callbacks[property_name].append((callback, valueonly))
 
     def unsubscribe(self, property_name, callback, valueonly=False):
         """Unregister an exactly matching, previously registered callback.  If
         the same callback function is registered multiple times with identical
         property_name and valueonly parameters, only one registration is removed."""
+        print('UNSUB {}'.format(property_name))
         if property_name is None:
             raise ValueError('property_name parameter must not be None.')
         try:
@@ -94,7 +83,7 @@ class PropertyClient(threading.Thread):
         except KeyError:
             raise KeyError('No subscription found for property name "{}".'.format(property_name))
         try:
-            cb_idx = cbs.index((callback, valueonly, False, property_name))
+            cb_idx = cbs.index((callback, valueonly))
         except ValueError:
             raise KeyError('At least one subscription was found for property name "{}", but none '.format(property_name) + \
                            'have the specified callback and valueonly parameters.')
@@ -115,12 +104,13 @@ class PropertyClient(threading.Thread):
         """
         if property_prefix not in self.prefix_callbacks:
             self.prefix_callbacks[property_prefix] = []
-        self.prefix_callbacks[property_prefix].append((callback, False, True, property_prefix))
+        self.prefix_callbacks[property_prefix].append((callback, False))
 
     def unsubscribe_prefix(self, property_prefix, callback):
         """Unregister an exactly matching, previously registered callback.  If
         the same callback function is registered multiple times with identical
         property_prefix parameters, only one registration is removed."""
+        print('UNSUB PREFIX {}'.format(property_prefix))
         if property_prefix is None:
             raise ValueError('property_prefix parameter must not be None.')
         try:
@@ -128,7 +118,7 @@ class PropertyClient(threading.Thread):
         except KeyError:
             raise KeyError('No subscription found for property prefix "{}".'.format(property_prefix))
         try:
-            cb_idx = cbs.index((callback, False, True, property_prefix))
+            cb_idx = cbs.index((callback, False))
         except ValueError:
             raise KeyError('At least one subscription was found for property prefix "{}", but none '.format(property_prefix) + \
                            'has the specified callback.')

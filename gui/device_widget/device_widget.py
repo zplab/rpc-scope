@@ -37,6 +37,7 @@ class DeviceWidget(Qt.QWidget):
 
     def __init__(self, scope, scope_properties, device_path, py_ui_fpath, parent):
         super().__init__(parent)
+        self.setAttribute(Qt.Qt.WA_DeleteOnClose, True)
         self.scope = scope
         self.scope_properties = scope_properties
         self.device_path = device_path
@@ -63,13 +64,14 @@ class DeviceWidget(Qt.QWidget):
             self.ui = uic.loadUiType(ui_sfpath)[0]()
             self.ui.setupUi(self)
 
-    def __del__(self):
+    def closeEvent(self, event):
         for prop_path in self.subscribed_prop_paths:
-            self.scope_properties.unsubscribe(prop_path, self.property_client_property_change_callback)
+            self.scope_properties.unsubscribe(prop_path, self.property_client_property_change_callback, False)
+        event.accept()
 
     def subscribe(self, *prop_path_parts):
         prop_path = '.'.join((self.device_path,) + prop_path_parts)
-        self.scope_properties.subscribe(prop_path, self.property_client_property_change_callback)
+        self.scope_properties.subscribe(prop_path, self.property_client_property_change_callback, False)
         self.subscribed_prop_paths.add(prop_path)
 
     def property_client_property_change_callback(self, prop_path, prop_value):
