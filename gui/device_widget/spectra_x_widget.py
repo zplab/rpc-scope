@@ -88,7 +88,7 @@ class SpectraX_Widget(DeviceWidget):
                 raise RuntimeError('Called for property "{}", which is not associated one of those of this device (all of which begin with "{}.").'.format(name, self.device_path))
             prop_path_parts = prop_path.split('.')
             if prop_path_parts[-1] == 'temperature':
-                self.temperature_label.setText('Temperature: {}ºC'.format(prop_value))
+                self.temperature_label.setText('Temperature: {}°C'.format(prop_value))
             else:
                 ccs = self.color_control_sets[prop_path_parts[-2]]
                 if prop_path_parts[-1] == 'enabled':
