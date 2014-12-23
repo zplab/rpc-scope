@@ -333,6 +333,11 @@ class Camera(property_device.PropertyDevice):
                 # ... and clear recent FPS data
                 self._live_reader.latest_intervals.clear()
 
+    def get_exposure_time_range(self):
+        """Return current exposure time minimum and maximum values in ms"""
+        return (1000 * lowlevel.GetFloatMin('ExposureTime'),
+                1000 * lowlevel.GetFloatMax('ExposureTime'))
+
     def get_aoi(self):
         """Convenience wrapper around the aoi_left, aoi_top, aoi_width, aoi_height
         properties. When setting this property, None elements and omitted entries
