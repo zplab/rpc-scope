@@ -97,6 +97,7 @@ class SpectraX_Widget(DeviceWidget):
                         else:
                             if ccs.enabled != prop_value:
                                 ccs.set_enable(prop_value)
+                                ccs.enabled = prop_value
                     elif prop_path_parts[-1] == 'intensity':
                         if ccs.slider.value() != prop_value:
                             ccs.slider.setValue(prop_value)
