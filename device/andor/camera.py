@@ -237,7 +237,7 @@ class Camera(property_device.PropertyDevice):
                 return (min_, max_)
             setattr(self, 'get_'+py_name+'_range', range_getter)
             if not readonly:
-                ren = (py_name+'_range_extrema').upper()
+                ren = py_name.upper()+'_RANGE_EXTREMA'
                 try:
                     re_ = getattr(config.Camera, ren)
                 except AttributeError:

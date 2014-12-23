@@ -38,7 +38,7 @@ class AndorCameraWidget(DeviceWidget):
 
     class ROStringPropertyWidgetSet(PropertyWidgetSet):
         # Note that all AT_String properties are currently read-only
-        def __init__(self, andor_camera_widget, layout, row, prop_name):
+        def __init__(self, andor_camera_widget, layout, row, prop_name, _):
             super().__init__(andor_camera_widget, layout, row, prop_name)
             self.value_label = Qt.QLabel()
             layout.addWidget(self.value_label, row, 1)
@@ -47,21 +47,46 @@ class AndorCameraWidget(DeviceWidget):
             self.value_label.setText(prop_value)
             self.value = prop_value
 
+    class IntPropertyWidgetSet(PropertyWidgetSet):
+        def __init__(self, andor_camera_widget, layout, row, prop_name, prop_extrema):
+            super().__init__(andor_camera_widget, layout, row, prop_name)
+            self.is_ro = prop_extrema is None
+            if self.is_ro:
+                self.value_label = Qt.QLabel()
+                layout.addWidget(self.value_label, row, 1)
+            else:
+                self.value_spin_box = Qt.QSpinBox()
+                self.value_spin_box.setRange(prop_extrema[0], prop_extrema[1])
+                layout.addWidget(self.value_spin_box, row, 1)
+
+        def update(self, prop_value, is_prop_update):
+            if self.is_ro:
+                self.value_label.setText(str(prop_value))
+            else:
+                self.value_spin_box.setValue(prop_value)
+
     def __init__(self, scope, scope_properties, device_path='scope.camera', parent=None, rebroadcast_on_init=True):
         super().__init__(scope, scope_properties, device_path, None, parent)
         self.setWindowTitle('Andor Camera ({})'.format(self.device.model_name))
         layout = Qt.QGridLayout()
         self.setLayout(layout)
         row = 0
-        property_widget_set_types = {'String' : self.ROStringPropertyWidgetSet}
+        property_widget_set_types = {'String' : self.ROStringPropertyWidgetSet,
+                                     'Int' : self.IntPropertyWidgetSet}
         self.property_widget_sets = {}
-        for prop_name, prop_type in sorted(self.device.property_types.items()):
+        for prop_name, prop_stuff in sorted(self.device.property_types_and_extrema.items()):
+            if type(prop_stuff) is str:
+                prop_type = prop_stuff
+                prop_extrema = None
+            else:
+                prop_type = prop_stuff[0]
+                prop_extrema = prop_stuff[1]
             try:
                 pwst = property_widget_set_types[prop_type]
             except KeyError:
                 continue
             self.subscribe(prop_name)
-            self.property_widget_sets[prop_name] = pwst(self, layout, row, prop_name)
+            self.property_widget_sets[prop_name] = pwst(self, layout, row, prop_name, prop_extrema)
             row += 1
         self._ChangeSignalFromPropertyClient.connect(self.property_change_slot, Qt.Qt.QueuedConnection)
         if rebroadcast_on_init:
