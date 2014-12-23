@@ -38,6 +38,7 @@ class DeviceWidget(Qt.QWidget):
     def __init__(self, scope, scope_properties, device_path, py_ui_fpath, parent):
         super().__init__(parent)
         self.setAttribute(Qt.Qt.WA_DeleteOnClose, True)
+        self.updating_gui = False
         self.scope = scope
         self.scope_properties = scope_properties
         self.device_path = device_path
@@ -81,3 +82,8 @@ class DeviceWidget(Qt.QWidget):
     def property_change_slot(self, prop_path, prop_value, is_prop_update=True):
         # Runs in GUI thread
         raise NotImplementedError('pure virtual method called')
+
+    def property_change_slot_verify_subscribed(self, prop_path):
+        if prop_path not in self.subscribed_prop_paths:
+            raise RuntimeError('Received GUI update or property change notification for property "{}".  '.format(prop_path) + \
+                               'However, we should not be subscribed to change notifications for this property.')

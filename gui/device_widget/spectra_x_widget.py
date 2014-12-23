@@ -37,9 +37,7 @@ class SpectraX_Widget(DeviceWidget):
             self.enabled = None
             self.intensity = None
 
-    def __init__(self, scope, scope_properties, device_path='scope.il.spectra_x', parent=None, rebroadcast_on_init=True, foo='bar'):
-        self.foo = foo
-        self.updating_gui = False
+    def __init__(self, scope, scope_properties, device_path='scope.il.spectra_x', parent=None, rebroadcast_on_init=True):
         super().__init__(scope, scope_properties, device_path, None, parent)
         self.setWindowTitle('Spectra X')
         lamps = sorted(((k, v[0]) for k, v in scope.il.spectra_x.lamp_specs.items()), key=lambda kv:kv[1], reverse=True)
@@ -82,35 +80,36 @@ class SpectraX_Widget(DeviceWidget):
             self.scope.rebroadcast_properties()
 
     def property_change_slot(self, prop_path, prop_value, is_prop_update=True):
+        self.property_change_slot_verify_subscribed(prop_path)
         if not self.updating_gui: # Avoid recursive valueChanged calls and looping changes caused by running ahead of property change notifications
-            self.updating_gui = True
-            if prop_path not in self.subscribed_prop_paths:
-                raise RuntimeError('Called for property "{}", which is not associated one of those of this device (all of which begin with "{}.").'.format(name, self.device_path))
-            prop_path_parts = prop_path.split('.')
-            if prop_path_parts[-1] == 'temperature':
-                self.temperature_label.setText('Temperature: {}°C'.format(prop_value))
-            else:
-                ccs = self.color_control_sets[prop_path_parts[-2]]
-                if prop_path_parts[-1] == 'enabled':
-                    if ccs.toggle.isChecked() != prop_value:
-                        ccs.toggle.setChecked(prop_value)
-                    if is_prop_update:
-                        ccs.enabled = prop_value
-                    else:
-                        if ccs.enabled != prop_value:
-                            ccs.set_enable(prop_value)
-                elif prop_path_parts[-1] == 'intensity':
-                    if ccs.slider.value() != prop_value:
-                        ccs.slider.setValue(prop_value)
-                    if ccs.spin_box.value() != prop_value:
-                        ccs.spin_box.setValue(prop_value)
-                    if is_prop_update:
-                        ccs.intensity = prop_value
-                    else:
-                        if ccs.intensity != prop_value:
-                            ccs.set_intensity(prop_value)
+            try:
+                self.updating_gui = True
+                prop_path_parts = prop_path.split('.')
+                if prop_path_parts[-1] == 'temperature':
+                    self.temperature_label.setText('Temperature: {}°C'.format(prop_value))
+                else:
+                    ccs = self.color_control_sets[prop_path_parts[-2]]
+                    if prop_path_parts[-1] == 'enabled':
+                        if ccs.toggle.isChecked() != prop_value:
+                            ccs.toggle.setChecked(prop_value)
+                        if is_prop_update:
+                            ccs.enabled = prop_value
+                        else:
+                            if ccs.enabled != prop_value:
+                                ccs.set_enable(prop_value)
+                    elif prop_path_parts[-1] == 'intensity':
+                        if ccs.slider.value() != prop_value:
+                            ccs.slider.setValue(prop_value)
+                        if ccs.spin_box.value() != prop_value:
+                            ccs.spin_box.setValue(prop_value)
+                        if is_prop_update:
                             ccs.intensity = prop_value
-            self.updating_gui = False
+                        else:
+                            if ccs.intensity != prop_value:
+                                ccs.set_intensity(prop_value)
+                                ccs.intensity = prop_value
+            finally:
+                self.updating_gui = False
 
     def disable_all_slot(self):
         for color, ccs in self.color_control_sets.items():
