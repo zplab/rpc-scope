@@ -28,6 +28,47 @@ from ...simple_rpc.rpc_client import RPCError
 import weakref
 
 class AndorCameraWidget(DeviceWidget):
+    def __init__(self, scope, scope_properties, device_path='scope.camera', parent=None, rebroadcast_on_init=True):
+        super().__init__(scope, scope_properties, device_path, None, parent)
+        self.setWindowTitle('Andor Camera ({})'.format(self.device.model_name))
+        layout = Qt.QGridLayout()
+        self.setLayout(layout)
+        row = 0
+        property_widget_set_types = {'Bool' : self.BoolPropertyWidgetSet,
+                                     'String' : self.ROStringPropertyWidgetSet,
+                                     'Int' : self.IntPropertyWidgetSet,
+                                     'Float' : self.FloatPropertyWidgetSet}
+        self.property_widget_sets = {}
+        for prop_name, prop_stuff in sorted(self.device.property_types_and_extrema.items()):
+            if type(prop_stuff) is str:
+                prop_type = prop_stuff
+                prop_extrema = None
+            else:
+                prop_type = prop_stuff[0]
+                prop_extrema = prop_stuff[1]
+            try:
+                pwst = property_widget_set_types[prop_type]
+            except KeyError:
+                continue
+            self.subscribe(prop_name)
+            self.property_widget_sets[prop_name] = pwst(self, layout, row, prop_name, prop_extrema)
+            row += 1
+        self._ChangeSignalFromPropertyClient.connect(self.property_change_slot, Qt.Qt.QueuedConnection)
+        if rebroadcast_on_init:
+            self.scope.rebroadcast_properties()
+
+    def property_change_slot(self, prop_path, prop_value, is_prop_update=True):
+        self.property_change_slot_verify_subscribed(prop_path)
+        if not self.updating_gui: # Avoid recursive valueChanged calls and looping changes caused by running ahead of property change notifications
+            try:
+                self.updating_gui = True
+                prop_path_parts = prop_path.split('.')
+                self.property_widget_sets[prop_path_parts[-1]].update(prop_value, is_prop_update)
+            finally:
+                self.updating_gui = False
+
+    ### Helper classes ###
+
     class PropertyWidgetSet:
         def __init__(self, andor_camera_widget, layout, row, prop_name):
             self.prop_name = prop_name
@@ -40,6 +81,10 @@ class AndorCameraWidget(DeviceWidget):
 
         def update(self, prop_value, is_prop_update):
             raise NotImplementedError('pure virtual method called')
+
+    class BoolPropertyWidgetSet(PropertyWidgetSet):
+        def __init__(self, andor_camera_widget, layout, row, prop_name, _):
+            pass
 
     class ROStringPropertyWidgetSet(PropertyWidgetSet):
         # Note that all AT_String properties are currently read-only
@@ -186,41 +231,3 @@ class AndorCameraWidget(DeviceWidget):
                             else:
                                 s = 'Failed to set {} property.'.format(self.prop_name)
                             Qt.QMessageBox.warning(self.andor_camera_widget_weakref(), 'Range Error', s)
-
-    def __init__(self, scope, scope_properties, device_path='scope.camera', parent=None, rebroadcast_on_init=True):
-        super().__init__(scope, scope_properties, device_path, None, parent)
-        self.setWindowTitle('Andor Camera ({})'.format(self.device.model_name))
-        layout = Qt.QGridLayout()
-        self.setLayout(layout)
-        row = 0
-        property_widget_set_types = {'String' : self.ROStringPropertyWidgetSet,
-                                     'Int' : self.IntPropertyWidgetSet,
-                                     'Float' : self.FloatPropertyWidgetSet}
-        self.property_widget_sets = {}
-        for prop_name, prop_stuff in sorted(self.device.property_types_and_extrema.items()):
-            if type(prop_stuff) is str:
-                prop_type = prop_stuff
-                prop_extrema = None
-            else:
-                prop_type = prop_stuff[0]
-                prop_extrema = prop_stuff[1]
-            try:
-                pwst = property_widget_set_types[prop_type]
-            except KeyError:
-                continue
-            self.subscribe(prop_name)
-            self.property_widget_sets[prop_name] = pwst(self, layout, row, prop_name, prop_extrema)
-            row += 1
-        self._ChangeSignalFromPropertyClient.connect(self.property_change_slot, Qt.Qt.QueuedConnection)
-        if rebroadcast_on_init:
-            self.scope.rebroadcast_properties()
-
-    def property_change_slot(self, prop_path, prop_value, is_prop_update=True):
-        self.property_change_slot_verify_subscribed(prop_path)
-        if not self.updating_gui: # Avoid recursive valueChanged calls and looping changes caused by running ahead of property change notifications
-            try:
-                self.updating_gui = True
-                prop_path_parts = prop_path.split('.')
-                self.property_widget_sets[prop_path_parts[-1]].update(prop_value, is_prop_update)
-            finally:
-                self.updating_gui = False
