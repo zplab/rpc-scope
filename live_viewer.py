@@ -1,7 +1,12 @@
+import signal
 from PyQt5 import Qt
 
 from ris_widget import _ris_widget
 from . import scope_client
+
+def sigint_handler(*args):
+    """Handler for the SIGINT signal."""
+    Qt.QApplication.quit()
 
 def make_streamer(host=None, ris_widget=None):
     scope, scope_properties = scope_client.client_main(host)
@@ -15,7 +20,22 @@ def streamer_main(host=None):
     params = []
     app = Qt.QApplication(params)
     streamer = make_streamer(host)
-    app.exec_()
+
+    # install a custom signal handler so that when python receives control-c,
+    # QT quits
+    # TODO: bundle this up into some code in the gui module, so that other
+    # GUI widgets behave similarly
+    signal.signal(signal.SIGINT, sigint_handler)
+    # now arrange for the QT event loop to allow the python interpreter to
+    # run occasionally. Otherwise it never runs, and hence the signal handler
+    # would never get called.
+    timer = Qt.QTimer()
+    timer.start(100)
+    # add a no-op callback for timeout. What's important is that the interpreter
+    # runs, so it can see the signal and call the handler.
+    timer.timeout.connect(lambda: None)
+
+    app.exec()
 
 class RisWidgetStreamer(Qt.QObject):
     RW_LIVE_STREAM_BINDING_LIVE_UPDATE_EVENT = 1001
