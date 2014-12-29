@@ -105,16 +105,10 @@ class Camera(property_device.PropertyDevice):
         # where getter() is a function that retrieves the current value for that property, and
         # update(value) posts the new value to the property server.
         self._callback_properties = {}
-        # _property_types_and_extrema maps Python property names (underbar_separated) to
-        # (property_type, (min, max)) tuples for writeable Int and Float properties and just property_type
-        # for all others - information useful for programmatically constructing GUI widgets
-        # representing each property.  The actual minimum and maximum values accepted for a property
-        # may vary depending on camera state.  The min and max values included in the tuple represent
-        # the lowest and highest values accepted for any of the states, considering min and max
-        # separately.  That is, if the camera will accept [100,1000] in bar state and [95,110] in foo
-        # state for some writeable property, the range tuple for that property in _property_types_and_extrema
-        # is [95,1000].
-        self._property_types_and_extrema = {}
+        # _andor_property_types maps Python property names (underbar_separated) to Andor property
+        # types (Int, Bool, Float, or Enum) - information useful for programmatically constructing
+        # GUI widgets representing each property.
+        self._andor_property_types = {}
 
         lowlevel.initialize(config.Camera.MODEL) # safe to call this multiple times
         self._live_mode = False
@@ -199,7 +193,7 @@ class Camera(property_device.PropertyDevice):
             setattr(self, 'get_'+py_name+'_values', enum.get_values_validity)
         setattr(self, 'get_'+py_name, enum.get_value)
         self._callback_properties[at_feature] = (enum.get_value, self._add_property(py_name, enum.get_value()))
-        self._property_types_and_extrema[py_name] = 'Enum'
+        self._andor_property_types[py_name] = 'Enum'
 
         if not readonly:
             def setter(value):
@@ -221,7 +215,6 @@ class Camera(property_device.PropertyDevice):
             except lowlevel.AndorError:
                 return None
         setattr(self, 'get_'+py_name, getter)
-        did_ptae = False
         if at_type in ('Float', 'Int'):
             andor_min_getter = getattr(lowlevel, 'Get'+at_type+'Min')
             andor_max_getter = getattr(lowlevel, 'Get'+at_type+'Max')
@@ -236,18 +229,8 @@ class Camera(property_device.PropertyDevice):
                     max_ = None
                 return (min_, max_)
             setattr(self, 'get_'+py_name+'_range', range_getter)
-            if not readonly:
-                ren = py_name.upper()+'_RANGE_EXTREMA'
-                try:
-                    re_ = getattr(config.Camera, ren)
-                except AttributeError:
-                    print('config.Camera does not contain ' + ren + '.  Defaulting to very large range.')
-                    re_ = (-2147483648, 2147483647)
-                self._property_types_and_extrema[py_name] = (at_type, re_)
-                did_ptae = True
-        if not did_ptae:
-            self._property_types_and_extrema[py_name] = at_type
         self._callback_properties[at_feature] = (getter, self._add_property(py_name, getter()))
+        self._andor_property_types[py_name] = at_type
 
         if not readonly:
             andor_setter = getattr(lowlevel, 'Set'+at_type)
@@ -266,8 +249,8 @@ class Camera(property_device.PropertyDevice):
             for at_feature in self._callback_properties.keys():
                 lowlevel.UnregisterFeatureCallback(at_feature, self._c_callback, 0)
 
-    def get_property_types_and_extrema(self):
-        return self._property_types_and_extrema
+    def get_andor_property_types(self):
+        return self._andor_property_types
 
     @contextlib.contextmanager
     def _live_guarded(self):

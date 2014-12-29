@@ -34,38 +34,24 @@ class AndorCameraWidget(DeviceWidget):
         layout = Qt.QGridLayout()
         self.setLayout(layout)
         row = 0
-        property_widget_set_types = {'Bool' : self.BoolPropertyWidgetSet,
+        property_widget_set_types = {#'Bool' : self.BoolPropertyWidgetSet,
                                      'String' : self.ROStringPropertyWidgetSet,
                                      'Int' : self.IntPropertyWidgetSet,
                                      'Float' : self.FloatPropertyWidgetSet}
         self.property_widget_sets = {}
-        for prop_name, prop_stuff in sorted(self.device.property_types_and_extrema.items()):
-            if type(prop_stuff) is str:
-                prop_type = prop_stuff
-                prop_extrema = None
-            else:
-                prop_type = prop_stuff[0]
-                prop_extrema = prop_stuff[1]
+        for prop_name, prop_type in sorted(self.device.andor_property_types.items()):
             try:
                 pwst = property_widget_set_types[prop_type]
             except KeyError:
                 continue
             self.subscribe(prop_name)
-            self.property_widget_sets[prop_name] = pwst(self, layout, row, prop_name, prop_extrema)
+            self.property_widget_sets[prop_name] = pwst(self, layout, row, prop_name)
             row += 1
-        self._ChangeSignalFromPropertyClient.connect(self.property_change_slot, Qt.Qt.QueuedConnection)
-        if rebroadcast_on_init:
-            self.scope.rebroadcast_properties()
+        self.post_init(rebroadcast_on_init)
 
-    def property_change_slot(self, prop_path, prop_value, is_prop_update=True):
-        self.property_change_slot_verify_subscribed(prop_path)
-        if not self.updating_gui: # Avoid recursive valueChanged calls and looping changes caused by running ahead of property change notifications
-            try:
-                self.updating_gui = True
-                prop_path_parts = prop_path.split('.')
-                self.property_widget_sets[prop_path_parts[-1]].update(prop_value, is_prop_update)
-            finally:
-                self.updating_gui = False
+    def handle_property_change(self, prop_path, prop_value, change_notification_is_from_property_server):
+        prop_path_parts = prop_path.split('.')
+        self.property_widget_sets[prop_path_parts[-1]].update(prop_value, change_notification_is_from_property_server)
 
     ### Helper classes ###
 
@@ -75,34 +61,34 @@ class AndorCameraWidget(DeviceWidget):
             self.name_label = Qt.QLabel(prop_name + ':')
             self.device = andor_camera_widget.device
             self.andor_camera_widget_weakref = weakref.ref(andor_camera_widget)
+            self.is_ro = not hasattr(self.device, '_set_'+prop_name)
             layout.addWidget(self.name_label, row, 0)
             # Value from most recent property change notification
             self.value = None
 
-        def update(self, prop_value, is_prop_update):
+        def update(self, prop_value, change_notification_is_from_property_server):
             raise NotImplementedError('pure virtual method called')
 
     class BoolPropertyWidgetSet(PropertyWidgetSet):
-        def __init__(self, andor_camera_widget, layout, row, prop_name, _):
+        def __init__(self, andor_camera_widget, layout, row, prop_name):
             pass
 
     class ROStringPropertyWidgetSet(PropertyWidgetSet):
         # Note that all AT_String properties are currently read-only
-        def __init__(self, andor_camera_widget, layout, row, prop_name, _):
+        def __init__(self, andor_camera_widget, layout, row, prop_name):
             super().__init__(andor_camera_widget, layout, row, prop_name)
             self.value_label = Qt.QLineEdit()
             self.value_label.setReadOnly(True)
             layout.addWidget(self.value_label, row, 1)
             self.name_label.setBuddy(self.value_label)
 
-        def update(self, prop_value, is_prop_update):
+        def update(self, prop_value, change_notification_is_from_property_server):
             self.value_label.setText(prop_value)
             self.value = prop_value
 
     class IntPropertyWidgetSet(PropertyWidgetSet):
-        def __init__(self, andor_camera_widget, layout, row, prop_name, prop_extrema):
+        def __init__(self, andor_camera_widget, layout, row, prop_name):
             super().__init__(andor_camera_widget, layout, row, prop_name)
-            self.is_ro = prop_extrema is None
             if self.is_ro:
                 self.value_label = Qt.QLineEdit()
                 self.value_label.setReadOnly(True)
@@ -110,7 +96,7 @@ class AndorCameraWidget(DeviceWidget):
                 self.name_label.setBuddy(self.value_label)
             else:
                 self.value_spin_box = Qt.QSpinBox()
-                self.value_spin_box.setRange(prop_extrema[0], prop_extrema[1])
+                self.value_spin_box.setRange(-2147483648, 2147483647)
                 layout.addWidget(self.value_spin_box, row, 1)
                 self.name_label.setBuddy(self.value_spin_box)
                 self.value_spin_box.valueChanged.connect(lambda v,
@@ -118,14 +104,14 @@ class AndorCameraWidget(DeviceWidget):
                                                          pp=andor_camera_widget.device_path+'.'+prop_name:
                                                             pcs(pp, v, False))
 
-        def update(self, prop_value, is_prop_update):
+        def update(self, prop_value, change_notification_is_from_property_server):
             if self.is_ro:
                 self.value_label.setText(str(prop_value))
                 self.value = prop_value
             else:
                 if self.value_spin_box.value() != prop_value:
                     self.value_spin_box.setValue(prop_value)
-                if is_prop_update:
+                if change_notification_is_from_property_server:
                     self.value = prop_value
                 else:
                     if self.value != prop_value:
@@ -159,9 +145,8 @@ class AndorCameraWidget(DeviceWidget):
                             Qt.QMessageBox.warning(self.andor_camera_widget_weakref(), 'Range Error', s)
 
     class FloatPropertyWidgetSet(PropertyWidgetSet):
-        def __init__(self, andor_camera_widget, layout, row, prop_name, prop_extrema):
+        def __init__(self, andor_camera_widget, layout, row, prop_name):
             super().__init__(andor_camera_widget, layout, row, prop_name)
-            self.is_ro = prop_extrema is None
             if self.is_ro:
                 self.value_label = Qt.QLineEdit()
                 self.value_label.setReadOnly(True)
@@ -185,7 +170,7 @@ class AndorCameraWidget(DeviceWidget):
                 acw = self.andor_camera_widget_weakref()
                 acw.property_change_slot(acw.device_path+'.'+self.prop_name, prop_value, False)
 
-        def update(self, prop_value, is_prop_update):
+        def update(self, prop_value, change_notification_is_from_property_server):
             if self.is_ro:
                 self.value_label.setText(str(prop_value))
                 self.value = prop_value
@@ -199,7 +184,7 @@ class AndorCameraWidget(DeviceWidget):
                     pass
                 if write_to_value_text_box:
                     self.value_text_box.setText(str(prop_value))
-                if is_prop_update:
+                if change_notification_is_from_property_server:
                     self.value = prop_value
                 else:
                     if self.value != prop_value:

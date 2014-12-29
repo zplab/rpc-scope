@@ -65,6 +65,11 @@ class DeviceWidget(Qt.QWidget):
             self.ui = uic.loadUiType(ui_sfpath)[0]()
             self.ui.setupUi(self)
 
+    def post_init(self, rebroadcast_on_init):
+        self._ChangeSignalFromPropertyClient.connect(self.property_change_slot, Qt.Qt.QueuedConnection)
+        if rebroadcast_on_init:
+            self.scope.rebroadcast_properties()
+
     def closeEvent(self, event):
         for prop_path in self.subscribed_prop_paths:
             self.scope_properties.unsubscribe(prop_path, self.property_client_property_change_callback, False)
@@ -79,9 +84,18 @@ class DeviceWidget(Qt.QWidget):
         # Runs in property client thread
         self._ChangeSignalFromPropertyClient.emit(prop_path, prop_value)
 
-    def property_change_slot(self, prop_path, prop_value, is_prop_update=True):
-        # Runs in GUI thread
+    def handle_property_change(self, prop_path, prop_value, change_notification_is_from_property_server):
         raise NotImplementedError('pure virtual method called')
+
+    def property_change_slot(self, prop_path, prop_value, change_notification_is_from_property_server=True):
+        # Runs in GUI thread
+        self.property_change_slot_verify_subscribed(prop_path)
+        if not self.updating_gui: # Avoid recursive valueChanged calls and looping changes caused by running ahead of property change notifications
+            try:
+                self.updating_gui = True
+                self.handle_property_change(prop_path, prop_value, change_notification_is_from_property_server)
+            finally:
+                self.updating_gui = False
 
     def property_change_slot_verify_subscribed(self, prop_path):
         if prop_path not in self.subscribed_prop_paths:
