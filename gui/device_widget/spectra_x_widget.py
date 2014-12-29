@@ -75,42 +75,34 @@ class SpectraX_Widget(DeviceWidget):
         self.temperature_label = Qt.QLabel('Temperature: (unknown)')
         self.bottom_layout.addWidget(self.temperature_label)
         self.subscribe('temperature')
-        self._ChangeSignalFromPropertyClient.connect(self.property_change_slot, Qt.Qt.QueuedConnection)
-        if rebroadcast_on_init:
-            self.scope.rebroadcast_properties()
+        self.post_init(rebroadcast_on_init)
 
-    def property_change_slot(self, prop_path, prop_value, is_prop_update=True):
-        self.property_change_slot_verify_subscribed(prop_path)
-        if not self.updating_gui: # Avoid recursive valueChanged calls and looping changes caused by running ahead of property change notifications
-            try:
-                self.updating_gui = True
-                prop_path_parts = prop_path.split('.')
-                if prop_path_parts[-1] == 'temperature':
-                    self.temperature_label.setText('Temperature: {}°C'.format(prop_value))
+    def handle_property_change(self, prop_path, prop_value, change_notification_is_from_property_server):
+        prop_path_parts = prop_path.split('.')
+        if prop_path_parts[-1] == 'temperature':
+            self.temperature_label.setText('Temperature: {}°C'.format(prop_value))
+        else:
+            ccs = self.color_control_sets[prop_path_parts[-2]]
+            if prop_path_parts[-1] == 'enabled':
+                if ccs.toggle.isChecked() != prop_value:
+                    ccs.toggle.setChecked(prop_value)
+                if is_prop_update:
+                    ccs.enabled = prop_value
                 else:
-                    ccs = self.color_control_sets[prop_path_parts[-2]]
-                    if prop_path_parts[-1] == 'enabled':
-                        if ccs.toggle.isChecked() != prop_value:
-                            ccs.toggle.setChecked(prop_value)
-                        if is_prop_update:
-                            ccs.enabled = prop_value
-                        else:
-                            if ccs.enabled != prop_value:
-                                ccs.set_enable(prop_value)
-                                ccs.enabled = prop_value
-                    elif prop_path_parts[-1] == 'intensity':
-                        if ccs.slider.value() != prop_value:
-                            ccs.slider.setValue(prop_value)
-                        if ccs.spin_box.value() != prop_value:
-                            ccs.spin_box.setValue(prop_value)
-                        if is_prop_update:
-                            ccs.intensity = prop_value
-                        else:
-                            if ccs.intensity != prop_value:
-                                ccs.set_intensity(prop_value)
-                                ccs.intensity = prop_value
-            finally:
-                self.updating_gui = False
+                    if ccs.enabled != prop_value:
+                        ccs.set_enable(prop_value)
+                        ccs.enabled = prop_value
+            elif prop_path_parts[-1] == 'intensity':
+                if ccs.slider.value() != prop_value:
+                    ccs.slider.setValue(prop_value)
+                if ccs.spin_box.value() != prop_value:
+                    ccs.spin_box.setValue(prop_value)
+                if is_prop_update:
+                    ccs.intensity = prop_value
+                else:
+                    if ccs.intensity != prop_value:
+                        ccs.set_intensity(prop_value)
+                        ccs.intensity = prop_value
 
     def disable_all_slot(self):
         for color, ccs in self.color_control_sets.items():
