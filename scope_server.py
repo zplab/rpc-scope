@@ -23,35 +23,40 @@
 # Authors: Zach Pincus
 
 import zmq
-import platform
 
 from .simple_rpc import rpc_server, property_server
 from . import scope
 from . import scope_configuration as config
 from .util import transfer_ism_buffer
 
-def server_main(verbose=False, context=None):
-    rpc_addr = config.Server.rpc_addr()
-    interrupt_addr = config.Server.interrupt_addr()
-    property_addr = config.Server.property_addr()
-
-    if context is None:
+class ScopeServer:
+    def __init__(self, host, verbose=False):
+        rpc_addr = config.Server.rpc_addr(host)
+        interrupt_addr = config.Server.interrupt_addr(host)
+        property_addr = config.Server.property_addr(host)
         context = zmq.Context()
 
-    property_update_server = property_server.ZMQServer(property_addr, context=context, verbose=verbose)
+        self.property_update_server = property_server.ZMQServer(property_addr, context=context, verbose=verbose)
 
-    scope_controller = scope.Scope(property_update_server, verbose=verbose)
-    # add transfer_ism_buffer as hidden elements of the namespace, which RPC clients can use for seamless buffer sharing
-    scope_controller._transfer_ism_buffer = transfer_ism_buffer
+        scope_controller = scope.Scope(property_update_server, verbose=verbose)
+        # add transfer_ism_buffer as hidden elements of the namespace, which RPC clients can use for seamless buffer sharing
+        scope_controller._transfer_ism_buffer = transfer_ism_buffer
 
-    interrupter = rpc_server.ZMQInterrupter(interrupt_addr, context=context, verbose=verbose)
-    scope_server = rpc_server.ZMQServer(scope_controller, interrupter, rpc_addr, context=context, verbose=verbose)
+        self.interrupter = rpc_server.ZMQInterrupter(interrupt_addr, context=context, verbose=verbose)
+        self.scope_server = rpc_server.ZMQServer(scope_controller, interrupter, rpc_addr, context=context, verbose=verbose)
 
+    def run(self):
+        self.scope_server.run()
+
+def simple_server_main(verbose=False):
+    server = ScopeServer(verbose)
     print('Scope Server Ready (Listening on {})'.format(config.Server.HOST))
     try:
-        scope_server.run()
+        server.run()
     except KeyboardInterrupt:
         return
+
+
 
 if __name__ == '__main__':
     import argparse
@@ -59,7 +64,5 @@ if __name__ == '__main__':
     parser.add_argument("--public", action='store_true', help="Allow network connections to the server [default: allow only local connections]")
     parser.add_argument("--verbose", action='store_true', help="Print human-readable representations of all RPC calls and property state changes to stdout.")
     args = parser.parse_args()
-    if args.public:
-        config.Server.HOST = config.Server.PUBLICHOST
-
-    server_main(verbose=args.verbose)
+    host = config.PUBLICHOST if args.public else config.LOCALHOST
+    simple_server_main(host, verbose=args.verbose)

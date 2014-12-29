@@ -47,7 +47,7 @@ def wrap_images_getter(namespace, func_name, get_data):
         return [get_data(name) for name in function()]
     setattr(namespace, func_name, wrapped)
 
-def rpc_client_main(host=None, context=None):
+def rpc_client_main(host='127.0.0.1', context=None):
     rpc_addr = config.Server.rpc_addr(host)
     interrupt_addr = config.Server.interrupt_addr(host)
 
@@ -67,13 +67,13 @@ def rpc_client_main(host=None, context=None):
             wrap_images_getter(scope.camera.acquisition_sequencer, 'run', get_data)
     return scope
 
-def property_client_main(host, context=None):
+def property_client_main(host='127.0.0.1', context=None):
     property_addr = config.Server.property_addr(host)
     scope_properties = property_client.ZMQClient(property_addr, context)
     return scope_properties
 
 
-def client_main(host=None, context=None, subscribe_all=False):
+def client_main(host='127.0.0.1', context=None, subscribe_all=False):
     if context is None:
         context = zmq.Context()
     scope = rpc_client_main(host, context)

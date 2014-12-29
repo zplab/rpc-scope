@@ -8,7 +8,6 @@ def _make_tcp_host(host, port):
 class Server:
     LOCALHOST = '127.0.0.1'
     PUBLICHOST = '*'
-    HOST = LOCALHOST
 
     RPC_PORT = '6000'
     RPC_INTERRUPT_PORT = '6001'
@@ -17,19 +16,19 @@ class Server:
     @classmethod
     def rpc_addr(cls, host=None):
         if host is None:
-            host = cls.HOST
+            host = cls.LOCALHOST
         return _make_tcp_host(host, cls.RPC_PORT)
 
     @classmethod
     def interrupt_addr(cls, host=None):
         if host is None:
-            host = cls.HOST
+            host = cls.LOCALHOST
         return _make_tcp_host(host, cls.RPC_INTERRUPT_PORT)
 
     @classmethod
     def property_addr(cls, host=None):
         if host is None:
-            host = cls.HOST
+            host = cls.LOCALHOST
         return _make_tcp_host(host, cls.PROPERTY_PORT)
 
 class Stand:
