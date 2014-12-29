@@ -215,6 +215,20 @@ class Camera(property_device.PropertyDevice):
             except lowlevel.AndorError:
                 return None
         setattr(self, 'get_'+py_name, getter)
+        if at_type in ('Float', 'Int'):
+            andor_min_getter = getattr(lowlevel, 'Get'+at_type+'Min')
+            andor_max_getter = getattr(lowlevel, 'Get'+at_type+'Max')
+            def range_getter():
+                try:
+                    min_ = andor_min_getter(at_feature)
+                except lowlevel.AndorError:
+                    min_ = None
+                try:
+                    max_ = andor_max_getter(at_feature)
+                except lowlevel.AndorError:
+                    max_ = None
+                return (min_, max_)
+            setattr(self, 'get_'+py_name+'_range', range_getter)
         self._callback_properties[at_feature] = (getter, self._add_property(py_name, getter()))
         self._andor_property_types[py_name] = at_type
 

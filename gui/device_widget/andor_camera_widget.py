@@ -39,7 +39,7 @@ class AndorCameraWidget(DeviceWidget):
                                      'Int' : self.IntPropertyWidgetSet,
                                      'Float' : self.FloatPropertyWidgetSet}
         self.property_widget_sets = {}
-        for prop_name, prop_type in sorted(self.device.property_types_and_extrema.items()):
+        for prop_name, prop_type in sorted(self.device.andor_property_types.items()):
             try:
                 pwst = property_widget_set_types[prop_type]
             except KeyError:
@@ -96,7 +96,7 @@ class AndorCameraWidget(DeviceWidget):
                 self.name_label.setBuddy(self.value_label)
             else:
                 self.value_spin_box = Qt.QSpinBox()
-                self.value_spin_box.setRange(prop_extrema[0], prop_extrema[1])
+                self.value_spin_box.setRange(-2147483648, 2147483647)
                 layout.addWidget(self.value_spin_box, row, 1)
                 self.name_label.setBuddy(self.value_spin_box)
                 self.value_spin_box.valueChanged.connect(lambda v,
