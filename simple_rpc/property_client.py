@@ -38,7 +38,7 @@ class PropertyClient(threading.Thread):
         # properties is a local copy of tracked properties, in case that's useful
         self.properties = {}
         # callbacks is a dict mapping property names to lists of callbacks
-        self.callbacks = collections.defaultdict(list)
+        self.callbacks = collections.defaultdict(set)
         # prefix_callbacks is a trie used to match property names to prefixes
         # which were registered for "wildcard" callbacks.
         self.prefix_callbacks = trie.trie()
@@ -69,26 +69,20 @@ class PropertyClient(threading.Thread):
 
         Multiple callbacks can be registered for a single property_name.
         """
-        self.callbacks[property_name].append((callback, valueonly))
+        self.callbacks[property_name].add((callback, valueonly))
 
     def unsubscribe(self, property_name, callback, valueonly=False):
         """Unregister an exactly matching, previously registered callback.  If
         the same callback function is registered multiple times with identical
         property_name and valueonly parameters, only one registration is removed."""
-        print('UNSUB {}'.format(property_name))
         if property_name is None:
             raise ValueError('property_name parameter must not be None.')
         try:
-            cbs = self.callbacks[property_name]
+            callbacks = self.callbacks[property_name]
+            callbacks.remove((callback, valueonly))
         except KeyError:
-            raise KeyError('No subscription found for property name "{}".'.format(property_name))
-        try:
-            cb_idx = cbs.index((callback, valueonly))
-        except ValueError:
-            raise KeyError('At least one subscription was found for property name "{}", but none '.format(property_name) + \
-                           'have the specified callback and valueonly parameters.')
-        del cbs[cb_idx]
-        if not cbs:
+            raise KeyError('No matching subscription found for property name "{}".'.format(property_name))
+        if not callbacks:
             del self.callbacks[property_name]
 
     def subscribe_prefix(self, property_prefix, callback):
@@ -103,28 +97,22 @@ class PropertyClient(threading.Thread):
         Multiple callbacks can be registered for a single property_prefix.
         """
         if property_prefix not in self.prefix_callbacks:
-            self.prefix_callbacks[property_prefix] = []
-        self.prefix_callbacks[property_prefix].append((callback, False))
+            self.prefix_callbacks[property_prefix] = set
+        self.prefix_callbacks[property_prefix].add((callback, False))
 
     def unsubscribe_prefix(self, property_prefix, callback):
         """Unregister an exactly matching, previously registered callback.  If
         the same callback function is registered multiple times with identical
         property_prefix parameters, only one registration is removed."""
-        print('UNSUB PREFIX {}'.format(property_prefix))
         if property_prefix is None:
             raise ValueError('property_prefix parameter must not be None.')
         try:
-            cbs = self.prefix_callbacks[property_prefix]
+            callbacks = self.callbacks[property_name]
+            callbacks.remove((callback, False))
         except KeyError:
-            raise KeyError('No subscription found for property prefix "{}".'.format(property_prefix))
-        try:
-            cb_idx = cbs.index((callback, False))
-        except ValueError:
-            raise KeyError('At least one subscription was found for property prefix "{}", but none '.format(property_prefix) + \
-                           'has the specified callback.')
-        del cbs[cb_idx]
-        if not cbs:
-            del self.prefix_callbacks[property_prefix]
+            raise KeyError('No matching subscription found for property name "{}".'.format(property_name))
+        if not callbacks:
+            del self.callbacks[property_name]
 
     def _receive_update(self):
         """Receive an update from the server"""

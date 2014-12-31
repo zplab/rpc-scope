@@ -55,6 +55,23 @@ LAMP_SPECS = {
 
 LAMP_NAMES = set(LAMP_DAC_COMMANDS.keys())
 
+class Lamp:
+    def __init__(name, spectra_x):
+        self.name = name
+        self.spectra_x = spectra_x
+
+    def set_intensity(self, value):
+        self.spectra_x.lamp_intensities(self.name=value)
+
+    def get_intensity(self):
+        return self.spectra_x._lamp_intensities[self.name]
+
+    def set_enabled(self, enable):
+        self.spectra_x.lamp_enableds(self.name=enable)
+
+    def get_enabled(self):
+        return self.spectra_x._lamp_enableds[self.name]
+
 class SpectraX(property_device.PropertyDevice):
     def __init__(self, iotool, property_server=None, property_prefix=''):
         super().__init__(property_server, property_prefix)
@@ -78,8 +95,12 @@ class SpectraX(property_device.PropertyDevice):
             self._timer_thread = threading.Thread(target=self._timer_update_temp, daemon=True)
             self._timer_thread.start()
 
+        self._lamp_intensities = {}
+        self._lamp_enableds = {}
         self.lamp_enable(**{lamp:False for lamp in LAMP_NAMES})
         self.lamp_intensity(**{lamp:255 for lamp in LAMP_NAMES})
+        for name in LAMP_NAMES:
+            setattr(self, name, Lamp(name, self))
 
     def _timer_update_temp(self):
         while self._timer_running:
@@ -96,10 +117,11 @@ class SpectraX(property_device.PropertyDevice):
         dac_bytes[4] = intensity_bytes >> 8
         dac_bytes[5] = intensity_bytes & 0x00FF
         self._serial_port.write(bytes(dac_bytes))
+        self._lamp_intensities[lamp] = value
         self._update_property(lamp+'.intensity', value)
 
-    def lamp_intensity(self, **lamps):
-        """Set intensity of named lamp to a given value.
+    def lamp_intensities(self, **lamps):
+        """Set intensity of named lamps to a given value.
 
         The keyword argument names must be valid lamp names. The values must be
         in the range [0, 255], or None to do nothing. (Lamps not specified as
@@ -108,7 +130,7 @@ class SpectraX(property_device.PropertyDevice):
             if value is not None:
                 self._lamp_intensity(lamp, value)
 
-    def lamp_enable(self, **lamps):
+    def lamp_enableds(self, **lamps):
         """Turn off or on named lamps.
 
         The keyword argument names must be valid lamp names. The values must be
@@ -117,6 +139,7 @@ class SpectraX(property_device.PropertyDevice):
         self._iotool.execute(*self._iotool.commands.spectra_x_lamps(**lamps))
         for lamp, enable in lamps.items():
             if enable is not None:
+                self._lamp_enableds[lamp] = enable
                 self._update_property(lamp+'.enabled', enable)
 
     def get_lamp_specs(self):

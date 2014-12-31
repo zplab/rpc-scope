@@ -43,8 +43,9 @@ class ReadOnly_AT_Enum(enumerated_properties.ReadonlyDictProperty):
         super().__init__()
 
     def _get_hw_to_usr(self):
-        str_count = lowlevel.GetEnumCount(self._feature)
-        return {idx : lowlevel.GetEnumStringByIndex(self._feature, idx) for idx in range(str_count)}
+        return {i: lowlevel.GetEnumStringByIndex(self._feature, i)
+            for i in range(lowlevel.GetEnumCount(self._feature))
+            if lowlevel.IsEnumIndexImplemented(self._feature, i)}
 
     def _read(self):
         return lowlevel.GetEnumIndex(self._feature)
@@ -52,9 +53,9 @@ class ReadOnly_AT_Enum(enumerated_properties.ReadonlyDictProperty):
 class AT_Enum(ReadOnly_AT_Enum, enumerated_properties.DictProperty):
     def get_values_validity(self):
         """Dict mapping value strings to True/False depending on whether that value
-        may be assigned without raising a NOTIMPLEMENTED AndorError, given the
-        camera model and its current state."""
-        return {feature: lowlevel.IsEnumIndexAvailable(self._feature, idx) for idx, feature in self._hw_to_usr.items()}
+        may be assigned without raising an AndorError, given the camera's current state."""
+        return {feature: lowlevel.IsEnumIndexAvailable(self._feature, i)
+            for i, feature in self._hw_to_usr.items()}
 
     def _write(self, value):
         lowlevel.SetEnumIndex(self._feature, value)
@@ -86,8 +87,8 @@ class Camera(property_device.PropertyDevice):
         ('IOInvert', lowlevel.SetBool, False),
         ('IOSelector', lowlevel.SetEnumString, 'External Trigger'),
         ('IOInvert', lowlevel.SetBool, False),
-        ('MetadataEnable', lowlevel.SetBool, False),
-        ('MetadataTimestamp', lowlevel.SetBool, False),
+        ('MetadataEnable', lowlevel.SetBool, True),
+        ('MetadataTimestamp', lowlevel.SetBool, True),
         ('TriggerMode', lowlevel.SetEnumString, 'Internal'), # need to set internal trigger mode to be able to set overlap
         ('Overlap', lowlevel.SetBool, False),
         ('PixelReadoutRate', lowlevel.SetEnumString, '100 MHz'),
@@ -105,8 +106,9 @@ class Camera(property_device.PropertyDevice):
         # where getter() is a function that retrieves the current value for that property, and
         # update(value) posts the new value to the property server.
         self._callback_properties = {}
-        # _andor_property_types maps Python property names (underbar_separated) to Andor property
-        # types (Int, Bool, Float, or Enum) - information useful for programmatically constructing
+        # _andor_property_types maps Python property names (underbar_separated) to a pair of:
+        # Andor property type (Int, Bool, Float, or Enum), and a bool for whether the property
+        # is read-only. This information is useful for programmatically constructing
         # GUI widgets representing each property.
         self._andor_property_types = {}
 
@@ -121,11 +123,12 @@ class Camera(property_device.PropertyDevice):
         self._add_andor_enum('AOIBinning', 'binning')
         self._add_andor_enum('BitDepth', 'bit_depth', readonly=True)
         self._add_andor_enum('CycleMode', 'cycle_mode')
+        self._add_andor_enum('FanSpeed', 'fan', readonly=True)
         self._add_andor_enum('IOSelector', 'io_selector')
-        self._add_andor_enum('PixelEncoding', 'pixel_encoding', readonly=True)
+        self._encoding_enum = self._add_andor_enum('PixelEncoding', 'pixel_encoding', readonly=True)
         self._add_andor_enum('PixelReadoutRate', 'pixel_readout_rate')
+        self._gain_enum = self._add_andor_enum('SimplePreAmpGainControl', 'sensor_gain', custom_setter=True) # setter defined below uses _gain_enum
         self._add_andor_enum('ElectronicShutteringMode', 'shutter_mode')
-        self._add_andor_enum('SimplePreAmpGainControl', 'sensor_gain')
         self._add_andor_enum('TriggerMode', 'trigger_mode')
         # TODO: figure out why TemperatureStatus never updates with a callback...
         self._add_andor_enum('TemperatureStatus', 'temperature_status', readonly=True)
@@ -137,7 +140,6 @@ class Camera(property_device.PropertyDevice):
         self._add_andor_property('AOIStride', 'aoi_stride', 'Int', readonly=True)
         self._add_andor_property('AOITop', 'aoi_top', 'Int')
         self._add_andor_property('AOIWidth', 'aoi_width', 'Int')
-        self._add_andor_property('BytesPerPixel', 'bytes_per_pixel', 'Float', readonly=True)
         self._add_andor_property('CameraAcquiring', 'is_acquiring', 'Bool', readonly=True)
         self._add_andor_property('CameraModel', 'model_name', 'String', readonly=True)
         self._add_andor_property('FrameCount', 'frame_count', 'Int')
@@ -146,8 +148,6 @@ class Camera(property_device.PropertyDevice):
         self._add_andor_property('InterfaceType', 'interface_type', 'String', readonly=True)
         self._add_andor_property('IOInvert', 'selected_io_pin_inverted', 'Bool')
         self._add_andor_property('MaxInterfaceTransferRate', 'max_interface_fps', 'Float', readonly=True)
-        self._add_andor_property('MetadataEnable', 'metadata_enabled', 'Bool')
-        self._add_andor_property('MetadataTimestamp', 'include_timestamp_in_metadata', 'Bool')
         self._add_andor_property('Overlap', 'overlap_enabled', 'Bool')
         self._add_andor_property('ReadoutTime', 'readout_time', 'Float', readonly=True)
         self._add_andor_property('SerialNumber', 'serial_number', 'String', readonly=True)
@@ -155,13 +155,12 @@ class Camera(property_device.PropertyDevice):
         self._add_andor_property('StaticBlemishCorrection', 'static_blemish_correction_enabled', 'Bool')
         self._add_andor_property('TimestampClock', 'current_timestamp', 'Int', readonly=True)
         self._add_andor_property('TimestampClockFrequency', 'timestamp_ticks_per_second', 'Int', readonly=True)
-        # FanSpeed and SensorCooling can be controlled from the low-level API, but are here set to read-only
-        # to make them harder to accidentally / ill-advisedly disable.
-        self._add_andor_enum('FanSpeed', 'fan', readonly=True)
         self._add_andor_property('SensorCooling', 'sensor_cooling_enabled', 'Bool', readonly=True)
+        self._add_andor_property('SensorTemperature', 'sensor_temperature', 'Float', readonly=True)
 
-        update_exp = self._add_property('exposure_time', self.get_exposure_time())
-        self._callback_properties['ExposureTime'] = (self.get_exposure_time, update_exp) # we use special case getters and setters below
+        # define custom getter and setters for exposure_time below
+        self._add_property_data('ExposureTime', 'Float', False, 'exposure_time', self.get_exposure_time)
+
 
         if property_server:
             self._c_callback = lowlevel.FeatureCallback(self._andor_callback)
@@ -182,8 +181,12 @@ class Camera(property_device.PropertyDevice):
             for feature, setter, value in self._CAMERA_DEFAULTS:
                 setter(feature, value)
 
+    def _add_property_data(self, at_feature, at_type, readonly, py_name, getter):
+        updater = self._add_property(py_name, getter())
+        self._callback_properties[at_feature] = (getter, updater)
+        self._andor_property_types[py_name] = at_type, readonly
 
-    def _add_andor_enum(self, at_feature, py_name, readonly=False):
+    def _add_andor_enum(self, at_feature, py_name, readonly=False, custom_setter=False):
         """Expose a camera setting presented by the Andor API as an enum (via GetEnumIndex,
         SetEnumIndex, and GetEnumStringByIndex) as an "enumerated" property."""
         if readonly:
@@ -192,14 +195,14 @@ class Camera(property_device.PropertyDevice):
             enum = AT_Enum(at_feature)
             setattr(self, 'get_'+py_name+'_values', enum.get_values_validity)
         setattr(self, 'get_'+py_name, enum.get_value)
-        self._callback_properties[at_feature] = (enum.get_value, self._add_property(py_name, enum.get_value()))
-        self._andor_property_types[py_name] = 'Enum'
+        self._add_property_data(at_feature, 'Enum', readonly, py_name, enum.get_value)
 
-        if not readonly:
+        if not readonly and not custom_setter:
             def setter(value):
                 with self._live_guarded():
                     enum.set_value(value)
             setattr(self, 'set_'+py_name, setter)
+        return enum
 
     def _add_andor_property(self, at_feature, py_name, at_type, readonly=False):
         '''Directly expose numeric or string camera setting.'''
@@ -220,17 +223,16 @@ class Camera(property_device.PropertyDevice):
             andor_max_getter = getattr(lowlevel, 'Get'+at_type+'Max')
             def range_getter():
                 try:
-                    min_ = andor_min_getter(at_feature)
+                    min = andor_min_getter(at_feature)
                 except lowlevel.AndorError:
-                    min_ = None
+                    min = None
                 try:
-                    max_ = andor_max_getter(at_feature)
+                    max = andor_max_getter(at_feature)
                 except lowlevel.AndorError:
-                    max_ = None
-                return (min_, max_)
+                    max = None
+                return min, max
             setattr(self, 'get_'+py_name+'_range', range_getter)
-        self._callback_properties[at_feature] = (getter, self._add_property(py_name, getter()))
-        self._andor_property_types[py_name] = at_type
+        self._add_property_data(at_feature, at_type, readonly, py_name, getter)
 
         if not readonly:
             andor_setter = getattr(lowlevel, 'Set'+at_type)
@@ -250,6 +252,9 @@ class Camera(property_device.PropertyDevice):
                 lowlevel.UnregisterFeatureCallback(at_feature, self._c_callback, 0)
 
     def get_andor_property_types(self):
+        """Return a dict mapping the property names to a pair of:
+        (andor_type, read_only), where andor_type is a one of 'Int', 'String',
+        'Bool', 'Float', or 'Enum', and read_only is a boolean value."""
         return self._andor_property_types
 
     @contextlib.contextmanager
@@ -337,6 +342,13 @@ class Camera(property_device.PropertyDevice):
         """Return current exposure time minimum and maximum values in ms"""
         return (1000 * lowlevel.GetFloatMin('ExposureTime'),
                 1000 * lowlevel.GetFloatMax('ExposureTime'))
+
+    def set_sensor_gain(self, value):
+        with self._live_guarded:
+            self._gain_enum.set_value(value)
+            if value.startswith('12'):
+                # make sure we always use the packed encoding for 12-bit mode
+                lowlevel.SetEnumIndex('PixelEncoding', self._encoding_enum._usr_to_hw['Mono12Packed'])
 
     def get_aoi(self):
         """Convenience wrapper around the aoi_left, aoi_top, aoi_width, aoi_height

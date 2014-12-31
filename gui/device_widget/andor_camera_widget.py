@@ -20,199 +20,164 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-# Authors: Erik Hvatum <ice.rikh@gmail.com>
-
-from .device_widget import DeviceWidget
+# Authors: Erik Hvatum <ice.rikh@gmail.com>, Zach Pincus <zpincus@wustl.edu>
+import math
 from PyQt5 import Qt
-from ...simple_rpc.rpc_client import RPCError
-import weakref
+from . import device_widget
+from ...simple_rpc import rpc_client
 
-class AndorCameraWidget(DeviceWidget):
-    def __init__(self, scope, scope_properties, device_path='scope.camera', parent=None, rebroadcast_on_init=True):
-        super().__init__(scope, scope_properties, device_path, None, parent)
-        self.setWindowTitle('Andor Camera ({})'.format(self.device.model_name))
-        layout = Qt.QGridLayout()
-        self.setLayout(layout)
-        row = 0
-        property_widget_set_types = {#'Bool' : self.BoolPropertyWidgetSet,
-                                     'String' : self.ROStringPropertyWidgetSet,
-                                     'Int' : self.IntPropertyWidgetSet,
-                                     'Float' : self.FloatPropertyWidgetSet}
-        self.property_widget_sets = {}
-        for prop_name, prop_type in sorted(self.device.andor_property_types.items()):
+INT_MIN, INT_MAX = 1, None
+FLOAT_MIN, FLOAT_MAX, FLOAT_DECIMALS = 0, None, 3
+CAM_ROOT = 'scope.camera.'
+
+class AndorCameraWidgetd(device_widget.DeviceWidget):
+    basic_properties = [ # list of properties to display, and logical range info if necessary
+        'is_acquiring',
+        'temperature_status',
+        'sensor_temperature',
+        'exposure_time',
+        'binning',
+        'aoi_left',
+        'aoi_top',
+        'aoi_width',
+        'aoi_height',
+        'sensor_gain',
+        'pixel_readout_rate',
+        'shutter_mode',
+        'overlap_enabled',
+        'cycle_mode',
+        'frame_count',
+        'frame_rate',
+        'max_interface_fps',
+        'trigger_mode'
+    ]
+
+    units = {
+        'exposure_time': 'ms',
+        'frame_rate': 'fps'
+    }
+
+    range_hints = {
+        'exposure_time': (0.001, 30000, 3)
+    }
+
+    def __init__(self, scope, scope_properties, parent=None):
+        super().__init__(scope, scope_properties, parent)
+        self.setWindowTitle('Andor Camera ({})'.format(scope.camera.model_name))
+        self.layout = Qt.QGridLayout()
+        self.setLayout(self.layout)
+        self.camera = scope.camera
+        property_types = self.camera.get_andor_property_types()
+        advanced_properties = sorted(property_types.keys() - set(self.basic_properties))
+
+        for row, property in enumerate(basic_properties):
+            type, readonly = property_types[property]
+            self.add_widget(row, property, type, readonly)
+
+    def add_widget(self, row, property, type, readonly):
+        label = Qt.QLabel(property + ':')
+        self.layout.addWidget(label, row, 0)
+        widget = self.make_widget(property, type, readonly)
+        self.layout.addWidget(widget, row, 1)
+        if property in self.units:
+            unit_label = Qt.QLabel(self.units[property])
+            self.layout.addWidget(unit_label, row, 2)
+
+    def make_widget(self, property, type, readonly):
+        if readonly:
+            return self.make_readonly_widget(property)
+        elif type in {'Int', 'Float'}:
+            return self.make_numeric_widget(property, type)
+        elif type == 'Enum':
+            return self.make_enum_widget(property)
+        elif type == 'Bool':
+            return self.make_bool_widget(property)
+        else: # we'll just treat it as readonly and show a string repr
+            return self.make_readonly_widget(property)
+
+    def make_readonly_widget(self, property):
+        widget = Qt.QLabel()
+        self.subscribe(CAM_ROOT + property, callback=lambda value: widget.setText(str(value)))
+        return widget
+
+    def make_numeric_widget(self, property, type):
+        widget = Qt.QLineEdit()
+        widget.setValidator(self.get_numeric_validator(property, type))
+        update = self.subscribe(CAM_ROOT + property, callback=lambda value: widget.setText(str(value)))
+        coerce_type = int if type == 'Int' else float
+        def editing_finished():
             try:
-                pwst = property_widget_set_types[prop_type]
-            except KeyError:
-                continue
-            self.subscribe(prop_name)
-            self.property_widget_sets[prop_name] = pwst(self, layout, row, prop_name)
-            row += 1
-        self.post_init(rebroadcast_on_init)
-
-    def handle_property_change(self, prop_path, prop_value, change_notification_is_from_property_server):
-        prop_path_parts = prop_path.split('.')
-        self.property_widget_sets[prop_path_parts[-1]].update(prop_value, change_notification_is_from_property_server)
-
-    ### Helper classes ###
-
-    class PropertyWidgetSet:
-        def __init__(self, andor_camera_widget, layout, row, prop_name):
-            self.prop_name = prop_name
-            self.name_label = Qt.QLabel(prop_name + ':')
-            self.device = andor_camera_widget.device
-            self.andor_camera_widget_weakref = weakref.ref(andor_camera_widget)
-            self.is_ro = not hasattr(self.device, '_set_'+prop_name)
-            layout.addWidget(self.name_label, row, 0)
-            # Value from most recent property change notification
-            self.value = None
-
-        def update(self, prop_value, change_notification_is_from_property_server):
-            raise NotImplementedError('pure virtual method called')
-
-    class BoolPropertyWidgetSet(PropertyWidgetSet):
-        def __init__(self, andor_camera_widget, layout, row, prop_name):
-            pass
-
-    class ROStringPropertyWidgetSet(PropertyWidgetSet):
-        # Note that all AT_String properties are currently read-only
-        def __init__(self, andor_camera_widget, layout, row, prop_name):
-            super().__init__(andor_camera_widget, layout, row, prop_name)
-            self.value_label = Qt.QLineEdit()
-            self.value_label.setReadOnly(True)
-            layout.addWidget(self.value_label, row, 1)
-            self.name_label.setBuddy(self.value_label)
-
-        def update(self, prop_value, change_notification_is_from_property_server):
-            self.value_label.setText(prop_value)
-            self.value = prop_value
-
-    class IntPropertyWidgetSet(PropertyWidgetSet):
-        def __init__(self, andor_camera_widget, layout, row, prop_name):
-            super().__init__(andor_camera_widget, layout, row, prop_name)
-            if self.is_ro:
-                self.value_label = Qt.QLineEdit()
-                self.value_label.setReadOnly(True)
-                layout.addWidget(self.value_label, row, 1)
-                self.name_label.setBuddy(self.value_label)
-            else:
-                self.value_spin_box = Qt.QSpinBox()
-                self.value_spin_box.setRange(-2147483648, 2147483647)
-                layout.addWidget(self.value_spin_box, row, 1)
-                self.name_label.setBuddy(self.value_spin_box)
-                self.value_spin_box.valueChanged.connect(lambda v,
-                                                         pcs=andor_camera_widget.property_change_slot,
-                                                         pp=andor_camera_widget.device_path+'.'+prop_name:
-                                                            pcs(pp, v, False))
-
-        def update(self, prop_value, change_notification_is_from_property_server):
-            if self.is_ro:
-                self.value_label.setText(str(prop_value))
-                self.value = prop_value
-            else:
-                if self.value_spin_box.value() != prop_value:
-                    self.value_spin_box.setValue(prop_value)
-                if change_notification_is_from_property_server:
-                    self.value = prop_value
+                value = coerce_type(widget.text())
+                update(value)
+            except ValueError as e: # from the coercion
+                Qt.QMessageBox.warning(self, 'Invalid Value', e.args[0])
+            except rpc_client.RPCError as e: # from the update
+                if e.args[0].find('AndorError: OUTOFRANGE') != -1:
+                    min, max = getattr(self.camera, property+'_range')
+                    if min is None:
+                        min = '?'
+                    if max is None:
+                        max = '?'
+                    error = 'Given the camera state, {} must be in the range [{}, {}].'.format(property, min, max)
+                elif e.args[0].find('AndorError: NOTWRITABLE'):
+                    error = 'Given the camera state, {} is not modifiable.'.format(property)
                 else:
-                    if self.value != prop_value:
-                        try:
-                            setattr(self.device, self.prop_name, prop_value)
-                            self.value = prop_value
-                        except RPCError as e:
-                            self.value_spin_box.setValue(self.value)
-                            if e.args[0].find('AndorError: OUTOFRANGE') != -1:
-                                s  = 'Given the current camera state, '
-                                s += self.prop_name
-                                s += ' '
-                                try:
-                                    range_ = getattr(self.device, self.prop_name+'_range')
-                                    if range_[0] == range_[1]:
-                                        if range_[0] is None:
-                                            s += 'must be in an UNKNOWN range (sorry).'
-                                        else:
-                                            s += 'is only permitted to be {}.'.format(range_[0])
-                                    else:
-                                        s += 'must be in the range [{}, {}].'.format('UNKNOWN' if range_[0] is None else range_[0],
-                                                                            'UNKNOWN' if range_[1] is None else range_[1])
-                                except:
-                                    s += 'must be in the range (FAILED TO DETERMINE ACCEPTABLE VALUES).'
-                            elif e.args[0].find('AndorError: NOTWRITABLE'):
-                                s  = 'Given the current camera state, '
-                                s += self.prop_name
-                                s += ' can not be modified.'
-                            else:
-                                s = 'Failed to set {} property.'.format(self.prop_name)
-                            Qt.QMessageBox.warning(self.andor_camera_widget_weakref(), 'Range Error', s)
+                    error = 'Could not set {} ({}).'.format(property, e.args[0])
+                Qt.QMessageBox.warning(self, 'Invalid Value', error)
+        widget.editingFinished.connect(editingFinished)
 
-    class FloatPropertyWidgetSet(PropertyWidgetSet):
-        def __init__(self, andor_camera_widget, layout, row, prop_name):
-            super().__init__(andor_camera_widget, layout, row, prop_name)
-            if self.is_ro:
-                self.value_label = Qt.QLineEdit()
-                self.value_label.setReadOnly(True)
-                layout.addWidget(self.value_label, row, 1)
-                self.name_label.setBuddy(self.value_label)
+    def get_numeric_validator(property, type):
+        if type == 'Float':
+            validator = Qt.QDoubleValidator()
+            if property in self.range_hints:
+                min, max, decimals = self.range_hints[property]
             else:
-                self.value_text_box = Qt.QLineEdit()
-                layout.addWidget(self.value_text_box, row, 1)
-                self.name_label.setBuddy(self.value_text_box)
-                self.value_text_box.editingFinished.connect(self.value_text_box_editing_finished_slot)
-                self.value_text_box.returnPressed.connect(self.value_text_box_editing_finished_slot)
+                min, max, decimals = FLOAT_MIN, FLOAT_MAX, FLOAT_DECIMALS
+            if decimals is not None:
+                validator.setDecimals(decimals)
+        if type == 'Int':
+            validator = Qt.QIntValidator()
+            if property in self.range_hints:
+                min, max = self.range_hints[property]
+            else:
+                min, max = INT_MIN, INT_MAX
+        if min is not None:
+            validator.setBottom(min)
+        if max is not None:
+            validator.setTop(max)
+        return validator
 
-        def value_text_box_editing_finished_slot(self):
-            prop_value_string = self.value_text_box.text()
+    def make_enum_widget(self, property):
+        widget = Qt.QComboBox()
+        values = sorted(getattr(self.camera, property+'_values').keys())
+        indices = {v:i for i, v in enumerate(values)}
+        widget.setItems(values)
+        update = self.subscribe(CAM_ROOT + property, callback=lambda value: widget.setCurrentIndex(indices[value]))
+        def changed(value):
             try:
-                prop_value = float(prop_value_string)
-            except ValueError as e:
-                Qt.QMessageBox.warning(self.andor_camera_widget_weakref(), 'Value Error', e.args[0])
-                prop_value = None
-            if prop_value is not None:
-                acw = self.andor_camera_widget_weakref()
-                acw.property_change_slot(acw.device_path+'.'+self.prop_name, prop_value, False)
+                update(value)
+            except rpc_client.RPCError as e: # from the update
+                accepted_values = sorted(k for k, v in getattr(self.camera, property+'_values') if v)
+                #TODO figure out the AndorError type for invalid value, and raise a more generic error if it's not that.
+                error = 'Given the camera state, {} can only be one of [{}].'.format(property, ', '.join(accepted_values))
+                Qt.QMessageBox.warning(self, 'Invalid Value', error)
+        widget.currentIndexChanged[str].connect(changed)
 
-        def update(self, prop_value, change_notification_is_from_property_server):
-            if self.is_ro:
-                self.value_label.setText(str(prop_value))
-                self.value = prop_value
-            else:
-                prop_value_string = str(prop_value)
-                write_to_value_text_box = True
-                try:
-                    if float(self.value_text_box.text()) == prop_value:
-                        write_to_value_text_box = False
-                except ValueError:
-                    pass
-                if write_to_value_text_box:
-                    self.value_text_box.setText(str(prop_value))
-                if change_notification_is_from_property_server:
-                    self.value = prop_value
-                else:
-                    if self.value != prop_value:
-                        try:
-                            setattr(self.device, self.prop_name, prop_value)
-                            self.value = prop_value
-                        except RPCError as e:
-                            self.value_text_box.setText(str(self.value))
-                            if e.args[0].find('AndorError: OUTOFRANGE') != -1:
-                                s  = 'Given the current camera state, '
-                                s += self.prop_name
-                                s += ' '
-                                try:
-                                    range_ = getattr(self.device, self.prop_name+'_range')
-                                    if range_[0] == range_[1]:
-                                        if range_[0] is None:
-                                            s += 'must be in an UNKNOWN range (sorry).'
-                                        else:
-                                            s += 'is only permitted to be {}.'.format(range_[0])
-                                    else:
-                                        s += 'must be in the range [{}, {}].'.format('UNKNOWN' if range_[0] is None else range_[0],
-                                                                            'UNKNOWN' if range_[1] is None else range_[1])
-                                except:
-                                    s += 'must be in the range (FAILED TO DETERMINE ACCEPTABLE VALUES).'
-                            elif e.args[0].find('AndorError: NOTWRITABLE'):
-                                s  = 'Given the current camera state, '
-                                s += self.prop_name
-                                s += ' can not be modified.'
-                            else:
-                                s = 'Failed to set {} property.'.format(self.prop_name)
-                            Qt.QMessageBox.warning(self.andor_camera_widget_weakref(), 'Range Error', s)
+    def make_bool_widget(self, property):
+        widget = Qt.QCheckBox(name)
+        update = widget.subscribe(CAM_ROOT + property, callback=toggle.setChecked)
+        toggle.toggled.connect(togupdate)
+
+        widget = Qt.QComboBox()
+        values = sorted(getattr(self.camera, property+'_values').keys())
+        indices = {v:i for i, v in enumerate(values)}
+        widget.setItems(values)
+        update = self.subscribe(CAM_ROOT + property, callback=lambda value: widget.setCurrentIndex(indices[value]))
+        def changed(value):
+            try:
+                update(value)
+            except rpc_client.RPCError as e: # from the update
+                #TODO figure out the AndorError type for invalid toggle, and raise a more generic error if it's not that.
+                error = "Given the camera state, {} can't be changed.".format(property)
+                Qt.QMessageBox.warning(self, 'Invalid Value', error)
+        widget.toggled.connect(changed)

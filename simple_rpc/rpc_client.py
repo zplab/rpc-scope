@@ -70,11 +70,17 @@ class RPCClient:
     def proxy_namespace(self):
         """Use the RPC server's __DESCRIBE__ functionality to reconstitute a
         faxscimile namespace on the client side with well-described functions
-        that can be seamlessly called."""
+        that can be seamlessly called.
+
+        A set of the fully-qualified function names available in the namespace
+        is included as the _functions_proxied attribute of this namespace.
+        """
 
         # group functions by their namespace
         server_namespaces = collections.defaultdict(list)
+        functions_proxied = set()
         for qualname, doc, argspec in self('__DESCRIBE__'):
+            functions_proxied.add(qualname)
             *parents, name = qualname.split('.')
             parents = tuple(parents)
             server_namespaces[parents].append((name, qualname, doc, argspec))
@@ -123,6 +129,7 @@ class RPCClient:
                     new_namespace = client_namespaces.pop(parents[:i+1])
                     setattr(namespace, element, new_namespace)
                     namespace = new_namespace
+        root._functions_proxied = functions_proxied
         return root
 
     class _accessor_pair:

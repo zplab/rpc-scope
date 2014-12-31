@@ -20,90 +20,72 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-# Authors: Erik Hvatum <ice.rikh@gmail.com>
+# Authors: Erik Hvatum <ice.rikh@gmail.com>, Zach Pincus <zpincus@wustl.edu>
 
-from .device_widget import DeviceWidget
+from . import device_widget
 from PyQt5 import Qt
 
-class SpectraX_Widget(DeviceWidget):
-    class ColorControlSet:
-        def __init__(self, toggle, slider, spin_box, set_enable, set_intensity):
-            self.toggle = toggle
-            self.slider = slider
-            self.spin_box = spin_box
-            self.set_enable = set_enable
-            self.set_intensity = set_intensity
-            # Values from most recent property change notifications
-            self.enabled = None
-            self.intensity = None
+SPX_ROOT = 'scope.il.spectra_x.'
 
-    def __init__(self, scope, scope_properties, device_path='scope.il.spectra_x', parent=None, rebroadcast_on_init=True):
-        super().__init__(scope, scope_properties, device_path, None, parent)
+class SpectraXWidget(device_widget.DeviceWidget):
+    def __init__(self, scope, scope_properties, parent=None):
+        super().__init__(scope, scope_properties, parent)
         self.setWindowTitle('Spectra X')
-        lamps = sorted(((k, v[0]) for k, v in scope.il.spectra_x.lamp_specs.items()), key=lambda kv:kv[1], reverse=True)
-        self.setLayout(Qt.QVBoxLayout())
-        self.grid_layout = Qt.QGridLayout()
-        self.layout().addLayout(self.grid_layout)
-        self.color_control_sets = {}
-        for row, (color, wavelength) in enumerate(lamps):
-            self.subscribe(color, 'intensity')
-            self.subscribe(color, 'enabled')
-            ccs = self.ColorControlSet(Qt.QCheckBox(color),
-                                       Qt.QSlider(Qt.Qt.Horizontal),
-                                       Qt.QSpinBox(),
-                                       lambda enable, color=color, setter=getattr(self.device, 'lamp_enable'): setter(**{color : enable}),
-                                       lambda intensity, color=color, setter=getattr(self.device, 'lamp_intensity'): setter(**{color : intensity}))
-            ccs.toggle.toggled.connect(lambda enabled, prop_path='{}.{}.enabled'.format(self.device_path, color), self=self: self.property_change_slot(prop_path, enabled, False))
-            ccs.slider.setRange(0, 255)
-            ccs.slider.setSingleStep(1)
-            ccs.slider.setPageStep(5)
-            ccs.slider.setValue(0)
-            ccs.slider.valueChanged.connect(lambda intensity, prop_path='{}.{}.intensity'.format(self.device_path, color), self=self: self.property_change_slot(prop_path, intensity, False))
-            ccs.spin_box.setRange(0, 255)
-            ccs.spin_box.setSingleStep(1)
-            ccs.spin_box.setValue(0)
-            ccs.spin_box.valueChanged.connect(lambda intensity, prop_path='{}.{}.intensity'.format(self.device_path, color), self=self: self.property_change_slot(prop_path, intensity, False))
-            self.grid_layout.addWidget(ccs.toggle, row, 0)
-            self.grid_layout.addWidget(ccs.slider, row, 1)
-            self.grid_layout.addWidget(ccs.spin_box, row, 2)
-            self.color_control_sets[color] = ccs
-        self.bottom_layout = Qt.QHBoxLayout()
-        self.layout().addLayout(self.bottom_layout)
-        self.disable_all_button = Qt.QPushButton('Disable All')
-        self.bottom_layout.addWidget(self.disable_all_button)
-        self.disable_all_button.clicked.connect(self.disable_all_slot)
-        self.temperature_label = Qt.QLabel('Temperature: (unknown)')
-        self.bottom_layout.addWidget(self.temperature_label)
-        self.subscribe('temperature')
-        self.post_init(rebroadcast_on_init)
+        container_layout = Qt.QVBoxLayout()
+        self.setLayout(container_layout)
+        grid_layout = Qt.QGridLayout()
+        container_layout.addLayout(grid_layout)
 
-    def handle_property_change(self, prop_path, prop_value, change_notification_is_from_property_server):
-        prop_path_parts = prop_path.split('.')
-        if prop_path_parts[-1] == 'temperature':
-            self.temperature_label.setText('Temperature: {}°C'.format(prop_value))
-        else:
-            ccs = self.color_control_sets[prop_path_parts[-2]]
-            if prop_path_parts[-1] == 'enabled':
-                if ccs.toggle.isChecked() != prop_value:
-                    ccs.toggle.setChecked(prop_value)
-                if is_prop_update:
-                    ccs.enabled = prop_value
-                else:
-                    if ccs.enabled != prop_value:
-                        ccs.set_enable(prop_value)
-                        ccs.enabled = prop_value
-            elif prop_path_parts[-1] == 'intensity':
-                if ccs.slider.value() != prop_value:
-                    ccs.slider.setValue(prop_value)
-                if ccs.spin_box.value() != prop_value:
-                    ccs.spin_box.setValue(prop_value)
-                if is_prop_update:
-                    ccs.intensity = prop_value
-                else:
-                    if ccs.intensity != prop_value:
-                        ccs.set_intensity(prop_value)
-                        ccs.intensity = prop_value
+        lamp_specs = scope.il.spectra_x.lamp_specs
+        # sort lamp names by the values of the lamp_specs dict; to wit, the center wavelengths
+        lamps = sorted(lamp_specs.keys(), key=lamp_specs.get)
+        self.lamp_controllers = [LampController(self, lamp, grid_layout, i) for i, lamp in enumerate(lamps)]
 
-    def disable_all_slot(self):
-        for color, ccs in self.color_control_sets.items():
-            ccs.set_enable(False)
+        bottom_layout = Qt.QHBoxLayout()
+        container_layout.addLayout(bottom_layout)
+        disable_all_button = Qt.QPushButton('Disable All')
+        bottom_layout.addWidget(disable_all_button)
+        disable_all_button.clicked.connect(self.disable_all)
+        temperature_label = Qt.QLabel('Temperature: -')
+        bottom_layout.addWidget(temperature_label)
+        self.subscribe(SPX_ROOT + 'temperature'),
+           callback=lambda temp: temperature_label.setText('Temperature: {}°C'.format(temp)))
+
+    def disable_all(self):
+        for lamp_controller in self.lamp_controllers:
+            lamp_controller.toggle.setChecked(False)
+
+class LampController:
+    def __init__(self, widget, name, layout, row):
+        toggle = Qt.QCheckBox(name)
+        layout.addWidget(toggle, row, 0)
+        toggle_update = widget.subscribe(SPX_ROOT + name + '.enabled', callback=toggle.setChecked)
+        toggle.toggled.connect(toggle_update)
+        self.toggle = toggle
+
+        slider = Qt.QSlider(Qt.Qt.Horizontal)
+        layout.addWidget(slider, row, 1)
+        slider.setRange(0, 255)
+        slider.setSingleStep(1)
+        slider.setPageStep(5)
+        slider.setValue(0)
+        self.slider = slider
+
+        spinbox = Qt.QSpinBox()
+        layout.addWidget(spinbox, row, 2)
+        spinbox.setRange(0, 255)
+        spinbox.setSingleStep(1)
+        spinbox.setValue(0)
+
+        self.update_spx = widget.subscribe(SPX_ROOT + name + '.intensity', callback=slider.setValue)
+        # note that giving slider.setValue as the callback will work fine. That will cause a slider.valueChanged
+        # signal, which due to the slider_changed() function will cause the spinbox to be updated too.
+        # It also calls update_spx(), which seems like an odd thing to fire off in response to getting
+        # an update *from* the spectra x. But update_spx is smart enough to not actually do anything in
+        # response to trying to update a value to the value it already is...
+        slider.valueChanged.connect(self.slider_changed)
+        spinbox.valueChanged.connect(self.slider.setValue)
+
+    def slider_changed(self, value):
+        self.spinbox.setValue(value)
+        self.update_spx(value)

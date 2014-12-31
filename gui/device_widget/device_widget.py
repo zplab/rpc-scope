@@ -20,84 +20,71 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-# Authors: Erik Hvatum <ice.rikh@gmail.com>
+# Authors: Erik Hvatum <ice.rikh@gmail.com>, Zach Pincus <zpincus@wustl.edu>
 
-import os
-from pathlib import Path
-from PyQt5 import Qt, uic
+from PyQt5 import Qt
+import collections
+from ...simple_rpc import rpc_client
 
 class DeviceWidget(Qt.QWidget):
-    # It is not safe to manipulate Qt widgets from another thread, and our property change callbacks
-    # are executed by the property client thread.  It is safe to emit a signal from a non-Qt thread,
-    # so long as any connections to that signal are established explicitly as queued connections (Qt
-    # will fail to recognize the discrepancy in thread affinity for a signal emitted from a thread
-    # not running a Qt event loop, preventing Qt.Qt.AutomaticConnection connections from
-    # automatically entering cross-thread (queued) mode.
-    _ChangeSignalFromPropertyClient = Qt.pyqtSignal(str, object)
+    _PropertyChangeSignal = Qt.pyqtSignal(str, object)
 
-    def __init__(self, scope, scope_properties, device_path, py_ui_fpath, parent):
+    def __init__(self, scope, scope_properties, parent):
         super().__init__(parent)
         self.setAttribute(Qt.Qt.WA_DeleteOnClose, True)
-        self.updating_gui = False
-        self.scope = scope
+        self.rpc_client = scope._rpc_client
+        self.rpc_functions = scope._functions_proxied
         self.scope_properties = scope_properties
-        self.device_path = device_path
-        self.device_path_parts = self.device_path.split('.')
-        self.subscribed_prop_paths = set()
-
-        self.device = self
-        for p in self.device_path.split('.'):
-            self.device = getattr(self.device, p)
-
-        if py_ui_fpath is None:
-            # Child class either does not use a .ui file or wants to call uic.loadUiType and such itself
-            pass
-        else:
-            ui_sfpath = str(py_ui_fpath)
-            ui_fpath = Path(py_ui_fpath)
-            if ui_sfpath.endswith('.py'):
-                # Child class is being lazy and gave us its __file__ variable rather than its .ui filename/path
-                ui_fpath = ui_fpath.parent / (ui_fpath.parts[-1][:-3] + '.ui')
-                ui_sfpath = str(ui_fpath)
-            # Note that uic.loadUiType(..) returns a tuple containing two class types (the form class and the Qt base
-            # class).  The line below instantiates the form class.  It is assumed that the .ui file resides in the same
-            # directory as this .py file.
-            self.ui = uic.loadUiType(ui_sfpath)[0]()
-            self.ui.setupUi(self)
-
-    def post_init(self, rebroadcast_on_init):
-        self._ChangeSignalFromPropertyClient.connect(self.property_change_slot, Qt.Qt.QueuedConnection)
-        if rebroadcast_on_init:
-            self.scope.rebroadcast_properties()
+        self._subscribed_properties = collections.defaultdict(set)
+        # It is not safe to manipulate Qt widgets from another thread, and our property change callbacks
+        # are executed by the property client thread.  It is safe to emit a signal from a non-Qt thread,
+        # so long as any connections to that signal are established explicitly as queued connections.
+        # (Qt.Qt.AutomaticConnection connections automatically enter cross-thread (queued) mode ONLY
+        # when the thread in question is a Qt thread, so we need to use the explicit queued connection.)
+        self._PropertyChangeSignal.connect(self._property_changed, Qt.Qt.QueuedConnection)
 
     def closeEvent(self, event):
-        for prop_path in self.subscribed_prop_paths:
-            self.scope_properties.unsubscribe(prop_path, self.property_client_property_change_callback, False)
+        for property in self.subscribed_properties:
+            self.scope_properties.unsubscribe(property, self._PropertyChangeSignal.emit, False)
         event.accept()
 
-    def subscribe(self, *prop_path_parts):
-        prop_path = '.'.join((self.device_path,) + prop_path_parts)
-        self.scope_properties.subscribe(prop_path, self.property_client_property_change_callback, False)
-        self.subscribed_prop_paths.add(prop_path)
+    def _property_changed(self, property, value):
+        for handler in self._subscribed_properties[property]:
+            handler.handle_update(value)
 
-    def property_client_property_change_callback(self, prop_path, prop_value):
-        # Runs in property client thread
-        self._ChangeSignalFromPropertyClient.emit(prop_path, prop_value)
+    def _get_property_setter(self, property):
+        scope, *device_path, property_name = property.split('.')
+        # all property names start with 'scope.', but the rpc server doesn't "see" the top-most namespace.
+        property_setter = '.'join(device_path) + '.set_' + property_name
+        if property_setter in self.rpc_functions:
+            return self.rpc_client.proxy_function(property_setter)
+        else:
+            return lambda x: None
 
-    def handle_property_change(self, prop_path, prop_value, change_notification_is_from_property_server):
-        raise NotImplementedError('pure virtual method called')
+    def is_property_readonly(self, property):
+        return self._get_property_setter(property) is None
 
-    def property_change_slot(self, prop_path, prop_value, change_notification_is_from_property_server=True):
-        # Runs in GUI thread
-        self.property_change_slot_verify_subscribed(prop_path)
-        if not self.updating_gui: # Avoid recursive valueChanged calls and looping changes caused by running ahead of property change notifications
+    def subscribe(self, property, callback):
+        rpc_updater = self._get_property_setter(property)
+        handler = _PropertyHandler(rpc_updater, callback)
+        self.scope_properties.subscribe(property, self._PropertyChangeSignal.emit, valueonly=False)
+        self._subscribed_properties[property].add(handler)
+        return handler.update_device_if_needed
+
+class _PropertyHandler:
+    def __init__(self, rpc_updater, callback):
+        self.rpc_updater = rpc_updater
+        self.callback = callback
+
+    def handle_update(self, value):
+        self.value = value
+        self.callback(value)
+
+    def update_device_if_needed(self, value):
+        if value != self.value: # no cyclic updates, thankyouverymuch
             try:
-                self.updating_gui = True
-                self.handle_property_change(prop_path, prop_value, change_notification_is_from_property_server)
-            finally:
-                self.updating_gui = False
-
-    def property_change_slot_verify_subscribed(self, prop_path):
-        if prop_path not in self.subscribed_prop_paths:
-            raise RuntimeError('Received GUI update or property change notification for property "{}".  '.format(prop_path) + \
-                               'However, we should not be subscribed to change notifications for this property.')
+                self.rpc_updater(value)
+            except rpc_client.RPCError:
+                self.handle_update(self.value) # tell the GUI that the old value is still correct
+                raise
+            self.value = value
