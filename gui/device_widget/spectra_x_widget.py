@@ -48,7 +48,7 @@ class SpectraXWidget(device_widget.DeviceWidget):
         disable_all_button.clicked.connect(self.disable_all)
         temperature_label = Qt.QLabel('Temperature: -')
         bottom_layout.addWidget(temperature_label)
-        self.subscribe(SPX_ROOT + 'temperature'),
+        self.subscribe(SPX_ROOT + 'temperature',
            callback=lambda temp: temperature_label.setText('Temperature: {}°C'.format(temp)))
 
     def disable_all(self):
@@ -69,13 +69,13 @@ class LampController:
         slider.setSingleStep(1)
         slider.setPageStep(5)
         slider.setValue(0)
-        self.slider = slider
 
         spinbox = Qt.QSpinBox()
         layout.addWidget(spinbox, row, 2)
         spinbox.setRange(0, 255)
         spinbox.setSingleStep(1)
         spinbox.setValue(0)
+        self.spinbox = spinbox
 
         self.update_spx = widget.subscribe(SPX_ROOT + name + '.intensity', callback=slider.setValue)
         # note that giving slider.setValue as the callback will work fine. That will cause a slider.valueChanged
@@ -84,7 +84,7 @@ class LampController:
         # an update *from* the spectra x. But update_spx is smart enough to not actually do anything in
         # response to trying to update a value to the value it already is...
         slider.valueChanged.connect(self.slider_changed)
-        spinbox.valueChanged.connect(self.slider.setValue)
+        spinbox.valueChanged.connect(slider.setValue)
 
     def slider_changed(self, value):
         self.spinbox.setValue(value)

@@ -56,21 +56,22 @@ LAMP_SPECS = {
 LAMP_NAMES = set(LAMP_DAC_COMMANDS.keys())
 
 class Lamp:
-    def __init__(name, spectra_x):
-        self.name = name
-        self.spectra_x = spectra_x
+    def __init__(self, name, spectra_x):
+        self._name = name
+        self._spectra_x = spectra_x
 
     def set_intensity(self, value):
-        self.spectra_x.lamp_intensities(self.name=value)
+        self._spectra_x.lamp_intensities(**{self._name:value})
 
     def get_intensity(self):
-        return self.spectra_x._lamp_intensities[self.name]
+        return self._spectra_x._lamp_intensities[self._name]
 
     def set_enabled(self, enable):
-        self.spectra_x.lamp_enableds(self.name=enable)
+        
+        self._spectra_x.lamp_enableds(**{self._name:enable})
 
     def get_enabled(self):
-        return self.spectra_x._lamp_enableds[self.name]
+        return self._spectra_x._lamp_enableds[self._name]
 
 class SpectraX(property_device.PropertyDevice):
     def __init__(self, iotool, property_server=None, property_prefix=''):
@@ -97,8 +98,8 @@ class SpectraX(property_device.PropertyDevice):
 
         self._lamp_intensities = {}
         self._lamp_enableds = {}
-        self.lamp_enable(**{lamp:False for lamp in LAMP_NAMES})
-        self.lamp_intensity(**{lamp:255 for lamp in LAMP_NAMES})
+        self.lamp_enableds(**{lamp:False for lamp in LAMP_NAMES})
+        self.lamp_intensities(**{lamp:255 for lamp in LAMP_NAMES})
         for name in LAMP_NAMES:
             setattr(self, name, Lamp(name, self))
 

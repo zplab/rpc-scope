@@ -36,21 +36,21 @@ class ScopeServer:
         property_addr = config.Server.property_addr(host)
         context = zmq.Context()
 
-        self.property_update_server = property_server.ZMQServer(property_addr, context=context, verbose=verbose)
+        property_update_server = property_server.ZMQServer(property_addr, context=context, verbose=verbose)
 
         scope_controller = scope.Scope(property_update_server, verbose=verbose)
         # add transfer_ism_buffer as hidden elements of the namespace, which RPC clients can use for seamless buffer sharing
         scope_controller._transfer_ism_buffer = transfer_ism_buffer
 
-        self.interrupter = rpc_server.ZMQInterrupter(interrupt_addr, context=context, verbose=verbose)
+        interrupter = rpc_server.ZMQInterrupter(interrupt_addr, context=context, verbose=verbose)
         self.scope_server = rpc_server.ZMQServer(scope_controller, interrupter, rpc_addr, context=context, verbose=verbose)
 
     def run(self):
         self.scope_server.run()
 
-def simple_server_main(verbose=False):
-    server = ScopeServer(verbose)
-    print('Scope Server Ready (Listening on {})'.format(config.Server.HOST))
+def simple_server_main(host, verbose=False):
+    server = ScopeServer(host, verbose)
+    print('Scope Server Ready (Listening on {})'.format(host))
     try:
         server.run()
     except KeyboardInterrupt:
@@ -64,5 +64,5 @@ if __name__ == '__main__':
     parser.add_argument("--public", action='store_true', help="Allow network connections to the server [default: allow only local connections]")
     parser.add_argument("--verbose", action='store_true', help="Print human-readable representations of all RPC calls and property state changes to stdout.")
     args = parser.parse_args()
-    host = config.PUBLICHOST if args.public else config.LOCALHOST
+    host = config.Server.PUBLICHOST if args.public else config.Server.LOCALHOST
     simple_server_main(host, verbose=args.verbose)

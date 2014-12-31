@@ -44,9 +44,15 @@ class DeviceWidget(Qt.QWidget):
         self._PropertyChangeSignal.connect(self._property_changed, Qt.Qt.QueuedConnection)
 
     def closeEvent(self, event):
-        for property in self.subscribed_properties:
-            self.scope_properties.unsubscribe(property, self._PropertyChangeSignal.emit, False)
+        for property in self._subscribed_properties:
+            self.scope_properties.unsubscribe(property, self._emit_property_changed)
         event.accept()
+
+    def _emit_property_changed(self, property, value):
+        # need to wrap the emit in a method, because each time emit is accessed, it is a new
+        # object, but each time methods are accessed, we get the same object. This is important
+        # because the property_client unsubscribes based on object identity.
+        self._PropertyChangeSignal.emit(property, value)
 
     def _property_changed(self, property, value):
         for handler in self._subscribed_properties[property]:
@@ -55,7 +61,7 @@ class DeviceWidget(Qt.QWidget):
     def _get_property_setter(self, property):
         scope, *device_path, property_name = property.split('.')
         # all property names start with 'scope.', but the rpc server doesn't "see" the top-most namespace.
-        property_setter = '.'join(device_path) + '.set_' + property_name
+        property_setter = '.'.join(device_path) + '.set_' + property_name
         if property_setter in self.rpc_functions:
             return self.rpc_client.proxy_function(property_setter)
         else:
@@ -67,7 +73,7 @@ class DeviceWidget(Qt.QWidget):
     def subscribe(self, property, callback):
         rpc_updater = self._get_property_setter(property)
         handler = _PropertyHandler(rpc_updater, callback)
-        self.scope_properties.subscribe(property, self._PropertyChangeSignal.emit, valueonly=False)
+        self.scope_properties.subscribe(property, self._emit_property_changed)
         self._subscribed_properties[property].add(handler)
         return handler.update_device_if_needed
 
@@ -75,6 +81,7 @@ class _PropertyHandler:
     def __init__(self, rpc_updater, callback):
         self.rpc_updater = rpc_updater
         self.callback = callback
+        self.value = None
 
     def handle_update(self, value):
         self.value = value

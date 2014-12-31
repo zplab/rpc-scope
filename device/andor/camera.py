@@ -125,7 +125,7 @@ class Camera(property_device.PropertyDevice):
         self._add_andor_enum('CycleMode', 'cycle_mode')
         self._add_andor_enum('FanSpeed', 'fan', readonly=True)
         self._add_andor_enum('IOSelector', 'io_selector')
-        self._encoding_enum = self._add_andor_enum('PixelEncoding', 'pixel_encoding', readonly=True)
+        self._add_andor_enum('PixelEncoding', 'pixel_encoding', readonly=True)
         self._add_andor_enum('PixelReadoutRate', 'pixel_readout_rate')
         self._gain_enum = self._add_andor_enum('SimplePreAmpGainControl', 'sensor_gain', custom_setter=True) # setter defined below uses _gain_enum
         self._add_andor_enum('ElectronicShutteringMode', 'shutter_mode')
@@ -149,7 +149,6 @@ class Camera(property_device.PropertyDevice):
         self._add_andor_property('IOInvert', 'selected_io_pin_inverted', 'Bool')
         self._add_andor_property('MaxInterfaceTransferRate', 'max_interface_fps', 'Float', readonly=True)
         self._add_andor_property('Overlap', 'overlap_enabled', 'Bool')
-        self._add_andor_property('ReadoutTime', 'readout_time', 'Float', readonly=True)
         self._add_andor_property('SerialNumber', 'serial_number', 'String', readonly=True)
         self._add_andor_property('SpuriousNoiseFilter', 'spurious_noise_filter_enabled', 'Bool')
         self._add_andor_property('StaticBlemishCorrection', 'static_blemish_correction_enabled', 'Bool')
@@ -158,19 +157,31 @@ class Camera(property_device.PropertyDevice):
         self._add_andor_property('SensorCooling', 'sensor_cooling_enabled', 'Bool', readonly=True)
         self._add_andor_property('SensorTemperature', 'sensor_temperature', 'Float', readonly=True)
 
-        # define custom getter and setters for exposure_time below
+        # define custom getter and setters for exposure_time and readout_time below
         self._add_property_data('ExposureTime', 'Float', False, 'exposure_time', self.get_exposure_time)
-
+        self._add_property_data('ReadoutTime', 'Float', True, 'readout_time', self.get_readout_time)
 
         if property_server:
             self._c_callback = lowlevel.FeatureCallback(self._andor_callback)
             for at_feature in self._callback_properties.keys():
                 lowlevel.RegisterFeatureCallback(at_feature, self._c_callback, 0)
 
+            self._sleep_time = 10
+            self._timer_running = True
+            self._timer_thread = threading.Thread(target=self._timer_update_temp, daemon=True)
+            self._timer_thread.start()
+
         self._update_live_frame = self._add_property('live_frame', None)
         self._update_property('live_mode', False)
         self._latest_live_array = None
         self._state_stack = []
+
+    def _timer_update_temp(self):
+        while self._timer_running:
+            for property in ('SensorTemperature', 'TemperatureStatus'):
+                getter, updater = self._callback_properties[property]
+                updater(getter())
+            time.sleep(self._sleep_time)
 
     def return_to_default_state(self):
         """Set the camera to its default, baseline state. Always a good idea to do before doing anything else."""
@@ -314,19 +325,22 @@ class Camera(property_device.PropertyDevice):
         """Return exposure time in ms"""
         return 1000 * lowlevel.GetFloat('ExposureTime')
 
+    def get_readout_time(self):
+        """Return sensor readout time in ms"""
+        return 1000 * lowlevel.GetFloat('ReadoutTime')
+
     def set_exposure_time(self, ms):
         """Set the exposure time in ms. If necessary, live imaging will be paused."""
-        sec = ms / 1000
         live = self._live_mode
         if live: # pause live if we can't do fast exposure switching
-            current_exposure = lowlevel.GetFloat('ExposureTime')
-            read_time = self.get_readout_time()
-            current_short = current_exposure < read_time
-            new_short = sec < read_time
+            current_exposure_ms = self.get_exposure_time()
+            read_time_ms = self.get_readout_time()
+            current_short = current_exposure < read_time_ms
+            new_short = ms < read_time_ms
             must_pause_live = current_short != new_short
             if must_pause_live:
                 self.set_live_mode(False)
-        lowlevel.SetFloat('ExposureTime', sec)
+        lowlevel.SetFloat('ExposureTime', ms / 1000)
         if live:
             if must_pause_live:
                 self.set_live_mode(True)
@@ -344,11 +358,11 @@ class Camera(property_device.PropertyDevice):
                 1000 * lowlevel.GetFloatMax('ExposureTime'))
 
     def set_sensor_gain(self, value):
-        with self._live_guarded:
+        with self._live_guarded():
             self._gain_enum.set_value(value)
             if value.startswith('12'):
                 # make sure we always use the packed encoding for 12-bit mode
-                lowlevel.SetEnumIndex('PixelEncoding', self._encoding_enum._usr_to_hw['Mono12Packed'])
+                lowlevel.SetEnumString('PixelEncoding', 'Mono12Packed')
 
     def get_aoi(self):
         """Convenience wrapper around the aoi_left, aoi_top, aoi_width, aoi_height
@@ -439,16 +453,16 @@ class Camera(property_device.PropertyDevice):
         live mode, based on data from the andor API and also knowledge from the
         camera manual about how many cycles things take in different camera modes.
         Returns trigger interval in seconds."""
-        readout_time = self.get_readout_time()
-        if self.get_exposure_time() / 1000 <= readout_time:
+        readout_time_ms = self.get_readout_time()
+        if self.get_exposure_time() <= readout_time_ms:
             # It may be a bug in the andor library that get_frame_rate() is wrong
-            # for short exposures (< readout_time), but in any case, it is, so we
+            # for short exposures (exposure <= readout_time), but in any case, it is, so we
             # need to note that software triggering mode (used for live viewing)
             # takes two full read cycles per image.
-            frame_time = readout_time * 2
+            frame_time_sec = readout_time * 2 / 1000
         else:
-            frame_time = 1/self.get_frame_rate()
-        trigger_interval = max(1/self.get_max_interface_fps(), frame_time) * 1.05
+            frame_time_sec = 1/self.get_frame_rate()
+        trigger_interval = max(1/self.get_max_interface_fps(), frame_time_sec) * 1.05
         return trigger_interval
 
     def _disable_live(self):

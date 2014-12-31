@@ -136,7 +136,7 @@ class ZMQClient(PropertyClient):
         super().subscribe(property_name, callback, valueonly)
     subscribe.__doc__ = PropertyClient.subscribe.__doc__
 
-    def unsubscribe(self, property_name, callback, valueonly=True):
+    def unsubscribe(self, property_name, callback, valueonly=False):
         super().unsubscribe(property_name, callback, valueonly)
         self.socket.setsockopt_string(zmq.UNSUBSCRIBE, property_name)
     unsubscribe.__doc__ = PropertyClient.unsubscribe.__doc__

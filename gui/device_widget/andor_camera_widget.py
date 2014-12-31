@@ -30,7 +30,7 @@ INT_MIN, INT_MAX = 1, None
 FLOAT_MIN, FLOAT_MAX, FLOAT_DECIMALS = 0, None, 3
 CAM_ROOT = 'scope.camera.'
 
-class AndorCameraWidgetd(device_widget.DeviceWidget):
+class AndorCameraWidget(device_widget.DeviceWidget):
     basic_properties = [ # list of properties to display, and logical range info if necessary
         'is_acquiring',
         'temperature_status',
@@ -49,28 +49,34 @@ class AndorCameraWidgetd(device_widget.DeviceWidget):
         'frame_count',
         'frame_rate',
         'max_interface_fps',
+        'readout_time',
         'trigger_mode'
     ]
 
     units = {
         'exposure_time': 'ms',
-        'frame_rate': 'fps'
+        'frame_rate': 'fps',
+        'sensor_temperature': '°C',
+        'readout_time': 'ms',
+        'max_interface_fps': 'fps'
     }
 
     range_hints = {
         'exposure_time': (0.001, 30000, 3)
     }
 
-    def __init__(self, scope, scope_properties, parent=None):
+    def __init__(self, scope, scope_properties, show_all=False, parent=None):
         super().__init__(scope, scope_properties, parent)
         self.setWindowTitle('Andor Camera ({})'.format(scope.camera.model_name))
         self.layout = Qt.QGridLayout()
         self.setLayout(self.layout)
         self.camera = scope.camera
-        property_types = self.camera.get_andor_property_types()
+        property_types = self.camera.andor_property_types
         advanced_properties = sorted(property_types.keys() - set(self.basic_properties))
-
-        for row, property in enumerate(basic_properties):
+        properties = self.basic_properties
+        if show_all:
+            properties = list(properties) + advanced_properties
+        for row, property in enumerate(properties):
             type, readonly = property_types[property]
             self.add_widget(row, property, type, readonly)
 
@@ -112,21 +118,22 @@ class AndorCameraWidgetd(device_widget.DeviceWidget):
             except ValueError as e: # from the coercion
                 Qt.QMessageBox.warning(self, 'Invalid Value', e.args[0])
             except rpc_client.RPCError as e: # from the update
-                if e.args[0].find('AndorError: OUTOFRANGE') != -1:
+                if e.args[0].find('OUTOFRANGE') != -1:
                     min, max = getattr(self.camera, property+'_range')
                     if min is None:
                         min = '?'
                     if max is None:
                         max = '?'
                     error = 'Given the camera state, {} must be in the range [{}, {}].'.format(property, min, max)
-                elif e.args[0].find('AndorError: NOTWRITABLE'):
+                elif e.args[0].find('NOTWRITABLE'):
                     error = 'Given the camera state, {} is not modifiable.'.format(property)
                 else:
                     error = 'Could not set {} ({}).'.format(property, e.args[0])
                 Qt.QMessageBox.warning(self, 'Invalid Value', error)
-        widget.editingFinished.connect(editingFinished)
+        widget.editingFinished.connect(editing_finished)
+        return widget
 
-    def get_numeric_validator(property, type):
+    def get_numeric_validator(self, property, type):
         if type == 'Float':
             validator = Qt.QDoubleValidator()
             if property in self.range_hints:
@@ -151,33 +158,32 @@ class AndorCameraWidgetd(device_widget.DeviceWidget):
         widget = Qt.QComboBox()
         values = sorted(getattr(self.camera, property+'_values').keys())
         indices = {v:i for i, v in enumerate(values)}
-        widget.setItems(values)
+        widget.addItems(values)
         update = self.subscribe(CAM_ROOT + property, callback=lambda value: widget.setCurrentIndex(indices[value]))
         def changed(value):
             try:
                 update(value)
-            except rpc_client.RPCError as e: # from the update
-                accepted_values = sorted(k for k, v in getattr(self.camera, property+'_values') if v)
-                #TODO figure out the AndorError type for invalid value, and raise a more generic error if it's not that.
-                error = 'Given the camera state, {} can only be one of [{}].'.format(property, ', '.join(accepted_values))
+            except rpc_client.RPCError as e:
+                if e.args[0].find('NOTAVAILABLE'):
+                    accepted_values = sorted(k for k, v in getattr(self.camera, property+'_values').items() if v)
+                    error = 'Given the camera state, {} can only be one of [{}].'.format(property, ', '.join(accepted_values))
+                else:
+                    error = 'Could not set {} ({}).'.format(property, e.args[0])
                 Qt.QMessageBox.warning(self, 'Invalid Value', error)
         widget.currentIndexChanged[str].connect(changed)
+        return widget
 
     def make_bool_widget(self, property):
-        widget = Qt.QCheckBox(name)
-        update = widget.subscribe(CAM_ROOT + property, callback=toggle.setChecked)
-        toggle.toggled.connect(togupdate)
-
-        widget = Qt.QComboBox()
-        values = sorted(getattr(self.camera, property+'_values').keys())
-        indices = {v:i for i, v in enumerate(values)}
-        widget.setItems(values)
-        update = self.subscribe(CAM_ROOT + property, callback=lambda value: widget.setCurrentIndex(indices[value]))
+        widget = Qt.QCheckBox()
+        update = self.subscribe(CAM_ROOT + property, callback=widget.setChecked)
         def changed(value):
             try:
                 update(value)
-            except rpc_client.RPCError as e: # from the update
-                #TODO figure out the AndorError type for invalid toggle, and raise a more generic error if it's not that.
-                error = "Given the camera state, {} can't be changed.".format(property)
+            except rpc_client.RPCError as e:
+                if e.args[0].find('NOTWRITABLE'):
+                    error = "Given the camera state, {} can't be changed.".format(property)
+                else:
+                    error = 'Could not set {} ({}).'.format(property, e.args[0])
                 Qt.QMessageBox.warning(self, 'Invalid Value', error)
         widget.toggled.connect(changed)
+        return widget
