@@ -173,7 +173,8 @@ class Camera(property_device.PropertyDevice):
 
         self._update_live_frame = self._add_property('live_frame', None)
         self._update_property('live_mode', False)
-        self._latest_live_array = None
+        self._latest_live_data = None
+        self._latest_timestamp = None
         self._state_stack = []
 
     def _timer_update_temp(self):
@@ -280,7 +281,6 @@ class Camera(property_device.PropertyDevice):
         finally:
             if live:
                 self.set_live_mode(True)
-
 
     def set_state(self, **state):
         """Set a number of camera parameters at once using keyword arguments, e.g.
@@ -401,6 +401,10 @@ class Camera(property_device.PropertyDevice):
         """Set the AOI to full frame"""
         self._set_aoi({'aoi_height': 2160, 'aoi_left': 1, 'aoi_top': 1, 'aoi_width': 2560})
 
+    def reset_timestamp(self):
+        """Reset timestamp clock to zero."""
+        lowlevel.Command('TimestampClockReset')
+
     def get_live_mode(self):
         return self._live_mode
 
@@ -417,7 +421,9 @@ class Camera(property_device.PropertyDevice):
         # was stored in. The scope_client code will transparently retrieve the
         # image bytes based on this name, either via the ISM_Buffer mechanism if
         # the client is on the same machine, or over the network.
-        name, array = self._latest_live_array
+        if self._latest_live_data is None:
+            raise RuntimeError('No live image has been acquired.')
+        name, array, self._latest_timestamp = self._latest_live_data
         transfer_ism_buffer.server_register_array_for_transfer(name, array)
         return name
 
@@ -443,7 +449,7 @@ class Camera(property_device.PropertyDevice):
         self._live_mode = True
         lowlevel.Command('AcquisitionStart')
         def update(frame_number):
-            self._latest_live_array = buffer_maker.convert_buffer()
+            self._latest_live_data = buffer_maker.convert_buffer()
             self._update_live_frame(frame_number)
         self._live_reader = LiveReader(buffer_maker.queue_buffer, update, trigger_interval)
         self._live_trigger = LiveTrigger(trigger_interval, self._live_reader)
@@ -571,13 +577,17 @@ class Camera(property_device.PropertyDevice):
         or an AndorError of TIMEDOUT will be raised."""
         self._buffer_maker.queue_if_needed()
         lowlevel.WaitBuffer(int(round(read_timeout_ms)))
-        name, output_array = self._buffer_maker.convert_buffer()
+        name, output_array, self._latest_timestamp = self._buffer_maker.convert_buffer()
         transfer_ism_buffer.server_register_array_for_transfer(name, output_array)
         # Return the name of the shared memory buffer that the image
         # was stored in. The scope_client code will transparently retrieve the
         # image bytes based on this name, either via the ISM_Buffer mechanism if
         # the client is on the same machine, or over the network.
         return name
+
+    def get_latest_timestamp(self):
+        """Return the timestamp of the most recent image acquired."""
+        return self._latest_timestamp
 
     def end_image_sequence_acquisition(self):
         """Stop an image-acquisition sequence and perform necessary cleanup."""
@@ -596,22 +606,22 @@ class BufferFactory:
         self.buffer_shape = (width, height)
         input_encoding = lowlevel.GetEnumStringByIndex('PixelEncoding', lowlevel.GetEnumIndex('PixelEncoding'))
         self.convert_buffer_args = (width, height, stride, input_encoding, 'Mono16')
-        image_buffer_ctype = ctypes.c_uint8 * lowlevel.GetInt('ImageSizeBytes')
+        image_bytes = lowlevel.GetInt('ImageSizeBytes')
         self.queued_buffers = collections.deque()
         if cycle:
-            self.buffers = itertools.cycle([image_buffer_ctype() for i in range(frame_count)])
+            self.buffers = itertools.cycle([numpy.empty(image_bytes, dtype=numpy.uint8) for i in range(frame_count)])
         else:
-            self.buffers = self._new_buffer_iter(image_buffer_ctype, frame_count)
+            self.buffers = self._new_buffer_iter(image_bytes, frame_count)
         if frame_count == 1 and not cycle:
             self.names = iter([namebase])
         else:
             self.names = self._name_iter(namebase)
 
-    def _new_buffer_iter(self, image_buffer_ctype, frame_count):
+    def _new_buffer_iter(self, image_bytes, frame_count):
         i = 0
         while True:
             i += 1
-            yield image_buffer_ctype()
+            yield numpy.empty(image_bytes, dtype=numpy.uint8)
             if frame_count is not None and i == frame_count:
                 return
 
@@ -622,9 +632,9 @@ class BufferFactory:
             i += 1
 
     def queue_buffer(self):
-        buf = next(self.buffers)
-        lowlevel.QueueBuffer(buf, len(buf))
-        self.queued_buffers.append(buf)
+        buffer = next(self.buffers)
+        lowlevel.QueueBuffer(buffer.ctypes.data_as(UINT8_P), len(buffer))
+        self.queued_buffers.append(buffer)
 
     def queue_if_needed(self):
         if not self.queued_buffers:
@@ -634,14 +644,28 @@ class BufferFactory:
         name = next(self.names)
         output_array = transfer_ism_buffer.server_create_array(name, shape=self.buffer_shape,
             dtype=numpy.uint16, order='Fortran')
-        lowlevel.ConvertBuffer(self.queued_buffers.popleft(), output_array.ctypes.data_as(UINT8_P),
+        buffer = self.queued_buffers.popleft()
+        timestamp = parse_buffer_metadata(buffer, 1) # timestamp is metadata CID 1
+        if timestamp is not None:
+            timestamp = timestamp.view('<u8')[0] # timestamp is 8 bytes of little-endian unsigned int
+        lowlevel.ConvertBuffer(buffer.ctypes.data_as(UINT8_P), output_array.ctypes.data_as(UINT8_P),
             *self.convert_buffer_args)
-        return name, output_array
+        return name, output_array, timestamp
 
-class SequenceAcquisitionState:
-    def __init__(self, live, names, output_arrays, convert_buffers):
-        self.live = live
-        self.acquire_data = zip(names, output_arrays, convert_buffers)
+def parse_buffer_metadata(buffer, desired_id):
+    offset = len(buffer)
+    while offset > 0:
+        # chunk layout: [chunk][CID][length], where CID and length are 4-byte little-endian uints,
+        # and where length is the size in bytes of chunk+CID.
+        length_start = offset - 4
+        cid_start = length_start - 4
+        length = buffer[length_start:offset].view('<u4')[0]
+        chunk_id = buffer[cid_start:length_start].view('<u4')[0]
+        chunk_start = length_start - length # length includes CID and data
+        if chunk_id == desired_id:
+            return buffer[chunk_start:cid_start]
+        offset = chunk_start
+    return None
 
 class LiveModeThread(threading.Thread):
     """Superclass for the threads that are used to run live camera acquisition,
