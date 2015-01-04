@@ -1,10 +1,3 @@
-# to change configuration values from these defaults, simply import this
-# file and modify the relevant attributes before importing other scope
-# modules.
-
-def _make_tcp_host(host, port):
-    return 'tcp://{}:{}'.format(host, port)
-
 class Server:
     LOCALHOST = '127.0.0.1'
     PUBLICHOST = '*'
@@ -12,24 +5,6 @@ class Server:
     RPC_PORT = '6000'
     RPC_INTERRUPT_PORT = '6001'
     PROPERTY_PORT = '6002'
-
-    @classmethod
-    def rpc_addr(cls, host=None):
-        if host is None:
-            host = cls.LOCALHOST
-        return _make_tcp_host(host, cls.RPC_PORT)
-
-    @classmethod
-    def interrupt_addr(cls, host=None):
-        if host is None:
-            host = cls.LOCALHOST
-        return _make_tcp_host(host, cls.RPC_INTERRUPT_PORT)
-
-    @classmethod
-    def property_addr(cls, host=None):
-        if host is None:
-            host = cls.LOCALHOST
-        return _make_tcp_host(host, cls.PROPERTY_PORT)
 
 class Stand:
     SERIAL_PORT = '/dev/ttyScope'

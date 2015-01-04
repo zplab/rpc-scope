@@ -24,7 +24,8 @@
 
 import time
 
-from .. import scope_configuration as config
+from ..config import scope_configuration
+config = scope_configuration.get_config()
 from .io_tool import commands
 
 class AcquisitionSequencer:

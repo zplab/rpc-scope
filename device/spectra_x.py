@@ -27,7 +27,8 @@ import time
 
 from ..util import smart_serial
 from ..util import property_device
-from .. import scope_configuration as config
+from ..config import scope_configuration
+config = scope_configuration.get_config()
 
 def _make_dac_bytes(IIC_Addr, bit):
     dac_bytes = bytearray(b'\x53\x00\x03\x00\x00\x00\x50')

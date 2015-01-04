@@ -24,9 +24,10 @@
 
 import time
 
-from ...util import smart_serial
-from ... import scope_configuration as config
 from . import commands
+from ...util import smart_serial
+from ...config import scope_configuration
+config = scope_configuration.get_config()
 
 _ECHO_OFF = b'\x80\xFF'
 

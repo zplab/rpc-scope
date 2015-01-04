@@ -35,7 +35,8 @@ from . import lowlevel
 from ...util import transfer_ism_buffer
 from ...util import enumerated_properties
 from ...util import property_device
-from ... import scope_configuration as config
+from ...config import scope_configuration
+config = scope_configuration.get_config()
 
 class ReadOnly_AT_Enum(enumerated_properties.ReadonlyDictProperty):
     def __init__(self, feature):

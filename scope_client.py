@@ -30,8 +30,9 @@ import numpy
 import threading
 
 from .simple_rpc import rpc_client, property_client
-from . import scope_configuration as config
 from .util import transfer_ism_buffer
+from .config import scope_configuration
+config = scope_configuration.get_config()
 
 def wrap_image_getter(namespace, func_name, get_data):
     function = getattr(namespace, func_name)
@@ -48,8 +49,8 @@ def wrap_images_getter(namespace, func_name, get_data):
     setattr(namespace, func_name, wrapped)
 
 def rpc_client_main(host='127.0.0.1', context=None):
-    rpc_addr = config.Server.rpc_addr(host)
-    interrupt_addr = config.Server.interrupt_addr(host)
+    rpc_addr = scope_configuration.rpc_addr(host)
+    interrupt_addr = scope_configuration.interrupt_addr(host)
 
     client = rpc_client.ZMQClient(rpc_addr, interrupt_addr, context)
     scope = client.proxy_namespace()
@@ -68,7 +69,7 @@ def rpc_client_main(host='127.0.0.1', context=None):
     return scope
 
 def property_client_main(host='127.0.0.1', context=None):
-    property_addr = config.Server.property_addr(host)
+    property_addr = scope_configuration.property_addr(host)
     scope_properties = property_client.ZMQClient(property_addr, context)
     return scope_properties
 
