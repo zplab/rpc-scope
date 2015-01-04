@@ -78,9 +78,7 @@ class Autofocus:
             z_positions = numpy.linspace(start, end, steps)
             self._stage.set_z(start)
             for next_step in range(1, steps+1): # step through with index of NEXT step. Will make sense when you read below
-#               t = time.time()
                 self._stage.wait()
-#               print(time.time() - t)
                 self._camera.send_software_trigger()
                 # if there is a next z position, wait for the exposure to finish and
                 # get the stage moving there
@@ -148,9 +146,7 @@ class ImageEvaluator(threading.Thread):
         self.start()
 
     def timer(self, array, z):
-        t = time.time()
         value = float(self.metric(array, z))
-        print('got metric {}'.format(time.time() - t))
         return value
 
     def get_focus_values(self):
@@ -168,12 +164,9 @@ class ImageEvaluator(threading.Thread):
             except queue.Empty:
                 continue
             self.z_values.append(z_value)
-            print('getting image')
-            t = time.time()
             name = self.camera.next_image(read_timeout_ms=1000)
             array = transfer_ism_buffer._release_array(name)
             if self.ims is not None:
                 self.ims.append(array)
-            print('got image {}'.format(time.time() - t))
             self.focus_futures.append(self.executor.submit(self.timer, array, z_value))
             self.z_queue.task_done()

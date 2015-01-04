@@ -22,6 +22,9 @@
 #
 # Authors: Zach Pincus
 
+from .util import logging
+logger = logging.get_logger(__name__)
+
 from serial import SerialException
 
 from .messaging import message_manager, message_device
@@ -37,21 +40,22 @@ from .device import footpedal
 
 from . import scope_configuration as config
 
-def _print_exception(preamble, e):
-    print(preamble + '\n\t' + str(e) + '\n')
+def _log_exception(preamble, e):
+    logger.warn(preamble + '\n\t' + str(e))
+    logger.debug('Detailed information\n', exc_info=True)
 
 class Namespace:
     pass
 
 class Scope(message_device.AsyncDeviceNamespace):
-    def __init__(self, property_server=None, verbose=False):
+    def __init__(self, property_server=None):
         super().__init__()
 
         if property_server:
             self.rebroadcast_properties = property_server.rebroadcast_properties
 
         try:
-            manager = message_manager.LeicaMessageManager(config.Stand.SERIAL_PORT, config.Stand.SERIAL_BAUD, verbose=verbose)
+            manager = message_manager.LeicaMessageManager(config.Stand.SERIAL_PORT, config.Stand.SERIAL_BAUD)
             self.stand = stand.Stand(manager, property_server, property_prefix='scope.stand.')
             self.nosepiece = objective_turret.ObjectiveTurret(manager, property_server, property_prefix='scope.nosepiece.')
             self.stage = stage.Stage(manager, property_server, property_prefix='scope.stage.')
@@ -60,14 +64,14 @@ class Scope(message_device.AsyncDeviceNamespace):
             has_scope = True
         except SerialException as e:
             has_scope = False
-            _print_exception('Could not connect to microscope:', e)
+            _log_exception('Could not connect to microscope:', e)
 
         try:
             self.iotool = io_tool.IOTool()
             has_iotool = True
         except SerialException as e:
             has_iotool = False
-            _print_exception('Could not connect to IOTool box:', e)
+            _log_exception('Could not connect to IOTool box:', e)
 
         if not has_scope and has_iotool:
             self.il = Namespace()
@@ -79,7 +83,7 @@ class Scope(message_device.AsyncDeviceNamespace):
                 has_spectra_x = True
             except SerialException as e:
                 has_spectra_x = False
-                _print_exception('Could not connect to Spectra X:', e)
+                _log_exception('Could not connect to Spectra X:', e)
             self.tl.lamp = tl_lamp.TL_Lamp(self.iotool, property_server, property_prefix='scope.tl.lamp.')
             self.footpedal = footpedal.Footpedal(self.iotool)
 
@@ -88,7 +92,7 @@ class Scope(message_device.AsyncDeviceNamespace):
             has_camera = True
         except camera.lowlevel.AndorError as e:
             has_camera = False
-            _print_exception('Could not connect to camera:', e)
+            _log_exception('Could not connect to camera:', e)
 
         if has_camera and has_iotool and has_spectra_x:
             self.camera.acquisition_sequencer = acquisition_sequencer.AcquisitionSequencer(self.camera, self.iotool, self.il.spectra_x)
@@ -99,4 +103,4 @@ class Scope(message_device.AsyncDeviceNamespace):
         try:
             self.peltier = peltier.Peltier(property_server, property_prefix='scope.peltier.')
         except SerialException as e:
-            _print_exception('Could not connect to peltier controller:', e)
+            _log_exception('Could not connect to peltier controller:', e)

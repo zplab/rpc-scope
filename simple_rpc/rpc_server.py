@@ -29,6 +29,9 @@ import threading
 import os
 import signal
 
+from ..util import logging
+logger = logging.get_logger(__name__)
+
 class RPCServer:
     """Dispatch remote calls to callable objects in a local namespace.
 
@@ -54,10 +57,9 @@ class RPCServer:
             kwonlyargs: list of keyword-only arguments
             kwonlydefaults: dict mapping keyword-only argument names to default values (if any)
     """
-    def __init__(self, namespace, interrupter, verbose=False):
+    def __init__(self, namespace, interrupter):
         self.namespace = namespace
         self.interrupter = interrupter
-        self.verbose = verbose
 
     def run(self):
         """Run the RPC server. To quit the server from another thread,
@@ -65,10 +67,7 @@ class RPCServer:
         self.running = True
         while self.running:
             command, args, kwargs = self._receive()
-            if self.verbose:
-                print("Received command: {}".format(command))
-                print("\t args: {}".format(args))
-                print("\t kwargs: {}".format(kwargs))
+            logger.debug("Received command: {}\n    args: {}\n    kwargs: {}", command, args, kwargs)
             self.process_command(command, args, kwargs)
 
     def process_command(self, command, args, kwargs):
@@ -124,13 +123,13 @@ class RPCServer:
         py_command = self.lookup(command)
         if py_command is None:
             self._reply('No such command: {}'.format(command), error=True)
+            logger.info('Received unknown command: {}', command)
             return
         try:
             self.interrupter.armed = True
             response = py_command(*args, **kwargs)
             self.interrupter.armed = False
-            if self.verbose:
-                print("\t response: {}".format(response))
+            logger.debug('Sending response: {}', response)
 
         except (Exception, KeyboardInterrupt) as e:
             exception_str = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
@@ -159,7 +158,7 @@ class RPCServer:
         raise NotImplementedError()
 
 class ZMQServer(RPCServer):
-    def __init__(self, namespace, interrupter, port, context=None, verbose=False):
+    def __init__(self, namespace, interrupter, port, context=None):
         """RPCServer subclass that uses ZeroMQ REQ/REP to communicate with clients.
         Arguments:
             namespace: contains a hierarchy of callable objects to expose to clients.
@@ -167,7 +166,7 @@ class ZMQServer(RPCServer):
             port: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
             context: a ZeroMQ context to share, if one already exists.
         """
-        super().__init__(namespace, interrupter, verbose)
+        super().__init__(namespace, interrupter)
         self.context = context if context is not None else zmq.Context()
         self.socket = self.context.socket(zmq.REP)
         self.socket.bind(port)
@@ -204,18 +203,16 @@ class Namespace:
 class Interrupter(threading.Thread):
     """Interrupter runs in a background thread and creates KeyboardInterrupt
     events in the main thread when requested to do so."""
-    def __init__(self, verbose=False):
+    def __init__(self):
         super().__init__(name='InterruptServer', daemon=True)
         self.running = True
         self.armed = False
-        self.verbose = verbose
         self.start()
 
     def run(self):
         while self.running:
             message = self._receive()
-            if self.verbose:
-                print('interrupt received: {}, armed={}'.format(message, self.armed))
+            logger.debug('Interrupt received: {}, armed={}', message, self.armed)
             if message == 'interrupt' and self.armed:
                 os.kill(os.getpid(), signal.SIGINT)
 
@@ -224,7 +221,7 @@ class Interrupter(threading.Thread):
 
 
 class ZMQInterrupter(Interrupter):
-    def __init__(self, port, context=None, verbose=False):
+    def __init__(self, port, context=None):
         """InterruptServer subclass that uses ZeroMQ PUSH/PULL to communicate with clients.
         Arguments:
             port: a string ZeroMQ port identifier, like ''tcp://127.0.0.1:5555''.
@@ -233,7 +230,7 @@ class ZMQInterrupter(Interrupter):
         self.context = context if context is not None else zmq.Context()
         self.socket = self.context.socket(zmq.PULL)
         self.socket.bind(port)
-        super().__init__(verbose)
+        super().__init__()
 
     def _receive(self):
         return str(self.socket.recv(), encoding='ascii')

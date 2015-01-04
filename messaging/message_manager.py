@@ -24,6 +24,10 @@
 
 import threading
 import collections
+
+from ..util import logging
+logger = logging.get_logger(__name__)
+
 from ..util import smart_serial
 
 class MessageManager(threading.Thread):
@@ -46,11 +50,10 @@ class MessageManager(threading.Thread):
      """
     thread_name = 'MessageManager'
 
-    def __init__(self, verbose=False, daemon=True):
+    def __init__(self, daemon=True):
         # pending_responses holds lists of callbacks to call for each response key
         self.pending_grouped_responses = collections.defaultdict(list)
         self.pending_standalone_responses = collections.defaultdict(list)
-        self.verbose = verbose
         super().__init__(name=self.thread_name, daemon=daemon)
         self.start()
 
@@ -62,8 +65,7 @@ class MessageManager(threading.Thread):
             if response is None:
                 break
             response_key = self._generate_response_key(response)
-            if self.verbose:
-                print('received response: {} with response key: {}'.format(response, response_key))
+            logger.debug('received response: {} with response key: {}', response, response_key)
 
             handled = False
             if response_key in self.pending_grouped_responses:
@@ -116,8 +118,7 @@ class MessageManager(threading.Thread):
         # things as quickly as possible on this side, so we will not use any
         # locking primitives and just hope for the best.
 
-        if self.verbose:
-            print('sending message: {!r} with response key: {!r}'.format(message, response_key))
+        logger.debug('sending message: {!r} with response key: {!r}', message, response_key)
         if response_key is not None and response_callback is not None:
             assert(onetime or coalesce)
             if coalesce:
@@ -141,12 +142,11 @@ class MessageManager(threading.Thread):
 
     def _handle_unexpected_response(self, response, response_key):
         """Handle a response that could not be matched to a response key."""
-        if self.verbose:
-            print('received UNPROMPTED response: {} with response key: {}'.format(response, response_key))
+        logger.debug('received UNPROMPTED response: {} with response key: {}', response, response_key)
 
 class SerialMessageManager(MessageManager):
     """MessageManager subclass that sends and receives from a serial port."""
-    def __init__(self, serial_port, serial_baud, response_terminator, verbose=False, daemon=True):
+    def __init__(self, serial_port, serial_baud, response_terminator, daemon=True):
         """Arguments:
             serial_port, serial_baud: information for connecting to serial device
             response_terminator: byte or bytes that terminate a response message
@@ -157,7 +157,7 @@ class SerialMessageManager(MessageManager):
         self.serial_port = smart_serial.Serial(serial_port, baudrate=serial_baud, timeout=1)
         self.thread_name = 'SerialMessageManager({})'.format(self.serial_port.port)
         self.response_terminator = response_terminator
-        super().__init__(verbose, daemon)
+        super().__init__(daemon)
 
     def _send_message(self, message):
         if type(message) != bytes:
@@ -174,8 +174,8 @@ class SerialMessageManager(MessageManager):
 
 class LeicaMessageManager(SerialMessageManager):
     """MessageManager subclass appropriate for routing messages from Leica API"""
-    def __init__(self, serial_port, serial_baud, verbose=False, daemon=True):
-        super().__init__(serial_port, serial_baud, response_terminator=b'\r', verbose=verbose, daemon=daemon)
+    def __init__(self, serial_port, serial_baud, daemon=True):
+        super().__init__(serial_port, serial_baud, response_terminator=b'\r', daemon=daemon)
 
     def _generate_response_key(self, response):
         if response[0] == '$':
@@ -188,11 +188,10 @@ class LeicaMessageManager(SerialMessageManager):
 
     def _handle_unexpected_response(self, response, response_key):
         if response[0] == '$':
-            if self.verbose and response_key not in ('$83023',):
-                # Unexpected notifications are quite common, and if the dm6000b has communicated with MicroManager or the Leica
-                # Windows software since last power cycled, they may be overwhelming in number. Therefore, these are appropriately
-                # confined to verbose mode.
-                print('received UNEXPECTED notification from Leica device: {} with response key: {}'.format(response, response_key))
+            # Unexpected notifications are quite common, and if the dm6000b has communicated with MicroManager or the Leica
+            # Windows software since last power cycled, they may be overwhelming in number. Therefore, these are appropriately
+            # debug messages.
+            logger.debug('received UNEXPECTED notification from Leica device: {} with response key: {}', response, response_key)
         else:
-            # Unprompted command responses are an ominous sign and are of interest even if not in verbose mode
-            print('received UNPROMPTED COMMAND RESPONSE from Leica device: {} with response key: {}'.format(response, response_key))
+            # Unprompted command responses are an ominous sign and are of general interest
+            logger.warn('received UNPROMPTED COMMAND RESPONSE from Leica device: {} with response key: {}', response, response_key)

@@ -26,6 +26,9 @@ import zmq
 import threading
 import queue
 
+from ..util import logging
+logger = logging.get_logger(__name__)
+
 class PropertyServer(threading.Thread):
     """Server for publishing changes to properties (i.e. (key, value) pairs) to
     other clients.
@@ -53,10 +56,9 @@ class PropertyServer(threading.Thread):
                 self._x = value
 
     """
-    def __init__(self, verbose=False):
+    def __init__(self):
         super().__init__(daemon=True)
         self.properties = {}
-        self.verbose = verbose
         self.task_queue = queue.Queue()
         self.running = True
         self.start()
@@ -84,8 +86,7 @@ class PropertyServer(threading.Thread):
     def update_property(self, property_name, value):
         """Inform the server that the property has a new value"""
         self.properties[property_name] = value
-        if self.verbose:
-            print('updating property: {} to {}'.format(property_name, value))
+        logger.debug('updating property: {} to {}', property_name, value)
         self.task_queue.put((property_name, value))
 
     def property_decorator(self, property_name):
@@ -103,7 +104,7 @@ class PropertyServer(threading.Thread):
         raise NotImplementedError()
 
 class ZMQServer(PropertyServer):
-    def __init__(self, port, context=None, verbose=False):
+    def __init__(self, port, context=None):
         """PropertyServer subclass that uses ZeroMQ PUB/SUB to send out updates.
         Arguments:
             port: a string ZeroMQ port identifier, like ''tcp://127.0.0.1:5555''.
@@ -112,7 +113,7 @@ class ZMQServer(PropertyServer):
         self.context = context if context is not None else zmq.Context()
         self.socket = self.context.socket(zmq.PUB)
         self.socket.bind(port)
-        super().__init__(verbose)
+        super().__init__()
 
     def _publish_update(self, property_name, value):
         # dump json first to catch "not serializable" errors before sending the first part of a two-part message
