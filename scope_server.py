@@ -26,15 +26,16 @@ import zmq
 
 from .simple_rpc import rpc_server, property_server
 from . import scope
-from . import scope_configuration as config
+from .config import scope_configuration
+config = scope_configuration.get_config()
 from .util import transfer_ism_buffer
 from .util import logging
 
 class ScopeServer:
     def __init__(self, host):
-        rpc_addr = config.Server.rpc_addr(host)
-        interrupt_addr = config.Server.interrupt_addr(host)
-        property_addr = config.Server.property_addr(host)
+        rpc_addr = scope_configuration.rpc_addr(host)
+        interrupt_addr = scope_configuration.interrupt_addr(host)
+        property_addr = scope_configuration.property_addr(host)
         context = zmq.Context()
 
         property_update_server = property_server.ZMQServer(property_addr, context=context)

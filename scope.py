@@ -38,7 +38,8 @@ from .device import autofocus
 from .device import peltier
 from .device import footpedal
 
-from . import scope_configuration as config
+from .config import scope_configuration
+config = scope_configuration.get_config()
 
 def _log_exception(preamble, e):
     logger.warn(preamble + '\n\t' + str(e))
