@@ -28,9 +28,10 @@ from ...simple_rpc import rpc_client
 
 INT_MIN, INT_MAX = 1, None
 FLOAT_MIN, FLOAT_MAX, FLOAT_DECIMALS = 0, None, 3
-CAM_ROOT = 'scope.camera.'
 
 class AndorCameraWidget(device_widget.DeviceWidget):
+    PROPERTY_ROOT = 'scope.camera.'
+
     basic_properties = [ # list of properties to display, and logical range info if necessary
         'is_acquiring',
         'temperature_status',
@@ -103,13 +104,13 @@ class AndorCameraWidget(device_widget.DeviceWidget):
 
     def make_readonly_widget(self, property):
         widget = Qt.QLabel()
-        self.subscribe(CAM_ROOT + property, callback=lambda value: widget.setText(str(value)))
+        self.subscribe(self.PROPERTY_ROOT + property, callback=lambda value: widget.setText(str(value)))
         return widget
 
     def make_numeric_widget(self, property, type):
         widget = Qt.QLineEdit()
         widget.setValidator(self.get_numeric_validator(property, type))
-        update = self.subscribe(CAM_ROOT + property, callback=lambda value: widget.setText(str(value)))
+        update = self.subscribe(self.PROPERTY_ROOT + property, callback=lambda value: widget.setText(str(value)))
         coerce_type = int if type == 'Int' else float
         def editing_finished():
             try:
@@ -159,7 +160,7 @@ class AndorCameraWidget(device_widget.DeviceWidget):
         values = sorted(getattr(self.camera, property+'_values').keys())
         indices = {v:i for i, v in enumerate(values)}
         widget.addItems(values)
-        update = self.subscribe(CAM_ROOT + property, callback=lambda value: widget.setCurrentIndex(indices[value]))
+        update = self.subscribe(self.PROPERTY_ROOT + property, callback=lambda value: widget.setCurrentIndex(indices[value]))
         def changed(value):
             try:
                 update(value)
@@ -175,7 +176,7 @@ class AndorCameraWidget(device_widget.DeviceWidget):
 
     def make_bool_widget(self, property):
         widget = Qt.QCheckBox()
-        update = self.subscribe(CAM_ROOT + property, callback=widget.setChecked)
+        update = self.subscribe(self.PROPERTY_ROOT + property, callback=widget.setChecked)
         def changed(value):
             try:
                 update(value)

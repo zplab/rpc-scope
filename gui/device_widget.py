@@ -29,6 +29,19 @@ from ...simple_rpc import rpc_client
 class DeviceWidget(Qt.QWidget):
     _PropertyChangeSignal = Qt.pyqtSignal(str, object)
 
+    @classmethod
+    def can_run(cls, scope):
+        """Report on whether the current scope object supports a given widget."""
+        property_path = cls.PROPERTY_ROOT.strip('.').split('.')[1:] # skip the leading 'scope.'
+        container = scope
+        try:
+            for element in property_path:
+                container = getattr(container, element)
+        except AttributeError:
+            return False
+        else:
+            return True
+
     def __init__(self, scope, scope_properties, parent):
         super().__init__(parent)
         self.setAttribute(Qt.Qt.WA_DeleteOnClose, True)

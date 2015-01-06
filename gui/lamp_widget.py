@@ -25,9 +25,10 @@
 from . import device_widget
 from PyQt5 import Qt
 
-SPX_ROOT = 'scope.il.spectra_x.'
 
 class SpectraXWidget(device_widget.DeviceWidget):
+    PROPERTY_ROOT = 'scope.il.spectra_x.'
+
     def __init__(self, scope, scope_properties, parent=None):
         super().__init__(scope, scope_properties, parent)
         self.setWindowTitle('Spectra X')
@@ -39,7 +40,7 @@ class SpectraXWidget(device_widget.DeviceWidget):
         lamp_specs = scope.il.spectra_x.lamp_specs
         # sort lamp names by the values of the lamp_specs dict; to wit, the center wavelengths
         lamps = sorted(lamp_specs.keys(), key=lamp_specs.get)
-        self.lamp_controllers = [LampController(self, lamp, grid_layout, i) for i, lamp in enumerate(lamps)]
+        self.lamp_controllers = [LampController(self, self.PROPERTY_ROOT+lamp, grid_layout, i) for i, lamp in enumerate(lamps)]
 
         bottom_layout = Qt.QHBoxLayout()
         container_layout.addLayout(bottom_layout)
@@ -48,18 +49,45 @@ class SpectraXWidget(device_widget.DeviceWidget):
         disable_all_button.clicked.connect(self.disable_all)
         temperature_label = Qt.QLabel('Temperature: -')
         bottom_layout.addWidget(temperature_label)
-        self.subscribe(SPX_ROOT + 'temperature',
+        self.subscribe(self.PROPERTY_ROOT + 'temperature',
            callback=lambda temp: temperature_label.setText('Temperature: {}°C'.format(temp)))
 
     def disable_all(self):
         for lamp_controller in self.lamp_controllers:
             lamp_controller.toggle.setChecked(False)
 
+
+class TLLampWidget(device_widget.DeviceWidget):
+    PROPERTY_ROOT = 'scope.tl.lamp.'
+
+    def __init__(self, scope, scope_properties, parent=None):
+        super().__init__(scope, scope_properties, parent)
+        self.setWindowTitle('TL Lamp')
+        grid_layout = Qt.QGridLayout()
+        self.setLayout(grid_layout)
+        self.lamp_controller = LampController(self, self.PROPERTY_ROOT[:-1], grid_layout, 0)
+
+class LampWidget(Qt.QWidget):
+    @staticmethod
+    def can_run(scope):
+        return SpectraXWidget.can_run(scope) or TLLampWidget.can_run(scope)
+
+    def __init__(self, scope, scope_properties, parent=None):
+        self.setWindowTitle('Lamp Controller')
+        container_layout = Qt.QVBoxLayout()
+        self.setLayout(container_layout)
+        if TLLampWidget.can_run(scope):
+            tl = TLLampWidget(scope, scope_properties, self)
+            container_layout.addWidget(tl)
+        if SpectraXWidget.can_run(scope):
+            spx = SpectraXWidget(scope, scope_properties, self)
+            container_layout.addWidget(spx)
+
 class LampController:
     def __init__(self, widget, name, layout, row):
         toggle = Qt.QCheckBox(name)
         layout.addWidget(toggle, row, 0)
-        toggle_update = widget.subscribe(SPX_ROOT + name + '.enabled', callback=toggle.setChecked)
+        toggle_update = widget.subscribe(name + '.enabled', callback=toggle.setChecked)
         toggle.toggled.connect(toggle_update)
         self.toggle = toggle
 
@@ -77,7 +105,7 @@ class LampController:
         spinbox.setValue(0)
         self.spinbox = spinbox
 
-        self.update_spx = widget.subscribe(SPX_ROOT + name + '.intensity', callback=slider.setValue)
+        self.update_spx = widget.subscribe(name + '.intensity', callback=slider.setValue)
         # note that giving slider.setValue as the callback will work fine. That will cause a slider.valueChanged
         # signal, which due to the slider_changed() function will cause the spinbox to be updated too.
         # It also calls update_spx(), which seems like an odd thing to fire off in response to getting

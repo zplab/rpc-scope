@@ -123,3 +123,6 @@ def main(argv):
     elif args.command == 'restart':
         runner.restart()
 
+if __name__ == '__main__':
+    import sys
+    main(sys.argv)
