@@ -113,10 +113,12 @@ class Camera(property_device.PropertyDevice):
         self._andor_property_types = {}
 
         config = scope_configuration.get_config()
+        
         lowlevel.initialize(config.Camera.MODEL) # safe to call this multiple times
+        
         self._live_mode = False
         self.return_to_default_state()
-
+        
         # Expose some certain camera properties presented by the Andor API more or less directly,
         # the only transformation being translation of enumeration indexes to descriptive strings
         # for convenience

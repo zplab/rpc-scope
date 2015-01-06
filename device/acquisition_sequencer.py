@@ -25,7 +25,6 @@
 import time
 
 from ..config import scope_configuration
-from .io_tool import commands
 
 class AcquisitionSequencer:
     def __init__(self, camera, io_tool, spectra_x):
@@ -71,9 +70,9 @@ class AcquisitionSequencer:
         self._exposures = []
         self._compiled = False
         # set the wait time low because we have clean shielded cables
-        self._steps.append(commands.wait_time(2))
+        self._steps.append(self.iotool.commands.wait_time(2))
         # turn off all the spectra x lamps
-        self._steps.extend(commands.spectra_x_lamps(**{lamp:False for lamp in self.config.IOTool.LUMENCOR_PINS.keys()}))
+        self._steps.extend(self.iotool.commands.spectra_x_lamps(**{lamp:False for lamp in self.config.IOTool.LUMENCOR_PINS.keys()}))
         for lamp in self.config.IOTool.LUMENCOR_PINS.keys():
             if lamp not in spectra_x_intensities:
                 spectra_x_intensities[lamp] = 255
@@ -95,28 +94,28 @@ class AcquisitionSequencer:
         self._num_acquisitions += 1
         self._exposures.append(exposure_ms)
         lamps = {lamp:True for lamp, value in spectra_x_lamps.items() if value}
-        self._steps.append(commands.wait_high(self.config.IOTool.CAMERA_PINS['Arm']))
-        self._steps.append(commands.set_high(self.config.IOTool.CAMERA_PINS['Trigger']))
-        self._steps.append(commands.set_low(self.config.IOTool.CAMERA_PINS['Trigger']))
-        self._steps.append(commands.wait_high(self.config.IOTool.CAMERA_PINS['AuxOut1'])) # set to 'FireAll'
-        self._steps.extend(commands.transmitted_lamp(tl_enable, tl_intensity))
-        self._steps.extend(commands.spectra_x_lamps(**lamps))
+        self._steps.append(self.iotool.commands.wait_high(self.config.IOTool.CAMERA_PINS['Arm']))
+        self._steps.append(self.iotool.commands.set_high(self.config.IOTool.CAMERA_PINS['Trigger']))
+        self._steps.append(self.iotool.commands.set_low(self.config.IOTool.CAMERA_PINS['Trigger']))
+        self._steps.append(self.iotool.commands.wait_high(self.config.IOTool.CAMERA_PINS['AuxOut1'])) # set to 'FireAll'
+        self._steps.extend(self.iotool.commands.transmitted_lamp(tl_enable, tl_intensity))
+        self._steps.extend(self.iotool.commands.spectra_x_lamps(**lamps))
         if exposure_ms <= 65.535:
-            self._steps.append(commands.delay_us(int(round(exposure_ms*1000))-4)) # delay command itself takes 4 µs, so subtract off 4
+            self._steps.append(self.iotool.commands.delay_us(int(round(exposure_ms*1000))-4)) # delay command itself takes 4 µs, so subtract off 4
         else:
-            self._steps.append(commands.delay_ms(int(round(exposure_ms))))
+            self._steps.append(self.iotool.commands.delay_ms(int(round(exposure_ms))))
         if tl_enable:
-            self._steps.extend(commands.transmitted_lamp(enable=False))
-        self._steps.extend(commands.spectra_x_lamps(**{lamp:False for lamp in lamps})) # turn lamps back off
+            self._steps.extend(self.iotool.commands.transmitted_lamp(enable=False))
+        self._steps.extend(self.iotool.commands.spectra_x_lamps(**{lamp:False for lamp in lamps})) # turn lamps back off
 
     def _compile(self):
         """Send the acquisition sequence to the IOTool box"""
         assert self._num_acquisitions > 0
         # send one last trigger to end the final acquisition
         steps = list(self._steps)
-        steps.append(commands.wait_high(self.config.IOTool.CAMERA_PINS['Arm']))
-        steps.append(commands.set_high(self.config.IOTool.CAMERA_PINS['Trigger']))
-        steps.append(commands.set_low(self.config.IOTool.CAMERA_PINS['Trigger']))
+        steps.append(self.iotool.commands.wait_high(self.config.IOTool.CAMERA_PINS['Arm']))
+        steps.append(self.iotool.commands.set_high(self.config.IOTool.CAMERA_PINS['Trigger']))
+        steps.append(self.iotool.commands.set_low(self.config.IOTool.CAMERA_PINS['Trigger']))
 
         self._io_tool.store_program(*steps)
         self._compiled = True

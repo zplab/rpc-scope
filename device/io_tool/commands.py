@@ -22,99 +22,103 @@
 #
 # Authors: Zach Pincus
 
-from ... import scope_configuration as _config
+from ...config import scope_configuration
 
-def _make_command(*elements):
-    return ' '.join(map(str, elements))
+class Commands:
+    def __init__(self):
+        self._config = scope_configuration.get_config()
 
-def wait_high(pin):
-    return _make_command('wh', pin)
+    def _make_command(self, *elements):
+        return ' '.join(map(str, elements))
 
-def wait_low(pin):
-    return _make_command('wl', pin)
+    def wait_high(self, pin):
+        return self._make_command('wh', pin)
 
-def wait_change(pin):
-    return _make_command('wc', pin)
+    def wait_low(self, pin):
+        return self._make_command('wl', pin)
 
-def wait_time(time):
-    return _make_command('wt', time)
+    def wait_change(self, pin):
+        return self._make_command('wc', pin)
 
-def read_digital(pin):
-    return _make_command('rd', pin)
+    def wait_time(time):
+        return self._make_command('wt', time)
 
-def read_analog(pin):
-    return _make_command('ra', pin)
+    def read_digital(self, pin):
+        return self._make_command('rd', pin)
 
-def delay_ms(delay):
-    return _make_command('dm', delay)
+    def read_analog(self, pin):
+        return self._make_command('ra', pin)
 
-def delay_us(delay):
-    return _make_command('du', delay)
+    def delay_ms(self, delay):
+        return self._make_command('dm', delay)
 
-def timer_begin():
-    return _make_command('tb')
+    def delay_us(self, delay):
+        return self._make_command('du', delay)
 
-def timer_end():
-    return _make_command('te')
+    def timer_begin(self):
+        return self._make_command('tb')
 
-def pwm(pin, value):
-    return _make_command('pm', pin, value)
+    def timer_end(self):
+        return self._make_command('te')
 
-def set_high(pin):
-    return _make_command('sh', pin)
+    def pwm(self, pin, value):
+        return self._make_command('pm', pin, value)
 
-def set_low(pin):
-    return _make_command('sl', pin)
+    def set_high(self, pin):
+        return self._make_command('sh', pin)
 
-def set_tristate(pin):
-    return _make_command('st', pin)
+    def set_low(self, pin):
+        return self._make_command('sl', pin)
 
-def char_transmit(byte):
-    return _make_command('ct', byte)
+    def set_tristate(self, pin):
+        return self._make_command('st', pin)
 
-def char_receive(cls):
-    return _make_command('cr')
+    def char_transmit(self, byte):
+        return self._make_command('ct', byte)
 
-def loop(index, count):
-    return _make_command('lo', index, count)
+    def char_receive(self):
+        return self._make_command('cr')
 
-def goto(index):
-    return _make_command('go', index)
+    def loop(self, index, count):
+        return self._make_command('lo', index, count)
 
-def spectra_x_lamps(**lamps):
-    """Produce a sequence of IOTool commands to enable and disable given
-    Spectra X lamps.
+    def goto(self, index):
+        return self._make_command('go', index)
 
-    Keyword arguments must be lamp names, as specified in
-    scope_configuration.LUMENCOR_PINS. The values specified must be True to
-    enable that lamp, False to disable, or None to do nothing (unspecified
-    lamps are also not altered)."""
-    commands = []
-    for lamp, enable in lamps.items():
-        if enable is None:
-            continue
-        pin = _config.IOTool.LUMENCOR_PINS[lamp]
-        if enable:
-            commands.append(set_high(pin))
-        else:
-            commands.append(set_low(pin))
-    return commands
+    def spectra_x_lamps(self, **lamps):
+        """Produce a sequence of IOTool commands to enable and disable given
+        Spectra X lamps.
 
-def transmitted_lamp(enable=None, intensity=None):
-    """Produce a sequence of IOTool commands to enable/disable and control the
-    intensity of the TL lamp.
+        Keyword arguments must be lamp names, as specified in
+        scope_configuration.LUMENCOR_PINS. The values specified must be True to
+        enable that lamp, False to disable, or None to do nothing (unspecified
+        lamps are also not altered)."""
+        commands = []
+        for lamp, enable in lamps.items():
+            if enable is None:
+                continue
+            pin = self._config.IOTool.LUMENCOR_PINS[lamp]
+            if enable:
+                commands.append(self.set_high(pin))
+            else:
+                commands.append(self.set_low(pin))
+        return commands
 
-    Parameters
-    enable: True (lamp on), False (lamp off), or None (no change).
-    intensity: None (no change) or value in the range [0, 255] for min to max.
-    """
-    commands = []
-    if intensity is not None:
-        assert 0 <= intensity <= _config.IOTool.TL_PWM_MAX
-        commands.append(pwm(_config.IOTool.TL_PWM_PIN, intensity))
-    if enable is not None:
-        if enable:
-            commands.append(set_high(_config.IOTool.TL_ENABLE_PIN))
-        else:
-            commands.append(set_low(_config.IOTool.TL_ENABLE_PIN))
-    return commands
+    def transmitted_lamp(self, enable=None, intensity=None):
+        """Produce a sequence of IOTool commands to enable/disable and control the
+        intensity of the TL lamp.
+
+        Parameters
+        enable: True (lamp on), False (lamp off), or None (no change).
+        intensity: None (no change) or value in the range [0, 255] for min to max.
+        """
+        commands = []
+        if intensity is not None:
+            assert 0 <= intensity <= self._config.IOTool.TL_PWM_MAX
+            commands.append(self.pwm(self._config.IOTool.TL_PWM_PIN, intensity))
+        if enable is not None:
+            if enable:
+                commands.append(self.set_high(self._config.IOTool.TL_ENABLE_PIN))
+            else:
+                commands.append(self.set_low(self._config.IOTool.TL_ENABLE_PIN))
+        return commands

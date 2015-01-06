@@ -16,7 +16,7 @@ def terminate_handler(signal_number, stack_frame):
     logger.debug('Caught termination signal {}. Terminating.', signal_number)
     raise SystemExit('Terminating on signal {}'.format(signal_number))
 
-SIGNAL_MAP = {sig: handler for sig, handler in
+SIGNAL_MAP = {getattr(signal, sig): handler for sig, handler in
     {'SIGTSTP': signal.SIG_IGN,
      'SIGTTIN': signal.SIG_IGN,
      'SIGTTOU': signal.SIG_IGN,
@@ -33,11 +33,11 @@ class Runner:
         if runner.is_pidfile_stale(self.pidfile):
             self.pidfile.break_lock()
 
+        logger.info('Starting Scope Server')
         homedir = os.path.expanduser('~')
         stderr_fd = sys.stderr.fileno()
 
         daemon.prevent_core_dump()
-        daemon.change_working_directory(homedir)
         daemon.set_signal_handlers(SIGNAL_MAP)
         daemon.close_all_open_files(exclude={stderr_fd})
 
@@ -45,49 +45,49 @@ class Runner:
         logging.set_verbose(verbose)
         logging.attach_file_handlers(log_dir)
 
+        # detach parent process. Note: ZMQ and camera don't work right unless 
+        # initialized in child process AFTER this detaching. Odd.
+        # TODO: figure out a fix.
+        daemon.detach_process_context()
+
         #initialize scope server
         server = scope_server.ScopeServer(server_host)
 
-        #detach stderr logger, close stderr, and redirect python-generated output to /dev/null
+
+        # chroot to home dir
+        try:
+            daemon.change_root_directory(homedir)
+        except daemon.DaemonOSEnvironmentError:
+            logger.warn('Could not chroot to {}', homedir)
+
+
+        logger.info('Scope Server Ready (Listening on {})', server_host)
+
+        # detach stderr logger, close stderr, and redirect python-generated output to /dev/null
         logging.detach_console_handler()
         daemon.close_file_descriptor_if_open(stderr_fd)
         daemon.redirect_stream(sys.stdin, None)
         daemon.redirect_stream(sys.stdout, None)
         daemon.redirect_stream(sys.stderr, None)
 
-        # detach from controlling terminal and chroot to home dir
-        daemon.detach_process_context()
-        daemon.change_root_directory(homedir)
-
         with self.pidfile:
             try:
-                logger.info('Starting microscope server.')
                 server.run()
             except Exception:
                 logger.warn('Scope server terminating due to unhandled execption:', exc_info=True)
 
 
-    def _terminate_daemon_process(self):
-        """Terminate the daemon process specified in the current PID file.
-            """
-
     def stop(self):
         """Exit the daemon process specified in the current PID file.
             """
         if not self.pidfile.is_locked():
-            raise RuntimeError("PID file {} not locked".format{self.pidfile.path})
+            raise RuntimeError("PID file {} not locked".format(self.pidfile.path))
 
         if runner.is_pidfile_stale(self.pidfile):
             self.pidfile.break_lock()
         else:
             pid = self.pidfile.read_pid()
             os.kill(pid, signal.SIGTERM)
-
-    def restart(self):
-        """ Stop, then start.
-            """
-        self.stop()
-        self.start()
 
 
 def main(argv):
@@ -102,7 +102,6 @@ def main(argv):
     parser_start.add_argument("--public", action='store_true', help="Allow network connections to the server [default: allow only local connections]")
     parser_start.add_argument("--verbose", action='store_true', help="Print human-readable representations of all RPC calls and property state changes to stdout.")
     parser_stop = subparsers.add_parser('stop', help='stop the microscope server, if running')
-    parser_restart = subparsers.add_parser('restart', help='restart the microscope server, if running')
     args = parser.parse_args()
 
     runner = Runner(pidfile_path)
@@ -115,13 +114,10 @@ def main(argv):
         config = scope_configuration.get_config()
         server_host = config.Server.PUBLICHOST if args.public else config.Server.LOCALHOST
 
-        runner.start(server_host, log_dir, config_file, args.verbose)
+        runner.start(server_host, log_dir, args.verbose)
 
     elif args.command == 'stop':
         runner.stop()
-
-    elif args.command == 'restart':
-        runner.restart()
 
 if __name__ == '__main__':
     import sys

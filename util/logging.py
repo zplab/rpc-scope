@@ -33,8 +33,9 @@ def set_verbose(verbose=True):
     else:
         logging.root.setLevel(logging.INFO)
 
+console_handler = logging.StreamHandler() # no formatter: just prints bare messages to stderr
+
 def attach_console_handler():
-    console_handler = logging.StreamHandler() # no formatter: just prints bare messages to stderr
     logging.root.addHandler(console_handler)
 
 def detach_console_handler():

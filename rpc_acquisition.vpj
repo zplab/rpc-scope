@@ -67,6 +67,16 @@
 		<Includes></Includes>
 	</Config>
 	<Files AutoFolders="DirectoryView">
+		<Folder Name="cli">
+			<F N="cli/__init__.py"/>
+			<F N="cli/scope_daemon.py"/>
+			<F N="cli/scope_gui.py"/>
+		</Folder>
+		<Folder Name="config">
+			<F N="config/__init__.py"/>
+			<F N="config/default_config.py"/>
+			<F N="config/scope_configuration.py"/>
+		</Folder>
 		<Folder Name="device">
 			<Folder Name="andor">
 				<Folder Name="generate_wrappers">
@@ -102,13 +112,12 @@
 			<F N="device/tl_lamp.py"/>
 		</Folder>
 		<Folder Name="gui">
-			<Folder Name="device_widget">
-				<F N="gui/device_widget/__init__.py"/>
-				<F N="gui/device_widget/andor_camera_widget.py"/>
-				<F N="gui/device_widget/device_widget.py"/>
-				<F N="gui/device_widget/spectra_x_widget.py"/>
-			</Folder>
 			<F N="gui/__init__.py"/>
+			<F N="gui/andor_camera_widget.py"/>
+			<F N="gui/build_gui.py"/>
+			<F N="gui/device_widget.py"/>
+			<F N="gui/lamp_widget.py"/>
+			<F N="gui/live_viewer_widget.py"/>
 		</Folder>
 		<Folder Name="messaging">
 			<F N="messaging/__init__.py"/>
@@ -126,16 +135,15 @@
 		<Folder Name="util">
 			<F N="util/__init__.py"/>
 			<F N="util/enumerated_properties.py"/>
+			<F N="util/logging.py"/>
 			<F N="util/property_device.py"/>
 			<F N="util/smart_serial.py"/>
 			<F N="util/transfer_ism_buffer.py"/>
 		</Folder>
 		<F N="__init__.py"/>
-		<F N="live_viewer.py"/>
 		<F N="rpc_acquisition.vpj"/>
 		<F N="scope.py"/>
 		<F N="scope_client.py"/>
-		<F N="scope_configuration.py"/>
 		<F N="scope_server.py"/>
 	</Files>
 </Project>

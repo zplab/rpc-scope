@@ -49,7 +49,7 @@ class IOTool:
         except (smart_serial.SerialTimeout, RuntimeError):
             # explicitly clobber traceback from SerialTimeout exception
             raise smart_serial.SerialException('Could not communicate with IOTool device -- is it attached?')
-        self.commands = commands
+        self.commands = commands.Commands()
         self._serial_port.setTimeout(None) # change to infinite time-out once initialized and in known-good state,
         # so that waiting for IOTool replies won't cause timeouts
 

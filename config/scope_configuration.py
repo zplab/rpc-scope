@@ -51,7 +51,7 @@ def _get_default_config_path():
 
 class _Config:
     def __init__(self, **kwargs):
-        for k, v in kwargs:
+        for k, v in kwargs.items():
             if not k.startswith('_'):
                 setattr(self, k, v)
 
