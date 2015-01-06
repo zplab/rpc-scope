@@ -26,10 +26,9 @@ import zmq
 
 from .simple_rpc import rpc_server, property_server
 from . import scope
-from .config import scope_configuration
-config = scope_configuration.get_config()
 from .util import transfer_ism_buffer
 from .util import logging
+from .config import scope_configuration
 
 class ScopeServer:
     def __init__(self, host):
@@ -61,6 +60,7 @@ def simple_server_main(host, verbose=False):
 
 if __name__ == '__main__':
     import argparse
+    config = scope_configuration.get_config()
     parser = argparse.ArgumentParser(description="Run the microscope server")
     parser.add_argument("--public", action='store_true', help="Allow network connections to the server [default: allow only local connections]")
     parser.add_argument("--verbose", action='store_true', help="Print human-readable representations of all RPC calls and property state changes to stdout.")

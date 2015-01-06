@@ -36,7 +36,6 @@ from ...util import transfer_ism_buffer
 from ...util import enumerated_properties
 from ...util import property_device
 from ...config import scope_configuration
-config = scope_configuration.get_config()
 
 class ReadOnly_AT_Enum(enumerated_properties.ReadonlyDictProperty):
     def __init__(self, feature):
@@ -113,6 +112,7 @@ class Camera(property_device.PropertyDevice):
         # GUI widgets representing each property.
         self._andor_property_types = {}
 
+        config = scope_configuration.get_config()
         lowlevel.initialize(config.Camera.MODEL) # safe to call this multiple times
         self._live_mode = False
         self.return_to_default_state()

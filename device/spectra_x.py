@@ -28,7 +28,6 @@ import time
 from ..util import smart_serial
 from ..util import property_device
 from ..config import scope_configuration
-config = scope_configuration.get_config()
 
 def _make_dac_bytes(IIC_Addr, bit):
     dac_bytes = bytearray(b'\x53\x00\x03\x00\x00\x00\x50')
@@ -68,7 +67,7 @@ class Lamp:
         return self._spectra_x._lamp_intensities[self._name]
 
     def set_enabled(self, enable):
-        
+
         self._spectra_x.lamp_enableds(**{self._name:enable})
 
     def get_enabled(self):
@@ -77,6 +76,7 @@ class Lamp:
 class SpectraX(property_device.PropertyDevice):
     def __init__(self, iotool, property_server=None, property_prefix=''):
         super().__init__(property_server, property_prefix)
+        config = scope_configuration.get_config()
         self._serial_port = smart_serial.Serial(config.SpectraX.SERIAL_PORT, baudrate=config.SpectraX.SERIAL_BAUD, timeout=1)
         # RS232 Lumencor docs state: "The [following] two commands MUST be issued after every power cycle to properly configure controls for further commands."
         # "Set GPIO0-3 as open drain output"

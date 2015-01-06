@@ -32,7 +32,6 @@ import threading
 from .simple_rpc import rpc_client, property_client
 from .util import transfer_ism_buffer
 from .config import scope_configuration
-config = scope_configuration.get_config()
 
 def wrap_image_getter(namespace, func_name, get_data):
     function = getattr(namespace, func_name)

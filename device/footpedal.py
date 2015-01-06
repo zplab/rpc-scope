@@ -24,7 +24,6 @@
 
 import time
 from ..config import scope_configuration
-config = scope_configuration.get_config()
 
 class Footpedal:
     def __init__(self, iotool):
@@ -34,6 +33,7 @@ class Footpedal:
         self._iotool = iotool
         self._bounce_sec = bounce_ms / 1000
         self._delay = iotool.commands.delay_ms(int(bounce_ms))
+        config = scope_configuration.get_config()
         if config.IOTool.FOOTPEDAL_CLOSED_TTL_STATE:
             self._depress = iotool.commands.wait_high(pin)
             self._release = iotool.commands.wait_low(pin)
