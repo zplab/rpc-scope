@@ -128,7 +128,8 @@ class LiveStreamer:
         # cares to know if frames were dropped. There's a bit of a race-condition
         # here if the frame is updated while get_image() is in action, but this
         # is a pretty minimal issue and not worth adding locking around.
-
+        if frame_no is None:
+            return
         self.frame_no = frame_no
         if not self.image_received.is_set():
             self.image_received.set()

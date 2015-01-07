@@ -15,7 +15,7 @@ logger = logging.get_logger(__name__)
 
 def terminate_handler(signal_number, stack_frame):
     """Signal handler for end-process signals."""
-    logger.debug('Caught termination signal {}. Terminating.', signal_number)
+    logger.warn('Caught termination signal {}. Terminating.', signal_number)
     raise SystemExit('Terminating on signal {}'.format(signal_number))
 
 SIGNAL_MAP = {getattr(signal, sig): handler for sig, handler in
@@ -35,16 +35,21 @@ class Runner:
         if runner.is_pidfile_stale(self.pidfile):
             self.pidfile.break_lock()
 
-        logger.info('Starting Scope Server')
+        # better to try to lock the pidfile here to avoid any race conditions, but
+        # managing the release through potentially-failing detach_process_context()
+        # calls sounds... tricky. TODO: do it anyway?
+        if self.pidfile.is_locked():
+            raise RuntimeError('Scope server is already running')
+
         homedir = os.path.expanduser('~')
         daemon.prevent_core_dump()
         daemon.set_signal_handlers(SIGNAL_MAP)
         daemon.close_all_open_files(exclude={sys.stderr.fileno()})
         daemon.change_working_directory(homedir)
-
         #initialize logging
         logging.set_verbose(verbose)
         logging.attach_file_handlers(log_dir)
+        logger.info('Starting Scope Server')
 
         # detach parent process. Note: ZMQ and camera don't work in child process
         # after a fork. ZMQ contexts don't work, and andor finalize functions hang.
@@ -54,39 +59,49 @@ class Runner:
         # parent's stderr. (Otherwise the stderr would just spew all over the
         # terminal after the parent exits, which is ugly.)
         detach_process_context()
+        try:
+            self.pidfile.acquire()
+            #initialize scope server
+            server = scope_server.ScopeServer(server_host)
 
-        #initialize scope server
-        server = scope_server.ScopeServer(server_host)
+            logger.info('Scope Server Ready (Listening on {})', server_host)
 
-        logger.info('Scope Server Ready (Listening on {})', server_host)
+            # detach stderr logger, and redirect python-generated output to /dev/null
+            # (preventing anything that tries to print to / read from these streams from
+            # throwing an error)
+            logging.detach_console_handler()
+            sys.stdin.close() # doing redirect_stream on sys.stdin somehow breaks subsequent logging. TODO: why?
+            #daemon.redirect_stream(sys.stdin, None)
+            daemon.redirect_stream(sys.stdout, None)
+            # below closes pipe to parent that was redirected from old stderr by detach_process_context
+            # which allows parent to exit...
+            daemon.redirect_stream(sys.stderr, None)
+        except:
+            logger.error('Scope server could not initialize after becoming daemonic:', exc_info=True)
+            self.pidfile.release()
+            raise
 
-        # detach stderr logger, and redirect python-generated output to /dev/null
-        # (preventing anything that tries to print to / read from these streams from
-        # throwing an error)
-        logging.detach_console_handler()
-        daemon.redirect_stream(sys.stdin, None)
-        daemon.redirect_stream(sys.stdout, None)
-        # below closes pipe to parent that was redirected from old stderr by detach_process_context
-        # which allows parent to exit...
-        daemon.redirect_stream(sys.stderr, None)
-
-        with self.pidfile:
-            try:
-                server.run()
-            except Exception:
-                logger.warn('Scope server terminating due to unhandled exception:', exc_info=True)
+        try:
+            server.run()
+        except Exception:
+            logger.warn('Scope server terminating due to unhandled exception:', exc_info=True)
+        finally:
+            self.pidfile.release()
 
 
-    def stop(self):
-        """Exit the daemon process specified in the current PID file."""
+    def signal(self, sig):
+        """Send a signal to the daemon process specified in the current PID file."""
         if not self.pidfile.is_locked():
-            raise RuntimeError('Scope daemon is not running? (PID file {} not locked.)'.format(self.pidfile.path))
+            raise RuntimeError('Scope daemon is not running? (PID file "{}" not locked.)'.format(self.pidfile.path))
 
         if runner.is_pidfile_stale(self.pidfile):
             self.pidfile.break_lock()
         else:
             pid = self.pidfile.read_pid()
-            os.kill(pid, signal.SIGTERM)
+            os.kill(pid, sig)
+
+    def stop(self):
+        self.signal(signal.SIGTERM)
 
 
 def detach_process_context():
@@ -113,7 +128,7 @@ def detach_process_context():
         # parent
         os.close(w) # use os.close() to close a file descriptor
         r = os.fdopen(r) # turn r into a file object
-        shutil.copyfileobj(r, sys.stderr) # stream output of pipe to stderr
+        shutil.copyfileobj(r, sys.stderr, 1) # stream output of pipe to stderr
         os._exit(0)
     # child
     os.close(r) # don't need read end
@@ -128,7 +143,7 @@ def detach_process_context():
 
     # child
     os.dup2(w, sys.stderr.fileno()) # redirect stderr to pipe that goes to original parent
-
+    os.close(w)
 
 def main(argv):
     # scope_server [start --host --verbose | stop]
@@ -145,19 +160,21 @@ def main(argv):
     args = parser.parse_args()
 
     runner = Runner(pidfile_path)
+    try:
+        if args.command == 'start':
+            #initialize scope config
+            scope_configuration.CONFIG_FILE = config_file
+            # if it doesn't exist, make it so that it can be customized.
+            scope_configuration.create_config_file_if_necessary()
+            config = scope_configuration.get_config()
+            server_host = config.Server.PUBLICHOST if args.public else config.Server.LOCALHOST
 
-    if args.command == 'start':
-        #initialize scope config
-        scope_configuration.CONFIG_FILE = config_file
-        # if it doesn't exist, make it so that it can be customized.
-        scope_configuration.create_config_file_if_necessary()
-        config = scope_configuration.get_config()
-        server_host = config.Server.PUBLICHOST if args.public else config.Server.LOCALHOST
+            runner.start(server_host, log_dir, args.verbose)
 
-        runner.start(server_host, log_dir, args.verbose)
-
-    elif args.command == 'stop':
-        runner.stop()
+        elif args.command == 'stop':
+            runner.stop()
+    except Exception as e:
+        logger.warn('Error: {}', e)
 
 if __name__ == '__main__':
     import sys

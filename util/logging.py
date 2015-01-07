@@ -60,23 +60,25 @@ def attach_file_handlers(log_dir):
 
     file_formatter = formatter = logging.Formatter('>{asctime}\t{levelname}\t{name}\t{message}', datefmt='%Y-%m-%d %H:%M:%S', style='{')
 
+    # TODO: make a custom rotating handler that works like the timed handler, but just appends .1, .2, .3 etc.
     info_log_handler = logging.handlers.TimedRotatingFileHandler(str(log_dir / 'messages.log'),
-        when='W6', backupCount=8) # roll over on sundays
+        when='D', interval=7, backupCount=8) # roll over weekly
     info_log_handler.namer = _gz_log_namer
     info_log_handler.rotator = _gz_log_rotator
+    info_log_handler.doRollover() # roll the log each time logging is started... sadly deletes old logs from same day. See TODO above
     info_log_handler.setLevel(logging.INFO)
     info_log_handler.setFormatter(file_formatter)
     logging.root.addHandler(info_log_handler)
 
-    debug_log = log_dir / 'debug.log'
-    if debug_log.exists():
-        debug_log.unlink() # kill old debug log
-    debug_log_handler = logging.handlers.TimedRotatingFileHandler(str(debug_log),
-        when='M', interval=30, backupCount=0, delay=True) # roll over every half hour; don't create unless asked-for
-    debug_log_handler.rotator = _delete_log_rotator # backupCount=0 otherwise just keeps making new logs. This way we delete the old
-    debug_log_handler.setLevel(logging.DEBUG)
-    debug_log_handler.setFormatter(file_formatter)
-    logging.root.addHandler(debug_log_handler)
+
+    if logging.root.getEffectiveLevel() == logging.DEBUG:
+        debug_log_handler = logging.handlers.TimedRotatingFileHandler(str(debug_log),
+            when='M', interval=30, backupCount=1, delay=True) # roll over every half hour; don't create unless asked-for
+        #debug_log_handler.rotator = _delete_log_rotator # required if backupCount=0, otherwise it never deletes the old log files
+        debug_log_handler.doRollover() # roll over each time logging is started
+        debug_log_handler.setLevel(logging.DEBUG)
+        debug_log_handler.setFormatter(file_formatter)
+        logging.root.addHandler(debug_log_handler)
 
 
 # Workaround for the fact that by default logging messages must use old-style %-formatting.

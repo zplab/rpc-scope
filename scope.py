@@ -41,7 +41,7 @@ from .util import logging
 logger = logging.get_logger(__name__)
 
 def _log_exception(preamble, e):
-    logger.warn(preamble + ' ' + str(e))
+    logger.warn('{} {}', preamble, e)
     logger.debug('Detailed information', exc_info=True)
 
 class Namespace:

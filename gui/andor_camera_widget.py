@@ -77,10 +77,10 @@ class AndorCameraWidget(device_widget.DeviceWidget):
         properties+= [(advanced_property, True) for advanced_property in advanced_properties]
         self.advanced_widgets = [] # Widgets visible only when show all is enabled
         self._row = 0
+        self.make_widgets_for_property('live_mode', 'Bool', readonly=False)
         for property in self.basic_properties:
             type, readonly = property_types[property]
             self.make_widgets_for_property(property, type, readonly)
-            self._row += 1
         if advanced_properties:
             self.advanced_visibility_button = Qt.QPushButton()
             self.layout().addWidget(self.advanced_visibility_button, self._row, 0, 1, -1, Qt.Qt.AlignHCenter | Qt.Qt.AlignVCenter)
@@ -88,7 +88,6 @@ class AndorCameraWidget(device_widget.DeviceWidget):
             for property in advanced_properties:
                 type, readonly = property_types[property]
                 self.advanced_widgets.extend(self.make_widgets_for_property(property, type, readonly))
-                self._row += 1
             self._show_advanced = None
             self.show_advanced = show_advanced
             self.advanced_visibility_button.clicked.connect(self.show_advanced_clicked)
@@ -107,6 +106,7 @@ class AndorCameraWidget(device_widget.DeviceWidget):
             unit_label = Qt.QLabel(self.units[property])
             ret.append(unit_label)
             self.layout().addWidget(unit_label, self._row, 2)
+        self._row += 1
         return ret
 
     def make_widget(self, property, type, readonly):

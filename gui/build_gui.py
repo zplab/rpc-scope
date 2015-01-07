@@ -7,13 +7,18 @@ def sigint_handler(*args):
     """Handler for the SIGINT signal."""
     Qt.QApplication.quit()
 
-def gui_main(host, widget_classes):
+def gui_main(host, **widget_classes):
     params = []
     app = Qt.QApplication(params)
 
     scope, scope_properties = scope_client.client_main(host)
-    widgets = [wc(scope, scope_properties) for wc in widget_classes if wc.can_run(scope)]
-    scope_properties.rebroadcast_all()
+    widgets = []
+    for name, wc in widget_classes.items():
+        if wc.can_run(scope):
+            widgets.append(wc(scope, scope_properties))
+        else:
+            print('Scope cannot currently run {}. (Hardware not turned on?)'.format(name))
+    scope.rebroadcast_properties()
     for widget in widgets:
         widget.show()
 
