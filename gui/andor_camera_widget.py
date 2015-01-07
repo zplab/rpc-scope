@@ -24,7 +24,7 @@
 import math
 from PyQt5 import Qt
 from . import device_widget
-from ...simple_rpc import rpc_client
+from ..simple_rpc import rpc_client
 
 INT_MIN, INT_MAX = 1, None
 FLOAT_MIN, FLOAT_MAX, FLOAT_DECIMALS = 0, None, 3
@@ -66,29 +66,48 @@ class AndorCameraWidget(device_widget.DeviceWidget):
         'exposure_time': (0.001, 30000, 3)
     }
 
-    def __init__(self, scope, scope_properties, show_all=False, parent=None):
+    def __init__(self, scope, scope_properties, show_advanced=False, parent=None):
         super().__init__(scope, scope_properties, parent)
         self.setWindowTitle('Andor Camera ({})'.format(scope.camera.model_name))
-        self.layout = Qt.QGridLayout()
-        self.setLayout(self.layout)
+        self.setLayout(Qt.QGridLayout())
         self.camera = scope.camera
         property_types = self.camera.andor_property_types
         advanced_properties = sorted(property_types.keys() - set(self.basic_properties))
-        properties = self.basic_properties
-        if show_all:
-            properties = list(properties) + advanced_properties
-        for row, property in enumerate(properties):
+        properties = [(property, False) for property in list(self.basic_properties)]
+        properties+= [(advanced_property, True) for advanced_property in advanced_properties]
+        self.advanced_widgets = [] # Widgets visible only when show all is enabled
+        self._row = 0
+        for property in self.basic_properties:
             type, readonly = property_types[property]
-            self.add_widget(row, property, type, readonly)
+            self.make_widgets_for_property(property, type, readonly)
+            self._row += 1
+        if advanced_properties:
+            self.advanced_visibility_button = Qt.QPushButton()
+            self.layout().addWidget(self.advanced_visibility_button, self._row, 0, 1, -1, Qt.Qt.AlignHCenter | Qt.Qt.AlignVCenter)
+            self._row += 1
+            for property in advanced_properties:
+                type, readonly = property_types[property]
+                self.advanced_widgets.extend(self.make_widgets_for_property(property, type, readonly))
+                self._row += 1
+            self._show_advanced = None
+            self.show_advanced = show_advanced
+            self.advanced_visibility_button.clicked.connect(self.show_advanced_clicked)
+        self.layout().addItem(Qt.QSpacerItem(0, 0, Qt.QSizePolicy.MinimumExpanding, Qt.QSizePolicy.MinimumExpanding), self._row, 0,
+                                             1,  # Spacer is just one logical row tall (that row stretches vertically to occupy all available space)...
+                                             -1) # ... and, it spans all the columns in its row
+        del self._row
 
-    def add_widget(self, row, property, type, readonly):
+    def make_widgets_for_property(self, property, type, readonly):
         label = Qt.QLabel(property + ':')
-        self.layout.addWidget(label, row, 0)
+        self.layout().addWidget(label, self._row, 0)
         widget = self.make_widget(property, type, readonly)
-        self.layout.addWidget(widget, row, 1)
+        ret = [label, widget]
+        self.layout().addWidget(widget, self._row, 1)
         if property in self.units:
             unit_label = Qt.QLabel(self.units[property])
-            self.layout.addWidget(unit_label, row, 2)
+            ret.append(unit_label)
+            self.layout().addWidget(unit_label, self._row, 2)
+        return ret
 
     def make_widget(self, property, type, readonly):
         if readonly:
@@ -188,3 +207,20 @@ class AndorCameraWidget(device_widget.DeviceWidget):
                 Qt.QMessageBox.warning(self, 'Invalid Value', error)
         widget.toggled.connect(changed)
         return widget
+
+    @property
+    def show_advanced(self):
+        if self.advanced_widgets:
+            return self._show_advanced
+
+    @show_advanced.setter
+    def show_advanced(self, show_advanced):
+        if self.advanced_widgets:
+            if show_advanced != self._show_advanced:
+                self.advanced_visibility_button.setText('Hide Advanced ▼' if show_advanced else 'Show Advanced ▷')
+                for widget in self.advanced_widgets:
+                    widget.setVisible(show_advanced)
+                self._show_advanced = show_advanced
+
+    def show_advanced_clicked(self):
+        self.show_advanced = not self.show_advanced

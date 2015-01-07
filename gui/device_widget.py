@@ -24,7 +24,7 @@
 
 from PyQt5 import Qt
 import collections
-from ...simple_rpc import rpc_client
+from ..simple_rpc import rpc_client
 
 class DeviceWidget(Qt.QWidget):
     _PropertyChangeSignal = Qt.pyqtSignal(str, object)
