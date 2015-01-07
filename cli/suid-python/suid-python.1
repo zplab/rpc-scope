@@ -1,0 +1,48 @@
+.TH SUID-PYTHON 1 "January 20, 2010"
+.\" Please adjust this date whenever revising the manpage.
+.\"
+.\" Some roff macros, for reference:
+.\" .nh        disable hyphenation
+.\" .hy        enable hyphenation
+.\" .ad l      left justify
+.\" .ad b      justify to both left and right margins
+.\" .nf        disable filling
+.\" .fi        enable filling
+.\" .br        insert line break
+.\" .sp <n>    insert n+1 empty lines
+.\" for manpage-specific macros, see man(7)
+.SH NAME
+suid-python \- SUID-wrapper for python
+.SH SYNOPSIS
+.B suid-python
+.RI python-script " arguments" ...
+.SH DESCRIPTION
+The usual way to call
+.B suid-python
+is by specifying it on the first line of a python script:
+.nf
+#!/usr/bin/env suid-python
+.fi
+.PP
+.B suid-python
+needs to be installed SUID root. When invoked it checks the python script to be
+run for the following:
+.IP 1
+The script has the SUID bit set
+.IP 2
+All the superdirectories of the one the script is located in are owned by
+either root or the same user that owns the script.
+.IP 3
+The script is located in a trusted directory ( /bin, /boot, /etc; /lib, /opt,
+/root, /sbin and /usr )
+.IP 4
+The directory where the script is located does not have the sticky bit set
+(like /tmp, see chmod(2))
+.PP
+If all these conditions are met, the environment is cleaned and the script is
+run as the user that owns the file.
+.SH AUTHOR
+suid-python was written by Steven Elliott <selliott4@austin.rr.com>.
+.PP
+This manual page was written by Paul Tötterman <paul.totterman@iki.fi>,
+for the Debian project (but may be used by others).

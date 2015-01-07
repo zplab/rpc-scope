@@ -1,7 +1,9 @@
 import argparse
+import os
 import os.path
 import signal
 import sys
+import shutil
 
 from daemon import daemon
 from daemon import runner
@@ -12,7 +14,7 @@ from ..util import logging
 logger = logging.get_logger(__name__)
 
 def terminate_handler(signal_number, stack_frame):
-    """ Signal handler for end-process signals."""
+    """Signal handler for end-process signals."""
     logger.debug('Caught termination signal {}. Terminating.', signal_number)
     raise SystemExit('Terminating on signal {}'.format(signal_number))
 
@@ -29,59 +31,56 @@ class Runner:
         self.pidfile = runner.make_pidlockfile(pidfile_path, acquire_timeout=10)
 
     def start(self, server_host, log_dir, verbose):
-        """Start the scope server daemon process"""
+        """Start the scope server daemon process."""
         if runner.is_pidfile_stale(self.pidfile):
             self.pidfile.break_lock()
 
         logger.info('Starting Scope Server')
         homedir = os.path.expanduser('~')
-        stderr_fd = sys.stderr.fileno()
-
         daemon.prevent_core_dump()
         daemon.set_signal_handlers(SIGNAL_MAP)
-        daemon.close_all_open_files(exclude={stderr_fd})
+        daemon.close_all_open_files(exclude={sys.stderr.fileno()})
+        daemon.change_working_directory(homedir)
 
         #initialize logging
         logging.set_verbose(verbose)
         logging.attach_file_handlers(log_dir)
 
-        # detach parent process. Note: ZMQ and camera don't work right unless 
-        # initialized in child process AFTER this detaching. Odd.
-        # TODO: figure out a fix.
-        daemon.detach_process_context()
+        # detach parent process. Note: ZMQ and camera don't work in child process
+        # after a fork. ZMQ contexts don't work, and andor finalize functions hang.
+        # Thus we need to init these things AFTER detaching the process via fork().
+        # In order to helpfully print messages to stderr from the child process,
+        # we use a custom detach_process_context that pipes stderr back to the
+        # parent's stderr. (Otherwise the stderr would just spew all over the
+        # terminal after the parent exits, which is ugly.)
+        detach_process_context()
 
         #initialize scope server
         server = scope_server.ScopeServer(server_host)
 
-
-        # chroot to home dir
-        try:
-            daemon.change_root_directory(homedir)
-        except daemon.DaemonOSEnvironmentError:
-            logger.warn('Could not chroot to {}', homedir)
-
-
         logger.info('Scope Server Ready (Listening on {})', server_host)
 
-        # detach stderr logger, close stderr, and redirect python-generated output to /dev/null
+        # detach stderr logger, and redirect python-generated output to /dev/null
+        # (preventing anything that tries to print to / read from these streams from
+        # throwing an error)
         logging.detach_console_handler()
-        daemon.close_file_descriptor_if_open(stderr_fd)
         daemon.redirect_stream(sys.stdin, None)
         daemon.redirect_stream(sys.stdout, None)
+        # below closes pipe to parent that was redirected from old stderr by detach_process_context
+        # which allows parent to exit...
         daemon.redirect_stream(sys.stderr, None)
 
         with self.pidfile:
             try:
                 server.run()
             except Exception:
-                logger.warn('Scope server terminating due to unhandled execption:', exc_info=True)
+                logger.warn('Scope server terminating due to unhandled exception:', exc_info=True)
 
 
     def stop(self):
-        """Exit the daemon process specified in the current PID file.
-            """
+        """Exit the daemon process specified in the current PID file."""
         if not self.pidfile.is_locked():
-            raise RuntimeError("PID file {} not locked".format(self.pidfile.path))
+            raise RuntimeError('Scope daemon is not running? (PID file {} not locked.)'.format(self.pidfile.path))
 
         if runner.is_pidfile_stale(self.pidfile):
             self.pidfile.break_lock()
@@ -90,8 +89,49 @@ class Runner:
             os.kill(pid, signal.SIGTERM)
 
 
+def detach_process_context():
+    """Detach the process context from parent and session.
+
+       Detach from the parent process and session group, allowing the
+       parent to exit while this process continues running.
+
+       This version, unlike that in daemon.py, pipes the stderr to the parent,
+       which then sends that to its stderr.
+       This way, the parent can report on child messages until the child
+       decides to close sys.stderr.
+
+       Reference: “Advanced Programming in the Unix Environment”,
+       section 13.3, by W. Richard Stevens, published 1993 by Addison-Wesley."""
+
+    r, w = os.pipe() # these are file descriptors, not file objects
+    try: # fork 1
+        pid = os.fork()
+    except OSError as e:
+        raise RuntimeError('First fork failed: [{}] {}'.format(e.errno, e.strerror))
+
+    if pid:
+        # parent
+        os.close(w) # use os.close() to close a file descriptor
+        r = os.fdopen(r) # turn r into a file object
+        shutil.copyfileobj(r, sys.stderr) # stream output of pipe to stderr
+        os._exit(0)
+    # child
+    os.close(r) # don't need read end
+    os.setsid()
+    try: # fork 2
+        pid = os.fork()
+        if pid:
+            # parent
+            os._exit(0)
+    except OSError as e:
+        raise RuntimeError('Second fork failed: [{}] {}'.format(e.errno, e.strerror))
+
+    # child
+    os.dup2(w, sys.stderr.fileno()) # redirect stderr to pipe that goes to original parent
+
+
 def main(argv):
-    # scope_server [start --host --verbose | stop | restart]
+    # scope_server [start --host --verbose | stop]
     pidfile_path = os.path.expanduser('~/scope_server.pid')
     config_file = os.path.expanduser('~/scope_configuration.py')
     log_dir = os.path.expanduser('~/scope_logs')
