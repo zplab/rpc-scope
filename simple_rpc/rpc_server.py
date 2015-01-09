@@ -100,7 +100,10 @@ class RPCServer:
                         doc = ''
                 except AttributeError:
                     doc = ''
-                argspec = inspect.getfullargspec(v)
+                try:
+                    argspec = inspect.getfullargspec(v)
+                except TypeError:
+                    raise TypeError('Could not get description of callable "{}"'.format(prefixed_name))
                 argdict = argspec.__dict__
                 argdict.pop('annotations')
                 if argdict['defaults']:

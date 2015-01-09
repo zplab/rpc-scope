@@ -145,7 +145,7 @@ class AndorCameraWidget(device_widget.DeviceWidget):
                     if max is None:
                         max = '?'
                     error = 'Given the camera state, {} must be in the range [{}, {}].'.format(property, min, max)
-                elif e.args[0].find('NOTWRITABLE'):
+                elif e.args[0].find('NOTWRITABLE') != -1:
                     error = 'Given the camera state, {} is not modifiable.'.format(property)
                 else:
                     error = 'Could not set {} ({}).'.format(property, e.args[0])
@@ -184,7 +184,7 @@ class AndorCameraWidget(device_widget.DeviceWidget):
             try:
                 update(value)
             except rpc_client.RPCError as e:
-                if e.args[0].find('NOTAVAILABLE'):
+                if e.args[0].find('NOTAVAILABLE') != -1:
                     accepted_values = sorted(k for k, v in getattr(self.camera, property+'_values').items() if v)
                     error = 'Given the camera state, {} can only be one of [{}].'.format(property, ', '.join(accepted_values))
                 else:
@@ -200,7 +200,7 @@ class AndorCameraWidget(device_widget.DeviceWidget):
             try:
                 update(value)
             except rpc_client.RPCError as e:
-                if e.args[0].find('NOTWRITABLE'):
+                if e.args[0].find('NOTWRITABLE') != -1:
                     error = "Given the camera state, {} can't be changed.".format(property)
                 else:
                     error = 'Could not set {} ({}).'.format(property, e.args[0])

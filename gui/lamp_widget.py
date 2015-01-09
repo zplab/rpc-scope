@@ -73,6 +73,7 @@ class LampWidget(Qt.QWidget):
         return SpectraXWidget.can_run(scope) or TLLampWidget.can_run(scope)
 
     def __init__(self, scope, scope_properties, parent=None):
+        super().__init__(parent)
         self.setWindowTitle('Lamp Controller')
         container_layout = Qt.QVBoxLayout()
         self.setLayout(container_layout)

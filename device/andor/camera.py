@@ -338,7 +338,7 @@ class Camera(property_device.PropertyDevice):
         if live: # pause live if we can't do fast exposure switching
             current_exposure_ms = self.get_exposure_time()
             read_time_ms = self.get_readout_time()
-            current_short = current_exposure < read_time_ms
+            current_short = current_exposure_ms < read_time_ms
             new_short = ms < read_time_ms
             must_pause_live = current_short != new_short
             if must_pause_live:
@@ -468,7 +468,7 @@ class Camera(property_device.PropertyDevice):
             # for short exposures (exposure <= readout_time), but in any case, it is, so we
             # need to note that software triggering mode (used for live viewing)
             # takes two full read cycles per image.
-            frame_time_sec = readout_time * 2 / 1000
+            frame_time_sec = readout_time_ms * 2 / 1000
         else:
             frame_time_sec = 1/self.get_frame_rate()
         trigger_interval = max(1/self.get_max_interface_fps(), frame_time_sec) * 1.05

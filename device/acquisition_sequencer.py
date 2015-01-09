@@ -31,7 +31,7 @@ class AcquisitionSequencer:
         self._camera = camera
         self._io_tool = io_tool
         self._spectra_x = spectra_x
-        self.config = scope_configuration.get_config()
+        self._config = scope_configuration.get_config()
 
     def new_sequence(self, readout_rate='280 MHz', **spectra_x_intensities):
         """Create a new acquisition sequence of camera exposures with different
@@ -72,8 +72,8 @@ class AcquisitionSequencer:
         # set the wait time low because we have clean shielded cables
         self._steps.append(self.iotool.commands.wait_time(2))
         # turn off all the spectra x lamps
-        self._steps.extend(self.iotool.commands.spectra_x_lamps(**{lamp:False for lamp in self.config.IOTool.LUMENCOR_PINS.keys()}))
-        for lamp in self.config.IOTool.LUMENCOR_PINS.keys():
+        self._steps.extend(self.iotool.commands.spectra_x_lamps(**{lamp:False for lamp in self._config.IOTool.LUMENCOR_PINS.keys()}))
+        for lamp in self._config.IOTool.LUMENCOR_PINS.keys():
             if lamp not in spectra_x_intensities:
                 spectra_x_intensities[lamp] = 255
         self._spectra_x_intensities = spectra_x_intensities
@@ -94,10 +94,10 @@ class AcquisitionSequencer:
         self._num_acquisitions += 1
         self._exposures.append(exposure_ms)
         lamps = {lamp:True for lamp, value in spectra_x_lamps.items() if value}
-        self._steps.append(self.iotool.commands.wait_high(self.config.IOTool.CAMERA_PINS['Arm']))
-        self._steps.append(self.iotool.commands.set_high(self.config.IOTool.CAMERA_PINS['Trigger']))
-        self._steps.append(self.iotool.commands.set_low(self.config.IOTool.CAMERA_PINS['Trigger']))
-        self._steps.append(self.iotool.commands.wait_high(self.config.IOTool.CAMERA_PINS['AuxOut1'])) # set to 'FireAll'
+        self._steps.append(self.iotool.commands.wait_high(self._config.IOTool.CAMERA_PINS['Arm']))
+        self._steps.append(self.iotool.commands.set_high(self._config.IOTool.CAMERA_PINS['Trigger']))
+        self._steps.append(self.iotool.commands.set_low(self._config.IOTool.CAMERA_PINS['Trigger']))
+        self._steps.append(self.iotool.commands.wait_high(self._config.IOTool.CAMERA_PINS['AuxOut1'])) # set to 'FireAll'
         self._steps.extend(self.iotool.commands.transmitted_lamp(tl_enable, tl_intensity))
         self._steps.extend(self.iotool.commands.spectra_x_lamps(**lamps))
         if exposure_ms <= 65.535:
@@ -113,9 +113,9 @@ class AcquisitionSequencer:
         assert self._num_acquisitions > 0
         # send one last trigger to end the final acquisition
         steps = list(self._steps)
-        steps.append(self.iotool.commands.wait_high(self.config.IOTool.CAMERA_PINS['Arm']))
-        steps.append(self.iotool.commands.set_high(self.config.IOTool.CAMERA_PINS['Trigger']))
-        steps.append(self.iotool.commands.set_low(self.config.IOTool.CAMERA_PINS['Trigger']))
+        steps.append(self.iotool.commands.wait_high(self._config.IOTool.CAMERA_PINS['Arm']))
+        steps.append(self.iotool.commands.set_high(self._config.IOTool.CAMERA_PINS['Trigger']))
+        steps.append(self.iotool.commands.set_low(self._config.IOTool.CAMERA_PINS['Trigger']))
 
         self._io_tool.store_program(*steps)
         self._compiled = True
