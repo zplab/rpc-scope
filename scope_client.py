@@ -22,7 +22,6 @@
 #
 # Authors: Zach Pincus
 
-import functools
 import zmq
 import time
 import collections
@@ -33,45 +32,32 @@ from .simple_rpc import rpc_client, property_client
 from .util import transfer_ism_buffer
 from .config import scope_configuration
 
-def wrap_image_getter(namespace, func_name, get_data):
-    function = getattr(namespace, func_name)
-    @functools.wraps(function)
-    def wrapped():
-        return get_data(function())
-    setattr(namespace, func_name, wrapped)
-
-def wrap_images_getter(namespace, func_name, get_data):
-    function = getattr(namespace, func_name)
-    @functools.wraps(function)
-    def wrapped():
-        return [get_data(name) for name in function()]
-    setattr(namespace, func_name, wrapped)
-
 def rpc_client_main(host='127.0.0.1', context=None):
     rpc_addr = scope_configuration.rpc_addr(host)
     interrupt_addr = scope_configuration.interrupt_addr(host)
 
     client = rpc_client.ZMQClient(rpc_addr, interrupt_addr, context)
-    scope = client.proxy_namespace()
     is_local, get_data = transfer_ism_buffer.client_get_data_getter(client)
+    def get_many_data(data_list):
+        return [get_data(name) for name in data_list]
+    client_wrappers = {
+        'camera.acquire_image': get_data,
+        'camera.live_image': get_data,
+        'camera.next_image': get_data,
+        'camera.acquisition_sequencer.run': get_many_data,
+    }
+    scope = client.proxy_namespace(client_wrappers)
     scope._get_data = get_data
     scope._is_local = is_local
     if not is_local:
         scope.camera.set_network_compression = get_data.set_network_compression
     scope._rpc_client = client
-    if hasattr(scope, 'camera'):
-        wrap_image_getter(scope.camera, 'acquire_image', get_data)
-        wrap_image_getter(scope.camera, 'live_image', get_data)
-        wrap_image_getter(scope.camera, 'next_image', get_data)
-        if hasattr(scope.camera, 'acquisition_sequencer'):
-            wrap_images_getter(scope.camera.acquisition_sequencer, 'run', get_data)
     return scope
 
 def property_client_main(host='127.0.0.1', context=None):
     property_addr = scope_configuration.property_addr(host)
     scope_properties = property_client.ZMQClient(property_addr, context)
     return scope_properties
-
 
 def client_main(host='127.0.0.1', context=None, subscribe_all=False):
     if context is None:

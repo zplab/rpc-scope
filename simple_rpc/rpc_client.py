@@ -67,15 +67,22 @@ class RPCClient:
         func.__name__ = func.__qualname__ = command
         return func
 
-    def proxy_namespace(self):
+    def proxy_namespace(self, client_wrappers=None):
         """Use the RPC server's __DESCRIBE__ functionality to reconstitute a
         faxscimile namespace on the client side with well-described functions
         that can be seamlessly called.
 
         A set of the fully-qualified function names available in the namespace
         is included as the _functions_proxied attribute of this namespace.
-        """
 
+        If client_wrappers is provided, it must be a dict mapping qualified
+        function names to functions that will be used to wrap that RPC call. For
+        example, if certain data returned from the RPC server needs additional
+        processing before returning to the client, this can be used for that
+        purpose.
+        """
+        if client_wrappers is None:
+            client_wrappers = {}
         # group functions by their namespace
         server_namespaces = collections.defaultdict(list)
         functions_proxied = set()
@@ -101,7 +108,11 @@ class RPCClient:
             # create functions and gather property accessors
             accessors = collections.defaultdict(RPCClient._accessor_pair)
             for name, qualname, doc, argspec in function_descriptions:
-                client_func = _rich_proxy_function(doc, argspec, name, self, qualname)
+                if qualname in client_wrappers:
+                    client_wrap_function = client_wrappers[qualname]
+                else:
+                    client_wrap_function = None
+                client_func = _rich_proxy_function(doc, argspec, name, self, qualname, client_wrap_function)
                 if name.startswith('get_'):
                     accessors[name[4:]].getter = client_func
                     name = '_'+name
@@ -172,7 +183,7 @@ class ZMQClient(RPCClient):
     def _send_interrupt(self, message):
         self.interrupt_socket.send(bytes(message, encoding='ascii'))
 
-def _rich_proxy_function(doc, argspec, name, rpc_client, rpc_function):
+def _rich_proxy_function(doc, argspec, name, rpc_client, rpc_function, client_wrap_function=None):
     """Using the docstring and argspec from the RPC __DESCRIBE__ command,
     generate a proxy function that looks just like the remote function, except
     wraps the function 'to_proxy' that is passed in."""
@@ -213,13 +224,16 @@ def _rich_proxy_function(doc, argspec, name, rpc_client, rpc_function):
     # creates the real function. This is necessary to generate the real proxy
     # function with the function to proxy stored inside a closure, as exec()
     # can't generate closures correctly.
+    rpc_call = 'rpc_client(rpc_function, {})'.format(', '.join(call_parts))
+    if client_wrap_function is not None:
+        rpc_call = 'client_wrap_function({})'.format(rpc_call)
     func_str = '''
         def make_func(rpc_client, rpc_function):
             def {}({}):
                 """{}"""
-                return rpc_client(rpc_function, {})
+                return {}
             return {}
-    '''.format(name, ', '.join(arg_parts), doc, ', '.join(call_parts), name)
+    '''.format(name, ', '.join(arg_parts), doc, rpc_call, name)
     fake_locals = {} # dict in which exec operates: locals() doesn't work here.
     exec(func_str.strip(), globals(), fake_locals)
     func = fake_locals['make_func'](rpc_client, rpc_function) # call the factory function
