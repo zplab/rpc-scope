@@ -590,7 +590,8 @@ class Camera(property_device.PropertyDevice):
 
     def get_latest_timestamp(self):
         """Return the timestamp of the most recent image acquired."""
-        return self._latest_timestamp
+        if self._latest_timestamp is not None:
+            return int(self._latest_timestamp)
 
     def end_image_sequence_acquisition(self):
         """Stop an image-acquisition sequence and perform necessary cleanup."""
