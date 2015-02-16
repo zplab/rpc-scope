@@ -67,7 +67,6 @@ class Lamp:
         return self._spectra_x._lamp_intensities[self._name]
 
     def set_enabled(self, enable):
-
         self._spectra_x.lamp_enableds(**{self._name:enable})
 
     def get_enabled(self):
@@ -103,6 +102,7 @@ class SpectraX(property_device.PropertyDevice):
         self.lamp_intensities(**{lamp:255 for lamp in LAMP_NAMES})
         for name in LAMP_NAMES:
             setattr(self, name, Lamp(name, self))
+        self._state_stack = []
 
     def _timer_update_temp(self):
         while self._timer_running:
@@ -154,3 +154,36 @@ class SpectraX(property_device.PropertyDevice):
         self._serial_port.write(b'\x53\x91\x02\x50')
         r = self._serial_port.read(2)
         return ((r[0] << 3) | (r[1] >> 5)) * 0.125
+
+    def set_state(self, **state):
+        """Set a number of parameters at once using keyword arguments, e.g.
+        spectra_x.set_state(Red_enabled=True, Red_intensity=255, Blue_enabled=False)"""
+        lamp_intensities = {}
+        lamp_enableds = {}
+        prop_args = {
+            'intensity':lamp_intensities,
+            'enabled':lamp_enableds}
+        for lamp_prop, value in state.items():
+            lamp, prop = lamp_prop.split('_')
+            prop_args[prop][lamp] = value
+        self.lamp_enableds(**lamp_enableds)
+        self.lamp_intensities(**lamp_intensities)
+
+    def push_state(self, **state):
+        """Set a number of parameters at once using keyword arguments, while
+        saving the old values of those parameters. pop_state() will restore those
+        previous values. push_state/pop_state pairs can be nested arbitrarily."""
+        prop_stores = {
+            'intensity':self._lamp_intensities,
+            'enabled':self._lamp_enableds}
+        old_state = {}
+        for lamp_prop in state.keys():
+            lamp, prop = lamp_prop.split('_')
+            old_state[lamp_prop] = prop_stores[prop][lamp]
+        self._state_stack.append(old_state)
+        self.set_state(**state)
+
+    def pop_state(self):
+        """Restore the most recent set of camera parameters changed by a push_state()
+        call."""
+        self.set_state(**self._state_stack.pop())
