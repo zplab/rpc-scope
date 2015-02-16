@@ -227,15 +227,17 @@ def _rich_proxy_function(doc, argspec, name, rpc_client, rpc_function, client_wr
     rpc_call = 'rpc_client(rpc_function, {})'.format(', '.join(call_parts))
     if client_wrap_function is not None:
         rpc_call = 'client_wrap_function({})'.format(rpc_call)
-    func_str = '''
-        def make_func(rpc_client, rpc_function):
+    func_str = """
+        def make_func(rpc_client, rpc_function, client_wrap_function):
             def {}({}):
-                """{}"""
+                '''{}'''
                 return {}
             return {}
-    '''.format(name, ', '.join(arg_parts), doc, rpc_call, name)
+    """.format(name, ', '.join(arg_parts), doc, rpc_call, name)
+    if name.find('next_image') != -1:
+        print(func_str)
     fake_locals = {} # dict in which exec operates: locals() doesn't work here.
     exec(func_str.strip(), globals(), fake_locals)
-    func = fake_locals['make_func'](rpc_client, rpc_function) # call the factory function
+    func = fake_locals['make_func'](rpc_client, rpc_function, client_wrap_function) # call the factory function
     func.__qualname__ = func.__name__ = name # rename the proxy function
     return func
