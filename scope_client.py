@@ -36,8 +36,8 @@ from .config import scope_configuration
 def wrap_image_getter(namespace, func_name, get_data):
     function = getattr(namespace, func_name)
     @functools.wraps(function)
-    def wrapped():
-        return get_data(function())
+    def wrapped(*args, **kws):
+        return get_data(function(*args, **kws))
     setattr(namespace, func_name, wrapped)
 
 def wrap_images_getter(namespace, func_name, get_data):
