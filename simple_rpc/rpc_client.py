@@ -234,8 +234,6 @@ def _rich_proxy_function(doc, argspec, name, rpc_client, rpc_function, client_wr
                 return {}
             return {}
     """.format(name, ', '.join(arg_parts), doc, rpc_call, name)
-    if name.find('next_image') != -1:
-        print(func_str)
     fake_locals = {} # dict in which exec operates: locals() doesn't work here.
     exec(func_str.strip(), globals(), fake_locals)
     func = fake_locals['make_func'](rpc_client, rpc_function, client_wrap_function) # call the factory function
