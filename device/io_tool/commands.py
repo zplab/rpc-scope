@@ -40,7 +40,7 @@ class Commands:
     def wait_change(self, pin):
         return self._make_command('wc', pin)
 
-    def wait_time(time):
+    def wait_time(self, time):
         return self._make_command('wt', time)
 
     def read_digital(self, pin):
