@@ -142,7 +142,7 @@ class Autofocus:
         return best_z, list(zip(z_values, focus_metrics))
 
 
-    def new_autofocus_continuous_move(self, start, end, speed, metric='brenner', return_image_names=False, max_workers=6):
+    def new_autofocus_continuous_move(self, start, end, speed, metric='brenner', fps_max=None, return_image_names=False, max_workers=6):
         """Move the stage from 'start' to 'end' at a constant speed, taking images
         for autofocus constantly. If fps_max is None, take images as fast as
         possible; otherwise take images as governed by fps_max. Apply the autofocus
@@ -157,7 +157,7 @@ class Autofocus:
             # need to note that software triggering mode takes two full read cycles per image.
             frame_time_sec = readout_time_ms * 2 / 1000
         else:
-            frame_time_sec = 1/self.get_frame_rate()
+            frame_time_sec = 1/self._camera.get_frame_rate()
 
         if fps_max is None:
             sleep_time = frame_time_sec
@@ -286,7 +286,7 @@ class NewImageEvaluator(threading.Thread):
         self.focus_futures = []
         self.z_values = []
         self.ism_names = []
-        self.return_ism_names = return_ism_names
+        self.return_image_names = return_image_names
         super().__init__()
         self.start()
 
@@ -311,7 +311,7 @@ class NewImageEvaluator(threading.Thread):
             self.z_values.append(z_value)
             name = self.camera.next_image(read_timeout_ms=1000)
             array = transfer_ism_buffer._release_array(name)
-            if return_ism_names:
+            if self.return_image_names:
                 self.ism_names.append(name)
                 transfer_ism_buffer.server_register_array_for_transfer(name, array)
             self.focus_futures.append(self.executor.submit(self.timer, array, z_value))

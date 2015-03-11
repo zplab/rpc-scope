@@ -494,8 +494,6 @@ class Camera(property_device.PropertyDevice):
         # a client tries to grab the image.
         self.pop_state()
 
-#   def get_max_fps
-
     def get_live_fps(self):
         if not self._live_mode:
             return
