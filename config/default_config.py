@@ -16,19 +16,19 @@ class Camera:
 class IOTool:
     SERIAL_PORT = '/dev/ttyIOTool'
     LUMENCOR_PINS = {
-        'UV': 'D6',
-        'Blue': 'D5',
-        'Cyan': 'D3',
-        'Teal': 'D4',
-        'GreenYellow': 'D2',
-        'Red': 'D1'
+        'uv': 'D6',
+        'blue': 'D5',
+        'cyan': 'D3',
+        'teal': 'D4',
+        'green_yellow': 'D2',
+        'red': 'D1'
     }
 
     CAMERA_PINS = {
-        'Trigger': 'B0',
-        'Arm': 'B1',
-        'Fire': 'B2',
-        'AuxOut1': 'B3'
+        'trigger': 'B0',
+        'arm': 'B1',
+        'fire': 'B2',
+        'aux_out1': 'B3'
     }
 
     TL_ENABLE_PIN = 'E6'

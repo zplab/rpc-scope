@@ -141,6 +141,60 @@ class Autofocus:
         self._stage.wait() # no op if in sync mode, necessary in async mode
         return best_z, list(zip(z_values, focus_metrics))
 
+
+    def new_autofocus_continuous_move(self, start, end, speed, metric='brenner', return_image_names=False, max_workers=6):
+        """Move the stage from 'start' to 'end' at a constant speed, taking images
+        for autofocus constantly. If fps_max is None, take images as fast as
+        possible; otherwise take images as governed by fps_max. Apply the autofocus
+        metric to each image and move to the best-focused position."""
+        metric = METRICS[metric]
+
+        self._camera.start_image_sequence_acquisition(frame_count=None, trigger_mode='Software', pixel_readout_rate='280 MHz')
+        readout_time_ms = self._camera.get_readout_time()
+        if self._camera.get_exposure_time() <= readout_time_ms:
+            # It may be a bug in the andor library that get_frame_rate() is wrong
+            # for short exposures (exposure <= readout_time), but in any case, it is, so we
+            # need to note that software triggering mode takes two full read cycles per image.
+            frame_time_sec = readout_time_ms * 2 / 1000
+        else:
+            frame_time_sec = 1/self.get_frame_rate()
+
+        if fps_max is None:
+            sleep_time = frame_time_sec
+        else:
+            sleep_time = max(1/fps_max, frame_time_sec)
+
+        self._stage.set_z(start)
+        self._stage.wait() # no op if in sync mode, necessary in async mode
+        timestamp_hz = self._camera.get_timestamp_hz()
+        timestamp0 = self._camera.get_current_timestamp()
+        t0 = time.time()
+        z_values = []
+        t_values = []
+        evaluator = NewImageEvaluator(self._camera, metric, return_image_names, max_workers)
+        with self._stage._pushed_state(async=True, z_speed=speed):
+            self._stage.wait()
+            self._stage.set_z(end)
+            while self._stage.has_pending(): # while stage-move event is still in progress
+                self._camera.send_software_trigger()
+                # just queue the images up on the camera head while we do this
+                evaluator.z_queue.put(self._stage.get_z())
+                time.sleep(sleep_time)
+        self._stage.wait() # make sure all events are cleared out
+        z_values, focus_metrics = evaluator.get_focus_values()
+        # now that we've retrieved all the images, end the acquisition
+        self._camera.end_image_sequence_acquisition()
+        focus_order = numpy.argsort(focus_metrics)
+        best_z = z_values[focus_order[-1]]
+        self._stage.set_z(best_z) # go to focal plane with highest score
+        self._stage.wait() # no op if in sync mode, necessary in async mode
+        if return_image_names:
+            return best_z, list(zip(z_values, focus_metrics)), evaluator.ism_names
+        else:
+            return best_z, list(zip(z_values, focus_metrics))
+
+
+
     def hackified_autofocus_continuous_move(self, start, end, speed, fps_max=None, ims=None, max_workers=1):
         """Move the stage from 'start' to 'end' at a constant speed, taking images
         for autofocus constantly. If fps_max is None, take images as fast as
@@ -221,6 +275,48 @@ class ImageEvaluator(threading.Thread):
                 self.ims.append(array)
             self.focus_futures.append(self.executor.submit(self.timer, array, z_value))
             self.z_queue.task_done()
+
+class NewImageEvaluator(threading.Thread):
+    def __init__(self, camera, metric, return_image_names=False, max_workers=1):
+        self.camera = camera
+        self.metric = metric
+        self.z_queue = queue.Queue()
+        self.executor = futures.ThreadPoolExecutor(max_workers)
+        self.running = True
+        self.focus_futures = []
+        self.z_values = []
+        self.ism_names = []
+        self.return_ism_names = return_ism_names
+        super().__init__()
+        self.start()
+
+    def timer(self, array, z):
+        value = float(self.metric(array, z))
+        return value
+
+    def get_focus_values(self):
+        self.z_queue.join() # wait until enough task_done() calls are made to match the number of put() calls
+        self.running = False
+        self.join()
+        focus_metrics = [fut.result() for fut in self.focus_futures]
+        self.executor.shutdown()
+        return self.z_values, focus_metrics
+
+    def run(self):
+        while self.running:
+            try:
+                z_value = self.z_queue.get(timeout=0.25)
+            except queue.Empty:
+                continue
+            self.z_values.append(z_value)
+            name = self.camera.next_image(read_timeout_ms=1000)
+            array = transfer_ism_buffer._release_array(name)
+            if return_ism_names:
+                self.ism_names.append(name)
+                transfer_ism_buffer.server_register_array_for_transfer(name, array)
+            self.focus_futures.append(self.executor.submit(self.timer, array, z_value))
+            self.z_queue.task_done()
+
 
 class HackifiedImageEvaluator(threading.Thread):
     def __init__(self, camera, ims, max_workers=1):

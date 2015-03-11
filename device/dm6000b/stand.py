@@ -40,7 +40,7 @@ class DM6000Device(message_device.LeicaAsyncDevice, property_device.PropertyDevi
         message_device.LeicaAsyncDevice.__init__(self, message_manager)
         self._state_stack = []
 
-    def set_state(self, **state):
+    def _set_state(self, **state):
         """Set a number of device parameters at once using keyword arguments, e.g.
         device.set_state(async=False, x=10)"""
         for k, v in state.items():
@@ -56,14 +56,14 @@ class DM6000Device(message_device.LeicaAsyncDevice, property_device.PropertyDevi
         async = state.pop('async', None)
         if async is not None:
             self.set_async(async)
-        self.set_state(**state)
+        self._set_state(**state)
 
     def pop_state(self):
         """Restore the most recent set of device parameters changed by a push_state()
         call."""
         old_state = self._state_stack.pop()
         async = old_state.pop('async', None)
-        self.set_state(**old_state)
+        self._set_state(**old_state)
         # unset async mode last for predictable results
         if async is not None:
             self.set_async(async)

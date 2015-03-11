@@ -53,6 +53,10 @@ def server_register_array_for_transfer(name, array):
     ISM_Buffer, it must call the appropriate get_data() function (provided by
     client_get_data_getter()), which will ensure that the _release_array()
     function gets called."""
+    # A single image can get queued for transfer several times (i.e. if several
+    # clients all want to grab the same live image). Appending it to a list
+    # makes sure we can track the count of outgoing requests, so we don't free
+    # things too soon.
     _ism_buffer_registry[name].append(array)
 
 def _release_array(name):

@@ -36,21 +36,21 @@ def _make_dac_bytes(IIC_Addr, bit):
     return dac_bytes
 
 LAMP_DAC_COMMANDS = {
-    'UV': _make_dac_bytes(0x18, 0),
-    'Blue': _make_dac_bytes(0x1A, 0),
-    'Cyan': _make_dac_bytes(0x18, 1),
-    'Teal': _make_dac_bytes(0x1A, 1),
-    'GreenYellow': _make_dac_bytes(0x18, 2),
-    'Red': _make_dac_bytes(0x18, 3)
+    'uv': _make_dac_bytes(0x18, 0),
+    'blue': _make_dac_bytes(0x1A, 0),
+    'cyan': _make_dac_bytes(0x18, 1),
+    'teal': _make_dac_bytes(0x1A, 1),
+    'green_yellow': _make_dac_bytes(0x18, 2),
+    'red': _make_dac_bytes(0x18, 3)
 }
 
 LAMP_SPECS = {
-    'UV': (396, 16),
-    'Blue': (434, 22),
-    'Cyan': (481, 22),
-    'Teal': (508, 29),
-    'GreenYellow': (545, 70),
-    'Red': (633, 19)
+    'uv': (396, 16),
+    'blue': (434, 22),
+    'cyan': (481, 22),
+    'teal': (508, 29),
+    'green_yellow': (545, 70),
+    'red': (633, 19)
 }
 
 LAMP_NAMES = set(LAMP_DAC_COMMANDS.keys())
@@ -61,13 +61,14 @@ class Lamp:
         self._spectra_x = spectra_x
 
     def set_intensity(self, value):
-        self._spectra_x.lamp_intensities(**{self._name:value})
+        """Set lamp intensity in the range [0, 255]"""
+        self._spectra_x._lamp_intensity(**{self._name:value})
 
     def get_intensity(self):
         return self._spectra_x._lamp_intensities[self._name]
 
     def set_enabled(self, enable):
-        self._spectra_x.lamp_enableds(**{self._name:enable})
+        self._spectra_x._lamp_enable(**{self._name:enable})
 
     def get_enabled(self):
         return self._spectra_x._lamp_enableds[self._name]
@@ -122,27 +123,10 @@ class SpectraX(property_device.PropertyDevice):
         self._lamp_intensities[lamp] = value
         self._update_property(lamp+'.intensity', value)
 
-    def lamp_intensities(self, **lamps):
-        """Set intensity of named lamps to a given value.
-
-        The keyword argument names must be valid lamp names. The values must be
-        in the range [0, 255], or None to do nothing. (Lamps not specified as
-        arguments are also not altered)."""
-        for lamp, value in lamps.items():
-            if value is not None:
-                self._lamp_intensity(lamp, value)
-
-    def lamp_enableds(self, **lamps):
-        """Turn off or on named lamps.
-
-        The keyword argument names must be valid lamp names. The values must be
-        either True to enable that lamp, False to disable, or None to do nothing.
-        (Lamps not specified as arguments are also not altered)."""
-        self._iotool.execute(*self._iotool.commands.spectra_x_lamps(**lamps))
-        for lamp, enable in lamps.items():
-            if enable is not None:
-                self._lamp_enableds[lamp] = enable
-                self._update_property(lamp+'.enabled', enable)
+    def _lamp_enable(self, lamp, enable):
+        self._iotool.execute(*self._iotool.commands.spectra_x_lamps(**{lamp:enable}))
+        self._lamp_enableds[lamp] = enable
+        self._update_property(lamp+'.enabled', enable)
 
     def get_lamp_specs(self):
         """Return a dict mapping lamp names to tuples of (peak_wavelength, bandwidth), in nm,
@@ -155,35 +139,44 @@ class SpectraX(property_device.PropertyDevice):
         r = self._serial_port.read(2)
         return ((r[0] << 3) | (r[1] >> 5)) * 0.125
 
-    def set_state(self, **state):
-        """Set a number of parameters at once using keyword arguments, e.g.
-        spectra_x.set_state(Red_enabled=True, Red_intensity=255, Blue_enabled=False)"""
-        lamp_intensities = {}
-        lamp_enableds = {}
-        prop_args = {
-            'intensity':lamp_intensities,
-            'enabled':lamp_enableds}
-        for lamp_prop, value in state.items():
-            lamp, prop = lamp_prop.split('_')
-            prop_args[prop][lamp] = value
-        self.lamp_enableds(**lamp_enableds)
-        self.lamp_intensities(**lamp_intensities)
+    def lamps(self, **lamp_parameters):
+        """Set a number of lamp parameters at once using keyword arguments, e.g.
+        spectra_x.lamps(red_enabled=True, red_intensity=255, blue_enabled=False)
 
-    def push_state(self, **state):
-        """Set a number of parameters at once using keyword arguments, while
-        saving the old values of those parameters. pop_state() will restore those
-        previous values. push_state/pop_state pairs can be nested arbitrarily."""
-        prop_stores = {
-            'intensity':self._lamp_intensities,
-            'enabled':self._lamp_enableds}
-        old_state = {}
-        for lamp_prop in state.keys():
+        Intensity values must be in the range [0, 255]. Valid lamp names can be
+        retrieved with get_lamp_specs().
+        """
+        for lamp_prop, value in lamp_parameters.items():
             lamp, prop = lamp_prop.split('_')
-            old_state[lamp_prop] = prop_stores[prop][lamp]
+            if lamp not in LAMP_SPECS:
+                raise ValueError('Invalid lamp name')
+            if prop == 'intensity':
+                self._lamp_intensity(lamp, value)
+            elif prop == 'enabled':
+                self._lamp_enable(lamp, value)
+            else:
+                raise ValueError('Invalid lamp parameter: must be "intensity" or "enabled"')
+
+    def push_state(self, **lamp_parameters):
+        """Set a number of parameters at once using keyword arguments, while
+        saving the old values of those parameters. (See lamps() for a description
+        of valid parameters.) pop_state() will restore those previous values.
+        push_state/pop_state pairs can be nested arbitrarily."""
+        old_state = {}
+        for lamp_prop in lamp_parameters.keys():
+            lamp, prop = lamp_prop.split('_')
+            if lamp not in LAMP_SPECS:
+                raise ValueError('Invalid lamp name')
+            if prop == 'intensity':
+                old_state[lamp_prop] = self._lamp_intensities[lamp]
+            elif prop == 'enabled':
+                old_state[lamp_prop] = self._lamp_enableds[lamp]
+            else:
+                raise ValueError('Invalid lamp parameter: must be "intensity" or "enabled"')
         self._state_stack.append(old_state)
-        self.set_state(**state)
+        self.lamps(**lamp_parameters)
 
     def pop_state(self):
-        """Restore the most recent set of camera parameters changed by a push_state()
+        """Restore the most recent set of lamp parameters changed by a push_state()
         call."""
-        self.set_state(**self._state_stack.pop())
+        self.lamps(**self._state_stack.pop())

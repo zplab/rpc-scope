@@ -113,12 +113,12 @@ class Camera(property_device.PropertyDevice):
         self._andor_property_types = {}
 
         config = scope_configuration.get_config()
-        
+
         lowlevel.initialize(config.Camera.MODEL) # safe to call this multiple times
-        
+
         self._live_mode = False
         self.return_to_default_state()
-        
+
         # Expose some certain camera properties presented by the Andor API more or less directly,
         # the only transformation being translation of enumeration indexes to descriptive strings
         # for convenience
@@ -146,7 +146,7 @@ class Camera(property_device.PropertyDevice):
         self._add_andor_property('CameraAcquiring', 'is_acquiring', 'Bool', readonly=True)
         self._add_andor_property('CameraModel', 'model_name', 'String', readonly=True)
         self._add_andor_property('FrameCount', 'frame_count', 'Int')
-        self._add_andor_property('FrameRate', 'frame_rate', 'Float')
+        # self._add_andor_property('FrameRate', 'frame_rate', 'Float')
         self._add_andor_property('ImageSizeBytes', 'image_byte_count', 'Int', readonly=True)
         self._add_andor_property('InterfaceType', 'interface_type', 'String', readonly=True)
         self._add_andor_property('IOInvert', 'selected_io_pin_inverted', 'Bool')
@@ -156,7 +156,7 @@ class Camera(property_device.PropertyDevice):
         self._add_andor_property('SpuriousNoiseFilter', 'spurious_noise_filter_enabled', 'Bool')
         self._add_andor_property('StaticBlemishCorrection', 'static_blemish_correction_enabled', 'Bool')
         self._add_andor_property('TimestampClock', 'current_timestamp', 'Int', readonly=True)
-        self._add_andor_property('TimestampClockFrequency', 'timestamp_ticks_per_second', 'Int', readonly=True)
+        self._add_andor_property('TimestampClockFrequency', 'timestamp_hz', 'Int', readonly=True)
         self._add_andor_property('SensorCooling', 'sensor_cooling_enabled', 'Bool', readonly=True)
         self._add_andor_property('SensorTemperature', 'sensor_temperature', 'Float', readonly=True)
 
@@ -285,9 +285,9 @@ class Camera(property_device.PropertyDevice):
             if live:
                 self.set_live_mode(True)
 
-    def set_state(self, **state):
+    def _set_state(self, **state):
         """Set a number of camera parameters at once using keyword arguments, e.g.
-        camera.set_state(exposure_time=50, frame_rate=10)"""
+        camera._set_state(exposure_time=50, frame_rate=10)"""
         for k, v in state.items():
             getattr(self, 'set_'+k)(v)
 
@@ -298,7 +298,7 @@ class Camera(property_device.PropertyDevice):
         old_state = {k: getattr(self, 'get_'+k)() for k in state.keys()}
         self._state_stack.append(old_state)
         overlap = state.pop('overlap_enabled', None)
-        self.set_state(**state)
+        self._set_state(**state)
         # overlap mode has complex dependencies, so it generally shouldn't be set until the very end
         # when presumably those dependencies are satisfied
         if overlap is not None and lowlevel.IsWritable('Overlap'):
@@ -313,7 +313,7 @@ class Camera(property_device.PropertyDevice):
         # other changes make overlap mode no longer writable
         if overlap is not None and lowlevel.IsWritable('Overlap'):
             self.set_overlap_enabled(overlap)
-        self.set_state(**old_state)
+        self._set_state(**old_state)
 
     @contextlib.contextmanager
     def _pushed_state(self, **state):
@@ -493,6 +493,8 @@ class Camera(property_device.PropertyDevice):
         # This avoids the race condition where live mode is turned off right before
         # a client tries to grab the image.
         self.pop_state()
+
+    def get_max_fps
 
     def get_live_fps(self):
         if not self._live_mode:
