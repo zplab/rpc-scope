@@ -99,8 +99,8 @@ class SpectraX(property_device.PropertyDevice):
 
         self._lamp_intensities = {}
         self._lamp_enableds = {}
-        self.lamp_enableds(**{lamp:False for lamp in LAMP_NAMES})
-        self.lamp_intensities(**{lamp:255 for lamp in LAMP_NAMES})
+        self.lamps(**{lamp+'_enabled':False for lamp in LAMP_NAMES})
+        self.lamps(**{lamp+'_intensity':255 for lamp in LAMP_NAMES})
         for name in LAMP_NAMES:
             setattr(self, name, Lamp(name, self))
         self._state_stack = []
@@ -147,7 +147,10 @@ class SpectraX(property_device.PropertyDevice):
         retrieved with get_lamp_specs().
         """
         for lamp_prop, value in lamp_parameters.items():
-            lamp, prop = lamp_prop.split('_')
+            delim_pos = lamp_prop.rfind('_')
+            if delim_pos == -1:
+                raise ValueError('Lamp parameters must be in the form lampname_parametername=value')
+            lamp, prop = lamp_prop[:delim_pos], lamp_prop[delim_pos+1:]
             if lamp not in LAMP_SPECS:
                 raise ValueError('Invalid lamp name')
             if prop == 'intensity':

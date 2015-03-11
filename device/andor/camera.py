@@ -146,7 +146,7 @@ class Camera(property_device.PropertyDevice):
         self._add_andor_property('CameraAcquiring', 'is_acquiring', 'Bool', readonly=True)
         self._add_andor_property('CameraModel', 'model_name', 'String', readonly=True)
         self._add_andor_property('FrameCount', 'frame_count', 'Int')
-        # self._add_andor_property('FrameRate', 'frame_rate', 'Float')
+        self._add_andor_property('FrameRate', 'frame_rate', 'Float')
         self._add_andor_property('ImageSizeBytes', 'image_byte_count', 'Int', readonly=True)
         self._add_andor_property('InterfaceType', 'interface_type', 'String', readonly=True)
         self._add_andor_property('IOInvert', 'selected_io_pin_inverted', 'Bool')
@@ -494,7 +494,7 @@ class Camera(property_device.PropertyDevice):
         # a client tries to grab the image.
         self.pop_state()
 
-    def get_max_fps
+#   def get_max_fps
 
     def get_live_fps(self):
         if not self._live_mode:
