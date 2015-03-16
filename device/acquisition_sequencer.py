@@ -91,7 +91,7 @@ class AcquisitionSequencer:
         keywords: True/False enable values for the Spectra X lamps. Any lamps
         not named will be turned off.
         """
-        self.compiled = False
+        self._compiled = False
         self._num_acquisitions += 1
         self._exposures.append(exposure_ms)
         lamps = {lamp:True for lamp, value in spectra_x_lamps.items() if value}
