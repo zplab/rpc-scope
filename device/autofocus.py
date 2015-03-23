@@ -150,19 +150,11 @@ class Autofocus:
         metric = METRICS[metric]
 
         self._camera.start_image_sequence_acquisition(frame_count=None, trigger_mode='Software', pixel_readout_rate='280 MHz')
-        readout_time_ms = self._camera.get_readout_time()
-        if self._camera.get_exposure_time() <= readout_time_ms:
-            # It may be a bug in the andor library that get_frame_rate() is wrong
-            # for short exposures (exposure <= readout_time), but in any case, it is, so we
-            # need to note that software triggering mode takes two full read cycles per image.
-            frame_time_sec = readout_time_ms * 2 / 1000
-        else:
-            frame_time_sec = 1/self._camera.get_frame_rate()
-
+        trigger_interval = self._camera._calculate_live_trigger_interval()
         if fps_max is None:
-            sleep_time = frame_time_sec
+            sleep_time = trigger_interval
         else:
-            sleep_time = max(1/fps_max, frame_time_sec)
+            sleep_time = max(1/fps_max, trigger_interval)
 
         self._stage.set_z(start)
         self._stage.wait() # no op if in sync mode, necessary in async mode
@@ -236,6 +228,19 @@ class Autofocus:
         self._stage.set_z(best_z) # go to focal plane with highest score
         self._stage.wait() # no op if in sync mode, necessary in async mode
         return best_z, list(zip(z_values, [float(fm) for fm in focus_metrics]))
+
+class ZRecorder(threading.Thread):
+    def __init__(self, camera, stage, sleep_time=0.001):
+        self.camera = camera
+        self.stage = stage
+        self.running = True
+        self.ts = []
+        self.zs = []
+        self.t0 = time.time()
+        self.ct0 = camera.get_current_timestamp()
+        self.start()
+
+    def run
 
 class ImageEvaluator(threading.Thread):
     def __init__(self, camera, metric, ims, max_workers=1):

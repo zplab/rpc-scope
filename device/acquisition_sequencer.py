@@ -32,6 +32,9 @@ class AcquisitionSequencer:
         self._io_tool = io_tool
         self._spectra_x = spectra_x
         self._config = scope_configuration.get_config()
+        self._latest_timestamps = None
+        self._compiled = False
+        self._num_acquisitions = 0
 
     def new_sequence(self, readout_rate='280 MHz', **spectra_x_intensities):
         """Create a new acquisition sequence of camera exposures with different
@@ -91,7 +94,7 @@ class AcquisitionSequencer:
         keywords: True/False enable values for the Spectra X lamps. Any lamps
         not named will be turned off.
         """
-        self.compiled = False
+        self._compiled = False
         self._num_acquisitions += 1
         self._exposures.append(exposure_ms)
         lamps = {lamp:True for lamp, value in spectra_x_lamps.items() if value}

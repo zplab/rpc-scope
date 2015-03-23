@@ -146,7 +146,7 @@ class Camera(property_device.PropertyDevice):
         self._add_andor_property('CameraAcquiring', 'is_acquiring', 'Bool', readonly=True)
         self._add_andor_property('CameraModel', 'model_name', 'String', readonly=True)
         self._add_andor_property('FrameCount', 'frame_count', 'Int')
-        self._add_andor_property('FrameRate', 'frame_rate', 'Float')
+        # self._add_andor_property('FrameRate', 'frame_rate', 'Float') # buggy frame-rate return values need to be hacked around
         self._add_andor_property('ImageSizeBytes', 'image_byte_count', 'Int', readonly=True)
         self._add_andor_property('InterfaceType', 'interface_type', 'String', readonly=True)
         self._add_andor_property('IOInvert', 'selected_io_pin_inverted', 'Bool')
@@ -160,9 +160,14 @@ class Camera(property_device.PropertyDevice):
         self._add_andor_property('SensorCooling', 'sensor_cooling_enabled', 'Bool', readonly=True)
         self._add_andor_property('SensorTemperature', 'sensor_temperature', 'Float', readonly=True)
 
-        # define custom getter and setters for exposure_time and readout_time below
+        #  custom getters and setters are defined for these features below
         self._add_property_data('ExposureTime', 'Float', False, 'exposure_time', self.get_exposure_time)
         self._add_property_data('ReadoutTime', 'Float', True, 'readout_time', self.get_readout_time)
+        self._add_property_data('FrameRate', 'Float', False, 'frame_rate', self.get_frame_rate)
+        # Note: technically, frame rate is a read/write property -- frame rates can be set in for
+        # certain internal triggered modes (RS long exposures without overlap, and GS long exposures
+        # with and without overlap). But the complexity of supporting this while working around Andor
+        # bugs is high, and the utility is low compared to software triggering to achieve a given FPS.
 
         if property_server:
             self._c_callback = lowlevel.FeatureCallback(self._andor_callback)
@@ -324,13 +329,13 @@ class Camera(property_device.PropertyDevice):
         finally:
             self.pop_state()
 
-    def get_exposure_time(self):
-        """Return exposure time in ms"""
-        return 1000 * lowlevel.GetFloat('ExposureTime')
-
     def get_readout_time(self):
         """Return sensor readout time in ms"""
         return 1000 * lowlevel.GetFloat('ReadoutTime')
+
+    def get_exposure_time(self):
+        """Return exposure time in ms"""
+        return 1000 * lowlevel.GetFloat('ExposureTime')
 
     def set_exposure_time(self, ms):
         """Set the exposure time in ms. If necessary, live imaging will be paused."""
@@ -359,6 +364,14 @@ class Camera(property_device.PropertyDevice):
         """Return current exposure time minimum and maximum values in ms"""
         return (1000 * lowlevel.GetFloatMin('ExposureTime'),
                 1000 * lowlevel.GetFloatMax('ExposureTime'))
+
+    def get_frame_rate(self):
+        """Return the frame rate in Hz for the current camera configuration."""
+        frame_rate = lowlevel.GetFloat('FrameRate')
+        # in Andor SDK as of 2015-03-11, some frame rates are mis-calculated. Fix this up:
+        if self.get_trigger_mode() == 'Software' and self.get_exposure_time() < self.get_readout_time():
+            frame_rate *= 2 # calculated frame rate needs to be doubled in this mode
+        return frame_rate
 
     def set_sensor_gain(self, value):
         with self._live_guarded():
@@ -459,19 +472,10 @@ class Camera(property_device.PropertyDevice):
 
     def _calculate_live_trigger_interval(self):
         """Determine how long to wait between sending acquisition triggers in
-        live mode, based on data from the andor API and also knowledge from the
-        camera manual about how many cycles things take in different camera modes.
+        live mode, based on data from the andor API.
         Returns trigger interval in seconds."""
-        readout_time_ms = self.get_readout_time()
-        if self.get_exposure_time() <= readout_time_ms:
-            # It may be a bug in the andor library that get_frame_rate() is wrong
-            # for short exposures (exposure <= readout_time), but in any case, it is, so we
-            # need to note that software triggering mode (used for live viewing)
-            # takes two full read cycles per image.
-            frame_time_sec = readout_time_ms * 2 / 1000
-        else:
-            frame_time_sec = 1/self.get_frame_rate()
-        trigger_interval = max(1/self.get_max_interface_fps(), frame_time_sec) * 1.05
+        sustainable_rate = min(self.get_frame_rate(), self.get_max_interface_fps())
+        trigger_interval = 1/sustainable_rate * 1.05
         return trigger_interval
 
     def _disable_live(self):
