@@ -62,13 +62,13 @@ class Lamp:
 
     def set_intensity(self, value):
         """Set lamp intensity in the range [0, 255]"""
-        self._spectra_x._lamp_intensity(**{self._name:value})
+        self._spectra_x._lamp_intensity(self._name, value)
 
     def get_intensity(self):
         return self._spectra_x._lamp_intensities[self._name]
 
     def set_enabled(self, enable):
-        self._spectra_x._lamp_enable(**{self._name:enable})
+        self._spectra_x._lamp_enable(self._name, enable)
 
     def get_enabled(self):
         return self._spectra_x._lamp_enableds[self._name]
