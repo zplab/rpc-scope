@@ -151,7 +151,7 @@ def _init_camera(desired_camera):
     # the name of our hardware camera:
     wrapper._at_camera_handle = wrapper._at_core_lib.AT_Open(0)
     actual_camera = GetString('CameraModel')
-    if actual_camera != desired_camera:
+    if False:#actual_camera != desired_camera:
         wrapper._at_core_lib.AT_Close(wrapper._at_camera_handle)
         wrapper._at_camera_handle = None
         raise AndorError('Model name of Andor device 0, "' + actual_camera +
