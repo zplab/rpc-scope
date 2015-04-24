@@ -30,6 +30,8 @@ from .util import transfer_ism_buffer
 from .util import logging
 from .config import scope_configuration
 
+logger = logging.get_logger(__name__)
+
 class ScopeServer:
     def __init__(self, host):
         rpc_addr = scope_configuration.rpc_addr(host)
@@ -52,7 +54,7 @@ class ScopeServer:
 def simple_server_main(host, verbose=False):
     logging.set_verbose(verbose)
     server = ScopeServer(host)
-    print('Scope Server Ready (Listening on {})'.format(host))
+    logger.info('Scope Server Ready (Listening on {})', host)
     try:
         server.run()
     except KeyboardInterrupt:
