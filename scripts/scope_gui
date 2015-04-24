@@ -1,0 +1,2 @@
+#!/bin/bash
+python -m scope.cli.scope_job_daemon "$@"
