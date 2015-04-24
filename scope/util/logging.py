@@ -66,7 +66,7 @@ def attach_file_handlers(log_dir):
     file_formatter = log_util.get_formatter()
 
     info_log_handler = logging.handlers.RotatingFileHandler(str(log_file),
-        maxBytes=0, backupCount=8) # keep 8 previous logs, but don't roll over automatically (maxBytes=0)
+        maxBytes=0, backupCount=8, delay=True) # keep 8 previous logs, but don't roll over automatically (maxBytes=0)
     info_log_handler.doRollover() # roll the log each time logging is started...
     info_log_handler.setLevel(logging.INFO)
     info_log_handler.setFormatter(file_formatter)
