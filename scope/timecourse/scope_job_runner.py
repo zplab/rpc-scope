@@ -223,7 +223,7 @@ class JobRunner(base_daemon.Runner):
         """Alert the world that the job errored out."""
         self.jobs.update(job.exec_file, status=new_status)
         logger.error('Could not run acquisition job in {}:\n {}\n', job.exec_file, error_text)
-        if job.alert_emails is not None:
+        if job.alert_emails:
             message = mimetext.MIMEText(error_text)
             message['From'] = MAIL_SENDER
             message['To'] = ', '.join(job.alert_emails)

@@ -2,7 +2,12 @@ import sys
 import pathlib
 import numpy
 
-from scope.timecourse import timecourse_handler
+try:
+    from scope.timecourse import timecourse_handler
+except:
+    # scopy package not installed... try seeing if it's running in place in the repo
+    sys.path.append(str(pathlib.Path(__file__).parent.parent))
+    from scope.timecourse import timecourse_handler
 
 class Handler(timecourse_handler.TimepointHandler):
     def configure_timepoint(self):
@@ -20,4 +25,4 @@ class Handler(timecourse_handler.TimepointHandler):
 
 
 handler = Handler(data_dir=pathlib.Path(__file__).parent, scope_host=None)
-timecourse_script.main(timepoint_function=handler.run_timepoint, next_run_interval=45, interval_mode='scheduled_start')
+timecourse_handler.main(timepoint_function=handler.run_timepoint, next_run_interval=45, interval_mode='scheduled_start')

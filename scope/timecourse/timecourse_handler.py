@@ -6,7 +6,6 @@ import logging
 
 from ..util import threaded_image_io
 from ..util import log_util
-from .. import scope_client
 
 def main(timepoint_function, next_run_interval, interval_mode='scheduled_start'):
     """Main function designed to interact with the job running daemon, which
@@ -62,6 +61,7 @@ class TimepointHandler:
             self.experiment_metadata['skip_positions'] = []
         self.skip_positions = set(self.experiment_metadata['skip_positions'])
         if scope_host is not None:
+            from .. import scope_client
             self.scope = scope_client.rpc_client_main(scope_host)
         else:
             self.scope = None
