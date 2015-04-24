@@ -79,7 +79,7 @@ class TimepointHandler:
             if position_name not in self.skip_positions:
                 self.run_position(position_name, position_coords)
         self.experiment_metadata['skip_positions'] = list(self.skip_positions)
-        run_again = self.finalize_timepoint()
+        self.finalize_timepoint()
         with self.experiment_metadata_path.open('w') as f:
             self.experiment_metadata = json.dump(self.experiment_metadata, f)
         if self.skip_positions == self.positions.keys():
@@ -103,6 +103,7 @@ class TimepointHandler:
         Note that positions added to self.skip_positions are automatically added
         to the metadata, so it is unnecessary to do this here.
         """
+        pass
 
     def run_position(self, position_name, position_coords):
         """Do everything required for taking a timepoint at a single position
