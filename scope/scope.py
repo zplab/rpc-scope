@@ -25,7 +25,7 @@
 from serial import SerialException
 
 from .messaging import message_manager, message_device
-from .device.dm6000b import stand, stage, objective_turret, illumination_axes
+from .device.leica import stand, stage, objective_turret, illumination_axes
 from .device.andor import camera
 from .device.io_tool import io_tool
 from .device import spectra_x
@@ -50,7 +50,7 @@ class Namespace:
 class Scope(message_device.AsyncDeviceNamespace):
     def __init__(self, property_server=None):
         super().__init__()
-        
+
         config = scope_configuration.get_config()
 
         if property_server:
@@ -68,7 +68,7 @@ class Scope(message_device.AsyncDeviceNamespace):
         except SerialException as e:
             has_scope = False
             _log_exception('Could not connect to microscope:', e)
-        
+
         try:
             logger.info('Looking for IOTool.')
             self.iotool = io_tool.IOTool()
@@ -76,11 +76,11 @@ class Scope(message_device.AsyncDeviceNamespace):
         except SerialException as e:
             has_iotool = False
             _log_exception('Could not connect to IOTool:', e)
-        
+
         if not has_scope and has_iotool:
             self.il = Namespace()
             self.tl = Namespace()
-        
+
         if has_iotool:
             try:
                 logger.info('Looking for Spectra X.')
@@ -91,7 +91,7 @@ class Scope(message_device.AsyncDeviceNamespace):
                 _log_exception('Could not connect to Spectra X:', e)
             self.tl.lamp = tl_lamp.TL_Lamp(self.iotool, property_server, property_prefix='scope.tl.lamp.')
             self.footpedal = footpedal.Footpedal(self.iotool)
-        
+
         try:
             logger.info('Looking for camera.')
             self.camera = camera.Camera(property_server, property_prefix='scope.camera.')
@@ -99,7 +99,7 @@ class Scope(message_device.AsyncDeviceNamespace):
         except camera.lowlevel.AndorError as e:
             has_camera = False
             _log_exception('Could not connect to camera:', e)
-        
+
         if has_camera and has_iotool and has_spectra_x:
             self.camera.acquisition_sequencer = acquisition_sequencer.AcquisitionSequencer(self.camera, self.iotool, self.il.spectra_x)
 

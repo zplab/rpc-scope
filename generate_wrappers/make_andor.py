@@ -22,18 +22,7 @@
 #
 # Authors: Zach Pincus, Erik Hvatum
 
-try:
-    from . import output_ctypes
-except SystemError:
-    import sys
-    es = [
-        'This script can not be run from within its own package. Try:',
-        '\tcd ..',
-        '\tpython3 -m generate_wrappers.make_andor'
-    ]
-    sys.stderr.write('\n'.join(es) + '\n')
-    sys.stderr.flush()
-    sys.exit(-1)
+import output_ctypes
 
 code = """
 # The MIT License (MIT)
@@ -223,4 +212,5 @@ def generate_code(outfile):
 
 if __name__ == '__main__':
     import pathlib
-    generate_code(outfile=str(pathlib.Path(__file__).parent.parent / 'wrapper.py'))
+    wrapper_dst = pathlib.Path(__file__).parent.parent / 'scope' / 'device' / 'andor' / 'wrapper.py'
+    generate_code(outfile=str(wrapper_dst))
