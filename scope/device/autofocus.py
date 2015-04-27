@@ -240,7 +240,8 @@ class ZRecorder(threading.Thread):
         self.ct0 = camera.get_current_timestamp()
         self.start()
 
-    def run
+    def run(self):
+        pass
 
 class ImageEvaluator(threading.Thread):
     def __init__(self, camera, metric, ims, max_workers=1):
