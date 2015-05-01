@@ -46,3 +46,7 @@ class SpectraX:
 class Peltier:
     SERIAL_PORT = '/dev/ttyPeltier'
     SERIAL_BAUD = 2400
+
+class EhFootPedals:
+    SERIAL_PORT = '/dev/ttyPedals'
+    SERIAL_BAUD = 115200

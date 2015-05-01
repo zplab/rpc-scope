@@ -22,7 +22,7 @@ class LiveViewerWidget(Qt.QObject):
         if e.type() == self.RW_LIVE_STREAM_BINDING_LIVE_UPDATE_EVENT:
             image, frame_no = self.live_streamer.get_image()
             rwimage = ris_widget_image.Image(image, is_twelve_bit=self.live_streamer.scope.camera.bit_depth=='12 Bit')
-            self.ris_widget.image = rwimage
+            self.ris_widget.image_scene.image_item.image = rwimage
             return True
         return super().event(e)
 
