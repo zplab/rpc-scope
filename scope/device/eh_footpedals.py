@@ -47,12 +47,12 @@ class EhFootPedals(property_device.PropertyDevice):
         # Clear microcontroller and host input buffers
         self._serial_port._timeout = 0.5
         try:
-            # NB: The production for the Python for statement is:
+            # NB: The EBNF production for the Python for statement is:
             # for_stmt ::=  "for" target_list "in" expression_list ":" suite
             #               ["else" ":" suite]
             # The else clause executes if the for loop was not terminated via break.
             for _ in range(2):
-                self._send_command('')
+                self._send('')
                 try:
                     # In _get_response, it is safe to assume that a multiline error begins with /*, allowing
                     # the entire error to be retrieved by read_until('/*\r\n') in the case where the response
@@ -67,13 +67,18 @@ class EhFootPedals(property_device.PropertyDevice):
                             pass
                         else:
                             break
+                    else:
+                        break
             else:
-                raise smart_serial.SerialException('Could not read data from EhFootPedals device -- is it attached to this computer?')
+                raise smart_serial.SerialException('Could not communicate with EhFootPedals device -- is it attached to this computer?')
         finally:
             self._serial_port._timeout = None
 
-    def _send_command(self, c):
+    def _send(self, c):
         self._serial_port.write((c + '\n').encode('ascii'))
 
-    def _get_response(self):
-        r = 
+    def _get(self):
+        pass
+
+    def _daemon_threadproc(self):
+
