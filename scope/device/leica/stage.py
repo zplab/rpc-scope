@@ -40,12 +40,14 @@ SET_SPEED_Z = 71032
 GET_SPEED_Z = 71033
 GET_MIN_SPEED_Z = 71058
 GET_MAX_SPEED_Z = 71059
+SET_RAMP_Z = 71030
+GET_RAMP_Z = 71031
 GET_MIN_RAMP_Z = 71048
 GET_MAX_RAMP_Z = 71049
 
 
-Z_SPEED_MM_PER_SECOND_PER_UNIT = 0.1430278
-Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT = 1
+Z_SPEED_MM_PER_SECOND_PER_UNIT = 0.149
+Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT = 600
 
 class Stage(stand.DM6000Device):
     def _setup_device(self):
@@ -168,6 +170,12 @@ class Stage(stand.DM6000Device):
         speed_ramp = self.get_z_ramp()
         # Calculate time for a movement with a simple linear acceleration ramp to a
         # final velocity, and a ramp back down so that speed=0 at the given distance.
+        # 
+        # NOTE: This assumption is WRONG. The stage does not follow a linear acceleration
+        # ramp. Small moves take systematically longer than estimated. The estimate
+        # is accurate for distances >= total_ramp_distance (defined below), but increasingly
+        # inaccurate for distances approaching zero. TODO: Figure out the actual acceleration
+        # profile and solve for that. Is the ramp actually the derivative of acceleration?
         #
         # Case 1: there's enough time for the stage to reach it's final speed:
         # ramp_time = final_speed / speed_ramp   # time for acceleration
@@ -238,14 +246,14 @@ class Stage(stand.DM6000Device):
         # time = final_speed / speed_ramp + distance / final_speed
         # Since time and distance are known, we have time = distance * a + b
         # where a = 1 / final_speed and b = final_speed / speed_ramp
-        # so the distance threshold is b/a, and speed_ramp = a*b
+        # so the distance threshold is b/a, and speed_ramp = 1/(a*b)
         #
         # If distance is below final_speed**2 / speed_ramp, then
         # time = 2 * sqrt(distance / speed_ramp)
         # (time/2)**2 = distance / speed_ramp
         # or speed_ramp = distance / (time/2)**2
 
-        test_distances = numpy.logspace(-2, 0.7, 20, base=10) # from 0.01 mm to ~5 mm
+        test_distances = numpy.logspace(-3, 0.7, 20, base=10) # from 0.001 mm to ~5 mm
         z0 = self.get_z()
         times, distances = [], []
         def time_move_to(z, d):
@@ -272,13 +280,9 @@ class Stage(stand.DM6000Device):
             ones = numpy.ones_like(t)
             (a, b), resid, rank, s = numpy.linalg.lstsq(numpy.transpose([d, ones]), t)
         threshold = b/a
-        speed_ramp = a*b
+        speed_ramp = 1/(a*b)
         final_speed = 1/a
         below_threshold = distances <= threshold
-        if numpy.any(below_threshold):
-            speed_ramp_other_estimate = distances[below_threshold] / (times[below_threshold]/2)**2
-        else:
-            speed_ramp_other_estimate = None
         time_estimates = numpy.empty_like(times)
         time_estimates[below_threshold] = 2 * (distances[below_threshold] / speed_ramp)**0.5
         time_estimates[~below_threshold] = final_speed / speed_ramp + distances[~below_threshold] / final_speed
@@ -290,5 +294,6 @@ class Stage(stand.DM6000Device):
         Z_SPEED_MM_PER_SECOND_PER_UNIT = final_speed / hardware_final_speed
         hardware_speed_ramp = self.get_z_ramp()
         Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT = speed_ramp / hardware_speed_ramp
+        self._setup_device()
         return times, distances, time_estimates, speed_ramp, final_speed, Z_SPEED_MM_PER_SECOND_PER_UNIT, Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT
 

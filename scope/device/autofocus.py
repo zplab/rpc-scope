@@ -104,8 +104,8 @@ class Autofocus:
         """Move the stage stepwise from start to end, taking an image at
         each step. Apply the given autofocus metric and move to the best-focused
         position."""
-        metric = METRICS[metric]
         focus_chooser = FOCUS_CHOOSERS[metric]
+        metric = METRICS[metric]
 
         exp_time = self._camera.get_exposure_time()
         self._camera.start_image_sequence_acquisition(steps, trigger_mode='Software', pixel_readout_rate='280 MHz')
@@ -123,7 +123,7 @@ class Autofocus:
                     time.sleep(exp_time / 1000) # exp_time is in ms, sleep is in sec
                     self._stage.set_z(z_positions[next_step])
                 name = self._camera.next_image(read_timeout_ms=exp_time+1000)
-                array = transfer_ism_buffer._ism_buffer_registry[name]
+                array = transfer_ism_buffer._borrow_array(name)
                 image_names.append(name)
                 focus_metrics.append(metric(array))
             self._camera.end_image_sequence_acquisition()
@@ -178,8 +178,8 @@ class Autofocus:
 
         Once the images are obtained, this function applies the autofocus metric
         to each image and moves to the best-focused position."""
-        metric = METRICS[metric]
         focus_chooser = FOCUS_CHOOSERS[metric]
+        metric = METRICS[metric]
 
         self._camera.start_image_sequence_acquisition(frame_count=None, trigger_mode='Software', pixel_readout_rate='280 MHz')
         trigger_interval = self._camera._calculate_live_trigger_interval()
@@ -190,7 +190,7 @@ class Autofocus:
             with self._stage._pushed_state(z_speed=speed):
                 movement_time = self._stage.calculate_movement_time(distance)
             requested_fps = num_images / movement_time
-            sleep_time = max(1/fps_max, trigger_interval)
+            sleep_time = max(1/requested_fps, trigger_interval)
 
         self._stage.set_z(start)
         self._stage.wait() # no op if in sync mode, necessary in async mode
@@ -223,8 +223,9 @@ class ZRecorder(threading.Thread):
         self.ct_hz = camera.get_timestamp_hz()
         self.ct0 = camera.get_current_timestamp()
         self.t0 = time.time()
-        self.start()
         self.done = threading.Event()
+        super().__init__()
+        self.start()
 
     def stop(self):
         self.running = False
@@ -319,6 +320,6 @@ class NewImageEvaluator(threading.Thread):
             name = self.camera.next_image(read_timeout_ms=1000)
             self.image_names.append(name)
             self.camera_timestamps.append(self.camera.get_latest_timestamp())
-            array = transfer_ism_buffer._ism_buffer_registry[name]
+            array = transfer_ism_buffer._borrow_array(name)
             self.focus_metrics.append(self.metric(array))
             self.job_queue.task_done()

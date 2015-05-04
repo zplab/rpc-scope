@@ -63,7 +63,16 @@ def _release_array(name):
     """Remove the named, ISM_Buffer-backed array from the transfer registry,
     allowing it to be deallocated if nobody else on the server process is
     retaining any references. Return the named array."""
-    return _ism_buffer_registry[name].pop()
+    arrays = _ism_buffer_registry[name]
+    array = arrays.pop()
+    if not arrays:
+        del _ism_buffer_registry[name]
+    return array
+
+def _borrow_array(name):
+    """Return the named array, while still keeping a reference in the registry
+    for future transfer to a client."""
+    return _ism_buffer_registry[name][-1]
 
 def _server_release_array(name):
     """Remove the named, ISM_Buffer-backed array from the transfer registry,

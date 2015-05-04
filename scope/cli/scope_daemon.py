@@ -1,7 +1,7 @@
 import argparse
 import os.path
 import sys
-
+import time
 
 from . import base_daemon
 
@@ -45,12 +45,29 @@ def main(argv):
     parser_restart = subparsers.add_parser('restart', help='restart the microscope server, if not running')
     parser_restart.add_argument('--public', action='store_true', help='Allow network connections to the server [default: allow only local connections]')
     parser_restart.add_argument('--verbose', action='store_true', help='Log all RPC calls and property state changes.')
+    parser_status = subparsers.add_parser('status', help='report whether the microscope server is running')
     args = parser.parse_args()
 
     try:
         runner, log_dir, config = make_runner()
+        if args.command == 'status':
+            print('Microscope server is {}running'.format('' if runner.is_running() else 'not '))
         if args.command in ('stop', 'restart'):
             runner.terminate()
+        if args.command == 'restart':
+            print('Waiting for server to terminate', end='', flush=True)
+            terminated = False
+            for i in range(40):
+                if runner.is_running():
+                    print('.', end='', flush=True)
+                    time.sleep(0.1)
+                else:
+                    terminated = True
+                    break
+            print('')
+            if not terminated:
+                print('Could not terminate microscope server')
+                return 1
         if args.command in ('start', 'restart'):
             runner.server_host = config.Server.PUBLICHOST if args.public else config.Server.LOCALHOST
             runner.start(log_dir, args.verbose)
