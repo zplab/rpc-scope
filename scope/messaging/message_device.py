@@ -122,6 +122,21 @@ class EchoAsyncDevice(AsyncDevice):
 
 LeicaResponseTuple = collections.namedtuple('LeicaResponse', ['full_response', 'auto_event', 'header', 'error_code', 'response'])
 
+def parse_leica_response(full_response):
+    """Parse a line from the Leica's serial output."""
+    header, *response = full_response.split(' ', 1)
+    if len(response) == 0:
+        response = None
+    else:
+        response = response[0]
+    if header.startswith('$'):
+        auto_event = True
+        header = header[1:]
+    else:
+        auto_event = False
+    error_code = header[2]
+    return LeicaResponseTuple(full_response, auto_event, header, error_code, response)
+
 class LeicaError(RuntimeError):
     """Leica communications error that can optionally stash a copy of a LeicaResponse object."""
     def __init__(self, *args, response=None):
@@ -144,18 +159,7 @@ class LeicaResponse(Response):
         self.intent = intent
 
     def __call__(self, full_response):
-        header, *response = full_response.split(' ', 1)
-        if len(response) == 0:
-            response = None
-        else:
-            response = response[0]
-        if header.startswith('$'):
-            auto_event = True
-            header = header[1:]
-        else:
-            auto_event = False
-        error_code = header[2]
-        super().__call__(LeicaResponseTuple(full_response, auto_event, header, error_code, response))
+        super().__call__(parse_leica_response(full_response))
 
     def wait(self):
         response = super().wait()
@@ -176,30 +180,48 @@ class LeicaAsyncDevice(AsyncDevice):
     def __init__(self, message_manager):
         super().__init__(message_manager)
         self._setup_device()
+        self._adapter_callbacks = {}
 
     def _setup_device(self):
         """Override in subclasses to perform device-specific setup."""
         pass
 
     def send_message(self, command, *params, async=None, intent=None, coalesce=True):
-        """Arguments:
-        command: the command number for the Leica scope
-        *params: a list of params to be coerced to strings and listed after command, separated by spaces
-        async: if not None, override the async instance variable.
-        intent: should be helpful text describing the intent of the command.
-        coalesce: see AsyncDevice.send_message documentation.
+        """Send a message to the Leica microscope
+
+        Arguments:
+            command: the command number for the Leica scope
+            *params: a list of params to be coerced to strings and listed after command, separated by spaces
+            async: if not None, override the async instance variable.
+            intent: should be helpful text describing the intent of the command.
+            coalesce: see AsyncDevice.send_message documentation.
+
         If a nonzero error code is returned, a LeicaError will be raised with
         the intent text when the response's wait() method is called.
-
         """
         message = ' '.join([str(command)] + [str(param) for param in params]) + '\r'
         response = LeicaResponse(intent)
         return super().send_message(message, async, response=response, coalesce=coalesce)
 
-
     def _generate_response_key(self, message):
         # return the message's function unit ID and command ID
         return message[:2] + message[3:5]
+
+    def register_event_callback(self, event_id, callback):
+        """If specific event information is enabled (via a separate message), then
+        events with the given ID will cause a LeicaResponseTuple to be passed
+        to the callback."""
+        def adapter_callback(full_response):
+            callback(parse_leica_response(full_response))
+        self._adapter_callbacks[callback] = adapter_callback
+        response_key = '$' + str(event_id)
+        self._message_manager.register_persistent_callback(response_key, adapter_callback)
+
+    def unregister_event_callback(self, event_id, callback):
+        """Stop calling the given callback when events with the given ID occur."""
+        adapter_callback = self._adapter_callbacks[callback]
+        response_key = '$' + str(event_id)
+        self._message_manager.unregister_persistent_callback(response_key, adapter_callback)
 
 class AsyncDeviceNamespace:
     """Simple container class for building a hierarchy of AsyncDevice-like

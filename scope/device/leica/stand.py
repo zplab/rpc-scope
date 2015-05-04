@@ -49,7 +49,11 @@ class DM6000Device(message_device.LeicaAsyncDevice, property_device.PropertyDevi
     def push_state(self, **state):
         """Set a number of device parameters at once using keyword arguments, while
         saving the old values of those parameters. pop_state() will restore those
-        previous values. push_state/pop_state pairs can be nested arbitrarily."""
+        previous values. push_state/pop_state pairs can be nested arbitrarily.
+
+        If the device is in async mode, wait for the state to be set before
+        proceeding.
+        """
         old_state = {k: getattr(self, 'get_'+k)() for k in state.keys()}
         self._state_stack.append(old_state)
         # set async mode first for predictable results
@@ -57,16 +61,22 @@ class DM6000Device(message_device.LeicaAsyncDevice, property_device.PropertyDevi
         if async is not None:
             self.set_async(async)
         self._set_state(**state)
+        self.wait() # no-op if not in async, otherwise wait for all setting to be done.
 
     def pop_state(self):
         """Restore the most recent set of device parameters changed by a push_state()
-        call."""
+        call.
+
+        If the device is in async mode, wait for the state to be restored before
+        proceeding.
+        """
         old_state = self._state_stack.pop()
         async = old_state.pop('async', None)
         self._set_state(**old_state)
         # unset async mode last for predictable results
         if async is not None:
             self.set_async(async)
+        self.wait() # no-op if not in async, otherwise wait for all setting to be done.
 
     @contextlib.contextmanager
     def _pushed_state(self, **state):

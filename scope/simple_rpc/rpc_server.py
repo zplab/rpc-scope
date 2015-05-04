@@ -28,6 +28,8 @@ import inspect
 import threading
 import os
 import signal
+import json
+import numpy
 
 from ..util import logging
 logger = logging.get_logger(__name__)
@@ -173,6 +175,7 @@ class ZMQServer(RPCServer):
         self.context = context if context is not None else zmq.Context()
         self.socket = self.context.socket(zmq.REP)
         self.socket.bind(port)
+        self.json_encoder = RPCEncoder(separators=(',', ':'))
 
     def _receive(self):
         json = self.socket.recv()
@@ -192,12 +195,38 @@ class ZMQServer(RPCServer):
 
         if reply_type == 'error' or reply_type == 'json':
             try:
-                reply = zmq.utils.jsonapi.dumps(reply)
+                reply = self.json_encoder.encode(reply)
             except TypeError:
                 reply_type = 'error'
-                reply = zmq.utils.jsonapi.dumps('Could not JSON-serialize return value.')
+                reply = self.json_encoder.encode('Could not JSON-serialize return value.')
         self.socket.send_string(reply_type, flags=zmq.SNDMORE)
         self.socket.send(reply, copy=False)
+
+class RPCEncoder(json.JSONEncoder):
+    """JSON encoder that is smart about converting iterators and numpy arrays to
+    lists, and converting numpy scalars to python scalars.
+
+    Caution: it is absurd to send large numpy arrays over the wire this way. Use
+    the transfer_ism_buffer tools to send large data.
+    """
+    def default(self, o):
+        try:
+            return super().default(o)
+        except TypeError as x:
+            if isinstance(o, numpy.generic):
+                item = o.item()
+                if isinstance(item, numpy.generic):
+                    raise x
+                else:
+                    return item
+            try:
+                return list(o)
+            except:
+                raise x
+
+    def encode(self, o):
+        """Always output bytes, which zmq needs for sending over the wire."""
+        return super().encode(o).encode('utf8')
 
 class Namespace:
     """Placeholder class to hold attribute values"""

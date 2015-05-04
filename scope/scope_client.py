@@ -45,6 +45,8 @@ def rpc_client_main(host='127.0.0.1', context=None):
         'camera.live_image': get_data,
         'camera.next_image': get_data,
         'camera.acquisition_sequencer.run': get_many_data,
+        'camera.autofocus.autofocus': get_many_data,
+        'camera.autofocus.autofocus_continuous_move': get_many_data
     }
     scope = client.proxy_namespace(client_wrappers)
     scope._get_data = get_data

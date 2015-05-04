@@ -51,9 +51,10 @@ class MessageManager(threading.Thread):
     thread_name = 'MessageManager'
 
     def __init__(self, daemon=True):
-        # pending_responses holds lists of callbacks to call for each response key
+        # pending_xxx_responses holds lists of callbacks to call for each response key
         self.pending_grouped_responses = collections.defaultdict(list)
         self.pending_standalone_responses = collections.defaultdict(list)
+        self.pending_persistent_responses = collections.defaultdict(list)
         super().__init__(name=self.thread_name, daemon=daemon)
         self.start()
 
@@ -70,10 +71,8 @@ class MessageManager(threading.Thread):
             handled = False
             if response_key in self.pending_grouped_responses:
                 callbacks = self.pending_grouped_responses.pop(response_key)
-                for callback, onetime in callbacks:
+                for callback in callbacks:
                     callback(response)
-                    if not onetime:
-                        self.pending_responses[response_key].append((callback, onetime))
                 handled = True
 
             if response_key in self.pending_standalone_responses:
@@ -83,10 +82,24 @@ class MessageManager(threading.Thread):
                     self.pending_standalone_responses[response] = remaining_callbacks
                 handled = True
 
+            if response_key in self.pending_persistent_responses:
+                callbacks = self.pending_persistent_responses[response_key]
+                for callback in callbacks:
+                    callback(response)
+                handled = True
+
             if not handled:
                 self._handle_unexpected_response(response, response_key)
 
-    def send_message(self, message, response_key=None, response_callback=None, onetime=True, coalesce=True):
+    def register_persistent_callback(self, response_key, response_callback):
+        """Add a callback to always be called for a given response_key."""
+        self.pending_persistent_responses[response_key].append(response_callback)
+
+    def unregister_persistent_callback(self, response_key, response_callback):
+        """Remove a presistent callback."""
+        self.pending_persistent_responses[response_key].remove(response_callback)
+
+    def send_message(self, message, response_key=None, response_callback=None, coalesce=True):
         """Send a message from a foreground thread.
         (I.e. not the thread that the MessageManager is running.)
 
@@ -94,15 +107,15 @@ class MessageManager(threading.Thread):
         message: message to send.
         response_key: if provided, any response with a matching response key will cause
             the provided response_callback to be called with the full response value.
-        onetime: if True, the callback will be called only the first time a matching
-            response is received. Otherwise, it will be called every time.
         coalesce: if True, this callback may be called at the same time as a
             previously queued callback, in response to a previously sent
             message. (This makes sense if messages override each other and the
             first response should be considered to retire both.) If False, this
             callback will not be grouped with any other callbacks also queued
             with 'coalesce=False'. Note that 'onetime' cannot be False if
-            'coalesce' is False.
+            'coalesce' is False -- it doesn't make sense, as non-onetime
+            messages are for status-update type information, which should be
+            shared among all requesters.
         """
         # There is one thread-synchronization worry: if a pending response is
         # queued right before a response to a previous message with the same
@@ -120,11 +133,8 @@ class MessageManager(threading.Thread):
 
         logger.debug('sending message: {!r} with response key: {!r}', message, response_key)
         if response_key is not None and response_callback is not None:
-            assert(onetime or coalesce)
-            if coalesce:
-                self.pending_grouped_responses[response_key].append((response_callback, onetime))
-            else:
-                self.pending_standalone_responses[response_key].append(response_callback)
+            response_dict = self.pending_grouped_responses if coalesce else self.pending_standalone_responses
+            response_dict[response_key].append(response_callback)
         self._send_message(message)
 
     def _send_message(self, message):
