@@ -223,13 +223,12 @@ class ZRecorder(threading.Thread):
         self.ct_hz = camera.get_timestamp_hz()
         self.ct0 = camera.get_current_timestamp()
         self.t0 = time.time()
-        self.done = threading.Event()
         super().__init__()
         self.start()
 
     def stop(self):
         self.running = False
-        self.done.wait()
+        self.join()
         self.zs = numpy.array(self.zs)
         self.ts = numpy.array(self.ts)
         self.ts -= self.t0
@@ -245,7 +244,6 @@ class ZRecorder(threading.Thread):
             self.zs.append(self.stage.get_z())
             self.ts.append(time.time())
             time.sleep(self.sleep_time)
-        self.done.set()
 
 
 class ImageEvaluator(threading.Thread):
