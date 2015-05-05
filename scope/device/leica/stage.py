@@ -48,6 +48,7 @@ GET_MAX_RAMP_Z = 71049
 
 Z_SPEED_MM_PER_SECOND_PER_UNIT = 0.149
 Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT = 600
+Z_MOVE_FUDGE_FACTOR = 0
 
 class Stage(stand.DM6000Device):
     def _setup_device(self):
@@ -170,12 +171,7 @@ class Stage(stand.DM6000Device):
         speed_ramp = self.get_z_ramp()
         # Calculate time for a movement with a simple linear acceleration ramp to a
         # final velocity, and a ramp back down so that speed=0 at the given distance.
-        # 
-        # NOTE: This assumption is WRONG. The stage does not follow a linear acceleration
-        # ramp. Small moves take systematically longer than estimated. The estimate
-        # is accurate for distances >= total_ramp_distance (defined below), but increasingly
-        # inaccurate for distances approaching zero. TODO: Figure out the actual acceleration
-        # profile and solve for that. Is the ramp actually the derivative of acceleration?
+        # Also include a "fudge factor" which is a constant amount of time for ANY move.
         #
         # Case 1: there's enough time for the stage to reach it's final speed:
         # ramp_time = final_speed / speed_ramp   # time for acceleration
@@ -206,9 +202,9 @@ class Stage(stand.DM6000Device):
         # the two time formulae give equivalent values, as expected.
 
         if distance >= final_speed**2 / speed_ramp:
-            return final_speed / speed_ramp + distance / final_speed
+            return final_speed / speed_ramp + distance / final_speed + Z_MOVE_FUDGE_FACTOR
         else:
-            return 2*(distance / speed_ramp)**2
+            return 2*(distance / speed_ramp)**2 + Z_MOVE_FUDGE_FACTOR
 
     def calculate_movement_position(self, distance, t):
         """Calculate where the stage will be (relative to the starting position)
@@ -216,20 +212,24 @@ class Stage(stand.DM6000Device):
         Distance must be positive."""
         final_speed = self.get_z_speed()
         speed_ramp = self.get_z_ramp()
+        # Assume fudge is in the initial speedup and slowdown evenly
+        half_fudge = Z_MOVE_FUDGE_FACTOR / 2
         if distance >= final_speed**2 / speed_ramp: # ramp up, cruise, back down
             ramp_time = final_speed / speed_ramp
             if t <= ramp_time:
-                return 0.5 * speed_ramp * t**2
+                return 0.5 * speed_ramp * t**2 + half_fudge * t/ramp_time # assign first half of fudge linearly
             non_ramp_time = distance / final_speed - ramp_time
             if t <= ramp_time + non_ramp_time:
                 return ( 0.5 * speed_ramp * ramp_time**2
-                       + final_speed * (t-ramp_time) )
+                       + final_speed * (t-ramp_time)
+                       + half_fudge)
             total_time = 2*ramp_time + non_ramp_time
             if t > total_time:
                 t = total_time
             return ( 0.5 * speed_ramp * ramp_time**2
                    + final_speed * non_ramp_time
-                   + 0.5 * speed_ramp * (t - ramp_time - non_ramp_time)**2 )
+                   + 0.5 * speed_ramp * (t - ramp_time - non_ramp_time)**2
+                   + half_fudge + half_fudge * (t - ramp_time - non_ramp_time) / ramp_time) # assign the second half of the fudge linearly
         else: # ramp up and down only
             ramp_time = (distance / speed_ramp)**2
             if t < ramp_time:
@@ -242,58 +242,85 @@ class Stage(stand.DM6000Device):
     def _calibrate_speed_coefficients(self):
         import time
         import numpy
-        # If distance is above final_speed**2 / speed_ramp, then
-        # time = final_speed / speed_ramp + distance / final_speed
-        # Since time and distance are known, we have time = distance * a + b
-        # where a = 1 / final_speed and b = final_speed / speed_ramp
-        # so the distance threshold is b/a, and speed_ramp = 1/(a*b)
+        # Need to recalculate the speed and ramp conversion factors to get to human units
+        # If distance is above (final_speed * speed_factor)**2 / (speed_ramp * ramp_factor) + fudge_factor, then
+        # time = (final_speed * speed_factor) / (speed_ramp * ramp_factor) + distance / (final_speed * speed_factor) + fudge_factor
+        # Since time, distance, final_speed, and speed_ramp are known, we have t = (v/a) * A + (d/v) * B + C
+        # where t, d, v, and a are time, distance, final_speed, and speed_ramp
+        # and A = speed_factor / ramp_factor, B = 1/speed_factor, and C = fudge_factor
+        # So speed_factor = 1/B and ramp_factor = 1/(AB)
         #
-        # If distance is below final_speed**2 / speed_ramp, then
-        # time = 2 * sqrt(distance / speed_ramp)
-        # (time/2)**2 = distance / speed_ramp
-        # or speed_ramp = distance / (time/2)**2
-
-        test_distances = numpy.logspace(-3, 0.7, 20, base=10) # from 0.001 mm to ~5 mm
+        # If distance is below (final_speed * speed_factor)**2 / (speed_ramp * ramp_factor) + fudge_factor, then
+        # time = 2 * sqrt(distance / (speed_ramp*ramp_factor)) + fudge_factor
+        # t = 1/sqrt(ramp_factor) * 2*sqrt(distance/speed_ramp) + fudge_factor
+        # t = A*sqrt(d/a) + B
+        # where A = 2/sqrt(ramp_factor) and b = fudge_factor
+        # so ramp_factor = (2/A)**2
+        global Z_SPEED_MM_PER_SECOND_PER_UNIT, Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT, Z_MOVE_FUDGE_FACTOR
+        speed_factor = Z_SPEED_MM_PER_SECOND_PER_UNIT
+        ramp_factor = Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT
+        fudge_factor = Z_MOVE_FUDGE_FACTOR
+        times = []
+        distances = []
+        speeds = []
+        ramps = []
+        vmin, vmax = self.get_z_speed_range()
+        rmin, rmax = self.get_z_ramp_range()
         z0 = self.get_z()
-        times, distances = [], []
-        def time_move_to(z, d):
-            t0 = time.time()
-            self.set_z(z)
-            times.append(time.time()-t0)
-            distances.append(d)
-        with self._pushed_state(async=False):
-            for d in test_distances:
-                time_move_to(z0 - d, d)
-                time_move_to(z0, d)
-        times = numpy.asarray(times)
-        distances = numpy.asarray(distances)
-        b = 0 # start out assuming infinite acceleration
-        a = 1
+        for speed in numpy.linspace(vmax/25, vmax/1.5, 8):
+            for ramp in numpy.linspace(rmax/80, rmax, 8):
+                threshold = (speed * speed_factor)**2 / (ramp * ramp_factor) + fudge_factor
+                log_t = numpy.log10(threshold)
+                test_distances = numpy.logspace(log_t-1, log_t+2.5, 8, base=10)
+                bad_distances = (test_distances < 0.001) | (test_distances > 10)
+                test_distances = test_distances[~bad_distances]
+                def time_move_to(z, d):
+                    t0 = time.time()
+                    self.set_z(z)
+                    times.append(time.time()-t0)
+                    distances.append(d)
+                    speeds.append(speed)
+                    ramps.append(ramp)
+                with self._pushed_state(async=False):
+                    for d in test_distances:
+                        time_move_to(z0 - d, d)
+                        time_move_to(z0, d)
+        times = numpy.array(times)
+        distances = numpy.array(distances)
+        speeds = numpy.array(speeds)
+        ramps = numpy.array(ramps)
         for _ in range(10):
             # Using our current best guess for the distance threshold (based on
             # our estimates of acceleration and speed), update our estimates of
             # acceleration and speed using the data above the distance threshold.
             # Iterate this a few times. Hopefully it converges...
-            threshold = b/a
-            above_threshold = distances >= threshold
-            t, d = times[above_threshold], distances[above_threshold]
+            thresholds = (speeds * speed_factor)**2 / (ramps * ramp_factor) + fudge_factor
+            above_threshold = distances >= thresholds
+            # above threshold: t = (v/a) * A + (d/v) * B + C
+            # A = speed_factor / ramp_factor, B = 1/speed_factor, and C = fudge_factor
+            t, d, v, a = times[above_threshold], distances[above_threshold], speeds[above_threshold], ramps[above_threshold]
             ones = numpy.ones_like(t)
-            (a, b), resid, rank, s = numpy.linalg.lstsq(numpy.transpose([d, ones]), t)
-        threshold = b/a
-        speed_ramp = 1/(a*b)
-        final_speed = 1/a
-        below_threshold = distances <= threshold
-        time_estimates = numpy.empty_like(times)
-        time_estimates[below_threshold] = 2 * (distances[below_threshold] / speed_ramp)**0.5
-        time_estimates[~below_threshold] = final_speed / speed_ramp + distances[~below_threshold] / final_speed
+            (A, B, C), resid, rank, s = numpy.linalg.lstsq(numpy.transpose([v/a, d/v, ones]), t)
+            speed_factor = 1/B
+            ramp_factor = 1/(A*B)
+            fudge_factor = C
+            # below_threshold: t = A*sqrt(d/a) + B
+            # A = 2/sqrt(ramp_factor) and b = fudge_factor
+            t, d, a = times[~above_threshold], distances[~above_threshold], ramps[~above_threshold]
+            if len(t) > 0:
+                ones = numpy.ones_like(t)
+                (A, B), resid, rank, s = numpy.linalg.lstsq(numpy.transpose([(d/a)**0.5, ones]), t)
+                alt_ramp_factor = (2/A)**2
+                alt_fudge_factor = B
 
-        global Z_SPEED_MM_PER_SECOND_PER_UNIT, Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT
-        # set the global fudge-factors to 1 so that we can recalculate them
-        Z_SPEED_MM_PER_SECOND_PER_UNIT = Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT = 1
-        hardware_final_speed = self.get_z_speed()
-        Z_SPEED_MM_PER_SECOND_PER_UNIT = final_speed / hardware_final_speed
-        hardware_speed_ramp = self.get_z_ramp()
-        Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT = speed_ramp / hardware_speed_ramp
+        time_estimates = numpy.empty_like(times)
+        time_estimates[~above_threshold] = 2 * (distances[~above_threshold] / (speeds[~above_threshold]*ramp_factor))*2 + fudge_factor
+        time_estimates[above_threshold] = speeds[above_threshold]*speed_factor / (ramps[above_threshold]*ramp_factor) + \
+            distances[above_threshold] / (speeds[above_threshold]*speed_factor) + fudge_factor
+
+        Z_SPEED_MM_PER_SECOND_PER_UNIT *= speed_factor
+        Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT *= ramp_factor
+        Z_MOVE_FUDGE_FACTOR += fudge_factor
         self._setup_device()
-        return times, distances, time_estimates, speed_ramp, final_speed, Z_SPEED_MM_PER_SECOND_PER_UNIT, Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT
+        return times, time_estimates, Z_SPEED_MM_PER_SECOND_PER_UNIT, Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT, Z_MOVE_FUDGE_FACTOR
 
