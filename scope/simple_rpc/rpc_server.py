@@ -165,7 +165,7 @@ class RPCServer:
 class ZMQServer(RPCServer):
     def __init__(self, namespace, interrupter, port, context=None):
         """RPCServer subclass that uses ZeroMQ REQ/REP to communicate with clients.
-        Arguments:
+        Parameters:
             namespace: contains a hierarchy of callable objects to expose to clients.
             interrupter: Interrupter instance for simulating control-c on server
             port: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
@@ -255,7 +255,7 @@ class Interrupter(threading.Thread):
 class ZMQInterrupter(Interrupter):
     def __init__(self, port, context=None):
         """InterruptServer subclass that uses ZeroMQ PUSH/PULL to communicate with clients.
-        Arguments:
+        Parameters:
             port: a string ZeroMQ port identifier, like ''tcp://127.0.0.1:5555''.
             context: a ZeroMQ context to share, if one already exists.
         """

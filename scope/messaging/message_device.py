@@ -189,7 +189,7 @@ class LeicaAsyncDevice(AsyncDevice):
     def send_message(self, command, *params, async=None, intent=None, coalesce=True):
         """Send a message to the Leica microscope
 
-        Arguments:
+        Parameters:
             command: the command number for the Leica scope
             *params: a list of params to be coerced to strings and listed after command, separated by spaces
             async: if not None, override the async instance variable.

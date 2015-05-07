@@ -157,7 +157,7 @@ class MessageManager(threading.Thread):
 class SerialMessageManager(MessageManager):
     """MessageManager subclass that sends and receives from a serial port."""
     def __init__(self, serial_port, serial_baud, response_terminator, daemon=True):
-        """Arguments:
+        """Parameters:
             serial_port, serial_baud: information for connecting to serial device
             response_terminator: byte or bytes that terminate a response message
             daemon: quit running in the background automatically when the interpreter is exited
