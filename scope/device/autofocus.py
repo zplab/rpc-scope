@@ -108,13 +108,14 @@ def get_metric(metric, shape):
     return METRICS[metric](shape)
 
 class Autofocus:
+    _CAMERA_MODE = dict(trigger_mode='Software', pixel_readout_rate='280 MHz')
     def __init__(self, camera, stage):
         self._camera = camera
         self._stage = stage
 
     def _start_autofocus(self, metric):
-        self._metric = get_metric(self._camera.get_aoi_shape())
-        self._camera.start_image_sequence_acquisition(steps, trigger_mode='Software', pixel_readout_rate='280 MHz')
+        self._metric = get_metric(metric, self._camera.get_aoi_shape())
+        self._camera.start_image_sequence_acquisition(frame_count=None, **self._CAMERA_MODE)
 
     def _stop_autofocus(self, z_positions):
         self._camera.end_image_sequence_acquisition()
@@ -125,14 +126,21 @@ class Autofocus:
         self._stage.wait() # no op if in sync mode, necessary in async mode
         return best_z, zip(z_positions, z_scores)
 
-    def autofocus(self, start, end, steps, metric='high pass + brenner'):
+    def autofocus(self, start, end, steps, metric='high pass + brenner', return_images=False):
         """Move the stage stepwise from start to end, taking an image at
         each step. Apply the given autofocus metric and move to the best-focused
         position."""
+        with self._camera._pushed_state(**self._CAMERA_MODE):
+            safe_images_to_queue = self._camera.get_safe_image_count_to_queue()
+            if steps < safe_images_to_queue:
+                sleep_time = 1/self._camera.get_frame_rate()
+            else:
+                sleep_time = self._camera._calculate_live_trigger_interval()
+
         exp_time = self._camera.get_exposure_time()
         z_positions = numpy.linspace(start, end, steps)
         self._start_autofocus(metric)
-        runner = MetricRunner(self._camera, self._metric)
+        runner = MetricRunner(self._camera, self._metric, return_images)
         with self._stage._pushed_state(async=False):
             for z in z_positions:
                 self._stage.set_z(z)
@@ -140,35 +148,57 @@ class Autofocus:
                 runner.add_image()
                 # if there is a next exposure, wait for the exposure to finish
                 if z != end:
-                    time.sleep(exp_time / 1000) # exp_time is in ms, sleep is in sec
+                    time.sleep(sleep_time)
         image_names, camera_timestamps = runner.stop()
         best_z, positions_and_scores = self._stop_autofocus(z_positions)
-        return best_z, positions_and_scores, image_names
+        if return_images:
+            return best_z, positions_and_scores, image_names
+        else:
+            return best_z, positions_and_scores
 
-    def autofocus_continuous_move(self, start, end, steps=None, speed=0.2, metric='brenner'):
+    def autofocus_continuous_move(self, start, end, steps=None, max_speed=0.2, metric='high pass + brenner', return_images=False):
         """Move the stage from 'start' to 'end' at a constant speed, taking images
         for autofocus constantly. If num_images is None, take images as fast as
         possible; otherwise take approximately the spcified number. If more images
-        are requested than can be obtained, images will be taken as fast as possible
-        and fewer images than requested will be returned.
+        are requested than can be obtained for a given stage speed, the stage will
+        move more slowly.
 
         Once the images are obtained, this function applies the autofocus metric
         to each image and moves to the best-focused position."""
-        trigger_interval = self._camera._calculate_live_trigger_interval()
+        with self._camera._pushed_state(**self._CAMERA_MODE):
+            oversize_trigger_interval = self._camera._calculate_live_trigger_interval()
+            undersize_trigger_interval = 1/self._camera.get_frame_rate()
+            safe_images_to_queue = self._camera.get_safe_image_count_to_queue()
+        distance = abs(end - start)
+        with self._stage._pushed_state(z_speed=max_speed):
+            movement_time = self._stage.calculate_z_movement_time(distance)
+
         if steps is None:
-            sleep_time = trigger_interval
+            max_frames = movement_time / undersize_trigger_interval
+            if max_frames < safe_images_to_queue:
+                sleep_time = undersize_trigger_interval
+            else:
+                sleep_time = oversize_trigger_interval
+            speed = max_speed
         else:
-            distance = abs(end - start)
-            with self._stage._pushed_state(z_speed=speed):
-                movement_time = self._stage.calculate_movement_time(distance)
-            requested_fps = (steps - 1) / movement_time # subtract 1 to account for fencepost problem
-            sleep_time = max(1/requested_fps, trigger_interval)
+            if steps < safe_images_to_queue:
+                min_sleep_time = undersize_trigger_interval
+            else:
+                min_sleep_time = oversize_trigger_interval
+            required_sleep_time = movement_time / steps
+            if required_sleep_time < min_sleep_time:
+                sleep_time = min_sleep_time
+                time_required = sleep_time * steps
+                speed = self._stage.calculate_required_z_speed(distance, time_required)
+            else:
+                sleep_time = required_sleep_time
+                speed = max_speed
 
         with self._stage._pushed_state(async=True, z_speed=speed):
             self._stage.set_z(start) # move to start position
             # while that's going on, set up some things
             self._start_autofocus(metric)
-            runner = MetricRunner(self._camera, self._metric)
+            runner = MetricRunner(self._camera, self._metric, return_images)
             zrecorder = ZRecorder(self._camera, self._stage)
             self._stage.wait() # wait for stage to get to start position
             zrecorder.start()
@@ -182,10 +212,13 @@ class Autofocus:
         image_names, camera_timestamps = runner.stop()
         z_positions = zrecorder.interpolate_zs(camera_timestamps)
         best_z, positions_and_scores = self._stop_autofocus(z_positions)
-        return best_z, positions_and_scores, image_names
+        if return_images:
+            return best_z, positions_and_scores, image_names
+        else:
+            return best_z, positions_and_scores
 
 class MetricRunner(threading.Thread):
-    def __init__(self, camera, metric):
+    def __init__(self, camera, metric, retain_images):
         self.camera = camera
         self.metric = metric
         # we don't actually queue any information other than that there is a job to be done
@@ -194,6 +227,9 @@ class MetricRunner(threading.Thread):
         self.job_queue = queue.Queue()
         self.camera_timestamps = []
         self.image_names = []
+        self.retain_images = retain_images
+        self.threadpool = futures.ThreadPoolExecutor(1) # just want to run metrics in a single background thread
+        self.futures = []
         super().__init__()
         self.start()
 
@@ -204,6 +240,8 @@ class MetricRunner(threading.Thread):
         self.job_queue.join() # wait until enough task_done() calls are made to match the number of put() calls
         self.running = False
         self.join()
+        for future in self.futures:
+            future.result() # make sure all metric evals are done, and raise errors if any of them did
         return self.image_names, self.camera_timestamps
 
     def run(self):
@@ -214,10 +252,13 @@ class MetricRunner(threading.Thread):
             except queue.Empty:
                 continue
             name = self.camera.next_image(read_timeout_ms=1000)
-            self.image_names.append(name)
             self.camera_timestamps.append(self.camera.get_latest_timestamp())
-            array = transfer_ism_buffer._borrow_array(name)
-            self.metric.evaluate_image(array)
+            if self.retain_images:
+                self.image_names.append(name)
+                array = transfer_ism_buffer._borrow_array(name)
+            else:
+                array = transfer_ism_buffer._release_array(name)
+            self.futures.append(self.threadpool.submit(self.metric.evaluate_image, array))
             self.job_queue.task_done()
 
 class ZRecorder(threading.Thread):

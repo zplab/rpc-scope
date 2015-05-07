@@ -421,6 +421,14 @@ class Camera(property_device.PropertyDevice):
         """Set the AOI to full frame"""
         self._set_aoi({'aoi_height': 2160, 'aoi_left': 1, 'aoi_top': 1, 'aoi_width': 2560})
 
+    def get_safe_image_count_to_queue(self):
+        """Return the maximum number of images that can be safely left on the camera head
+        before overflowing its limited memory. 
+
+        Uses the current aoi and pixel-depth settings."""
+        image_size_mb = self.get_image_byte_count() / 1024**2
+        return 1400 / image_size_mb # we estimate the camera has ~1500 mb of memory
+
     def reset_timestamp(self):
         """Reset timestamp clock to zero."""
         lowlevel.Command('TimestampClockReset')

@@ -40,8 +40,13 @@ def rpc_client_main(host='127.0.0.1', context=None):
     is_local, get_data = transfer_ism_buffer.client_get_data_getter(client)
     def get_many_data(data_list):
         return [get_data(name) for name in data_list]
-    def get_autofocus_data(best_z, positions_and_scores, image_names):
-        return best_z, positions_and_scores, get_many_data(image_names)
+    def get_autofocus_data(*return_values):
+        best_z, positions_and_scores = return_values[:2]
+        if len(return_values) == 3:
+            image_names = return_values[2]
+            return best_z, positions_and_scores, get_many_data(image_names)
+        else:
+            return best_z, positions_and_scores
     client_wrappers = {
         'camera.acquire_image': get_data,
         'camera.live_image': get_data,

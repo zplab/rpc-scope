@@ -164,8 +164,8 @@ class Stage(stand.DM6000Device):
         counts = int(round(ramp / self._z_mm_per_count / Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT))
         self.send_message(SET_RAMP_Z, counts, intent="set z ramp")
 
-    def calculate_movement_time(self, distance):
-        """Calculate how long it will take the stage to move a given distance (in mm)
+    def calculate_z_movement_time(self, distance):
+        """Calculate how long it will take the stage to move a given z distance (in mm)
         with the current speed and ramp settings. Distance must be positive."""
         final_speed = self.get_z_speed()
         speed_ramp = self.get_z_ramp()
@@ -205,6 +205,43 @@ class Stage(stand.DM6000Device):
             return final_speed / speed_ramp + distance / final_speed + Z_MOVE_FUDGE_FACTOR
         else:
             return 2*(distance / speed_ramp)**2 + Z_MOVE_FUDGE_FACTOR
+
+    def calculate_required_z_speed(self, distance, time):
+        """Calculate how the speed needed for the stage to move the desired z distance
+        in the specified time, using the current speed ramp, or the max valid speed if
+        the required speed would be too large.
+
+        If the distance is short enough that the stage would never get to speed, 
+        return the min valid speed.
+        """
+        speed_ramp = self.get_z_ramp()
+        min_speed, max_speed = self.get_z_speed_range()
+        # case 1 above:
+        # time = final_speed / speed_ramp + distance / final_speed + fudge
+        # time - fudge = (final_speed**2 + speed_ramp*distance) / (final_speed * speed_ramp)
+        # (time - fudge) * final_speed * speed_ramp = final_speed**2 + speed_ramp*distance
+        # 0 = final_speed**2 - (time - fudge) * final_speed * speed_ramp + speed_ramp * distance
+        # 0 = v**2 + Bv + C, where B = (fudge-time)*speed_ramp and C = speed_ramp*distance
+        # v = -B +- sqrt(B**2-4C)/2
+        B = (Z_MOVE_FUDGE_FACTOR - time)*speed_ramp
+        C = speed_ramp * distance
+        discriminant = B**2-4*C
+        if discriminant > 0:
+            v1 = (-B + discriminant**0.5)/2
+            v2 = (-B - discriminant**0.5)/2
+            v1_valid = v1 > 0 and distance >= v1**2 / speed_ramp # it appears that v1 will never be valid, but I haven't worked this out in closed form...
+            v2_valid = v2 > 0 and distance >= v2**2 / speed_ramp
+            if v1_valid and v2_valid:
+                return min(min(v1, v2), max_speed)
+            elif v1_valid:
+                return min(v1, max_speed)
+            elif v2_valid:
+                return min(v2, max_speed)
+            else: # we must have a sufficient ramp that we can never go slow enough
+                return min_speed
+        else: # ramp and distance must be such that we can never go fast enough
+            return max_speed
+
 
     def calculate_movement_position(self, distance, t):
         """Calculate where the stage will be (relative to the starting position)
@@ -277,7 +314,7 @@ class Stage(stand.DM6000Device):
         _calibrate_speed_coefficients(times, distances, speeds, ramps)
         return times, distances, speeds, ramps
 
-def _calibrate_speed_coefficients(times, distances, speeds, ramps):
+def _calibrate_z_speed_coefficients(times, distances, speeds, ramps):
     import numpy
 
     # Need to recalculate the speed and ramp conversion factors to get to human units
