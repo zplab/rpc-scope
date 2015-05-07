@@ -391,6 +391,10 @@ class Camera(property_device.PropertyDevice):
             'aoi_height' : self.get_aoi_height()
         }
 
+    def get_aoi_shape(self):
+        """Return shape of the images the camera is acquiring as a (width, height) tuple."""
+        return self.get_aoi_width(), self.get_aoi_height()
+
     def _delta_sort_key(self, kv):
         key, value = kv
         return value - getattr(self, 'get_'+key)()
