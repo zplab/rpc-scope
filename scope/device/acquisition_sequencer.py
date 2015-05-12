@@ -84,13 +84,31 @@ class AcquisitionSequencer:
         self._num_acquisitions = 0
         self._latest_timestamps = None
 
-    def add_step(self, exposure_ms, tl_enable=None, tl_intensity=None, **spectra_x_lamps):
+    def add_delay_ms(self, delay):
+        """Add a delay of the given number of milliseconds (up to 2**16) to the acquisition).
+        Note that the camera will be exposing during this delay, though no lights will be on."""
+        assert 0 < delay < 2**16
+        self._steps.append(self._io_tool.commands.delay_ms(int(delay)))
+
+    def add_delay_us(self, delay):
+        """Add a delay of the given number of microseconds (uo to 2**16) to the acquisition).
+        Note that the camera will be exposing during this delay, though no lights will be on.
+        Note also that delays of 4 microseconds or less are not possible and the the delay
+        will be 4 microseconds in this case."""
+        assert 0 < delay < 2**16
+        if delay < 4:
+            delay = 4
+        self._steps.append(self._io_tool.commands.delay_us(int(delay)-4)) # delay command itself takes 4 us, so subtract off 4
+
+    def add_step(self, exposure_ms, tl_enable=None, tl_intensity=None, lamp_off_delay=None, **spectra_x_lamps):
         """Add an image acquisition step to the existing sequence.
 
         Parameters
         exposure_ms: exposure time in ms for the image.
         tl_enable: should the transmitted lamp be on during the exposure?
         tl_intensity: intensity of the transmitted lamp, should it be enabled.
+        lamp_off_delay: how long, in microseconds, to wait for the lamp to be completely
+            off before starting the next acquisition.
         keywords: True/False enable values for the Spectra X lamps. Any lamps
         not named will be turned off.
         """
@@ -105,12 +123,14 @@ class AcquisitionSequencer:
         self._steps.extend(self._io_tool.commands.transmitted_lamp(tl_enable, tl_intensity))
         self._steps.extend(self._io_tool.commands.spectra_x_lamps(**lamps))
         if exposure_ms <= 65.535:
-            self._steps.append(self._io_tool.commands.delay_us(int(round(exposure_ms*1000))-4)) # delay command itself takes 4 µs, so subtract off 4
+            self.add_delay_us(round(exposure_ms*1000))
         else:
-            self._steps.append(self._io_tool.commands.delay_ms(int(round(exposure_ms))))
+            self.add_delay_ms(round(exposure_ms))
         if tl_enable:
             self._steps.extend(self._io_tool.commands.transmitted_lamp(enable=False))
         self._steps.extend(self._io_tool.commands.spectra_x_lamps(**{lamp:False for lamp in lamps})) # turn lamps back off
+        if lamp_off_delay:
+            self.add_delay_us(lamp_off_delay)
 
     def _compile(self):
         """Send the acquisition sequence to the IOTool box"""
