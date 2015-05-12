@@ -192,7 +192,7 @@ class JobRunner(base_daemon.Runner):
         """Actually run a given job and interpret the output"""
         logger.info('Running job {}', job.exec_file)
         args = [sys.executable, str(job.exec_file), str(job.next_run_time)]
-        logger.debug('Arguments: {}', args)
+        logger.debug('Parameters: {}', args)
         sub = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
         stdout_data, stderr_data = sub.communicate()
         logger.debug('Stdout {}', stdout_data)

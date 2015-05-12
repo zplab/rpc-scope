@@ -158,7 +158,7 @@ class RPCError(RuntimeError):
 class ZMQClient(RPCClient):
     def __init__(self, rpc_addr, interrupt_addr, context=None):
         """RPCClient subclass that uses ZeroMQ REQ/REP to communicate.
-        Arguments:
+        Parameters:
             rpc_addr, interrupt_addr: a string ZeroMQ port identifier, like ''tcp://127.0.0.1:5555''.
             context: a ZeroMQ context to share, if one already exists.
         """

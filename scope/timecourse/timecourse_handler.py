@@ -13,7 +13,7 @@ def main(timepoint_function, next_run_interval, interval_mode='scheduled_start')
     argument, and expects stdout to contain the timestamp of the next scheduled
     run-time.
 
-    Arguments:
+    Parameters:
         timepoint_function: function to call to do whatever the job is supposed
             to do during its invocation. Usually it will be the run_timepoint
             method of a TimepointHandler subclass. If this function does not return
@@ -43,7 +43,7 @@ class TimepointHandler:
     def __init__(self, data_dir, io_threads=4, loglevel=logging.INFO, scope_host='127.0.0.1'):
         """Setup the basic code to take a single timepoint from a timecourse experiment.
 
-        Arguments:
+        Parameters:
             data_dir: directory where the data and metadata-files should be read/written.
             io_threads: number of threads to use to save image data out.
             loglevel: level from logging library at which to log information to the
@@ -159,7 +159,7 @@ class TimepointHandler:
         self.skip_positions set to indicate that in the future this position
         should not be acquired. (E.g. the worm is dead.)
 
-        Arguments:
+        Parameters:
             position_name: identifier for this image-acquisition position. Useful
                 for adding this position to the skip_positions set.
             position_dir: pathlib.Path object representing the directory where
