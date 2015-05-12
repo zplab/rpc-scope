@@ -9,7 +9,7 @@ from ..timecourse import scope_job_runner
 def make_runner(base_dir='~'):
     base_dir = os.path.realpath(os.path.expanduser(base_dir))
     backingfile_path = os.path.join(base_dir, 'scope_jobs.json')
-    jobfile_path = os.path.join(base_dir, 'current_job')
+    jobfile_path = os.path.join(base_dir, 'scope_job_current')
     pidfile_path = os.path.join(base_dir, 'scope_job_runner.pid')
     log_dir = os.path.join(base_dir, 'scope_job_logs')
     runner = scope_job_runner.JobRunner(backingfile_path, jobfile_path, pidfile_path)

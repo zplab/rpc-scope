@@ -56,6 +56,7 @@ def main(argv):
             runner.terminate()
         if args.command == 'restart':
             print('Waiting for server to terminate', end='', flush=True)
+            time.sleep(2) # fudge factor -- sometimes the ZMQ socket doesn't become available again until a little while after the server process exits??
             terminated = False
             for i in range(40):
                 if runner.is_running():

@@ -209,7 +209,11 @@ class JobRunner(base_daemon.Runner):
                 return
         else:
             next_run_time = None
-        self.jobs.update(job.exec_file, next_run_time=next_run_time)
+        try:
+            self.jobs.update(job.exec_file, next_run_time=next_run_time)
+        except ValueError:
+            logger.info('Could not updatae job {}: perhaps it was removed while running?', job.exec_file)
+
         log_run_time = 'in {:.0f} seconds'.format(next_run_time - time.time()) if next_run_time else 'never'
         logger.info('Job done; next run time: {}', log_run_time)
 
@@ -306,7 +310,7 @@ class _JobList:
                 del jobs[exec_file]
                 self._write(jobs)
             else:
-                raise ValueError('No job queued for {}'.format(job.exec_file))
+                raise ValueError('No job queued for {}'.format(exec_file))
 
     def add(self, exec_file, alert_emails, next_run_time, status):
         """Add a new job to the list.
@@ -356,7 +360,7 @@ class _JobList:
         if exec_file in jobs:
             return jobs[exec_file]
         else:
-            raise ValueError('No job queued for {}'.format(job.exec_file))
+            raise ValueError('No job queued for {}'.format(exec_file))
 
 class _JobFile:
     def __init__(self, jobfile_path):
