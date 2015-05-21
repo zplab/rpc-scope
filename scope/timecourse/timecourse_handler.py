@@ -1,184 +1,179 @@
-import sys
-import time
+# The MIT License (MIT)
+#
+# Copyright (c) 2014-2015 WUSTL ZPLAB
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+# Authors: Erik Hvatum <ice.rikh@gmail.com>, Zach Pincus <zpincus@wustl.edu>
+
 import pathlib
-import json
-import logging
+import numpy
+import inspect
 
-from ..util import threaded_image_io
-from ..util import log_util
+from . import base_handler
+from ..client_util import autofocus
+from ..client_util import calibrate
+from ..util import state_stack
 
-def main(timepoint_function, next_run_interval, interval_mode='scheduled_start'):
-    """Main function designed to interact with the job running daemon, which
-    starts a process with the timestamp of the scheduled start time as the first
-    argument, and expects stdout to contain the timestamp of the next scheduled
-    run-time.
+class BasicAcquisitionHandler(base_handler.TimepointHandler):
+    """Base class for most timecourse acquisition needs.
 
-    Parameters:
-        timepoint_function: function to call to do whatever the job is supposed
-            to do during its invocation. Usually it will be the run_timepoint
-            method of a TimepointHandler subclass. If this function does not return
-            True, the job will not be scheduled again.
-        next_run_interval: in how many seconds should the job runner run this
-            job again. (The beginning point of the interval is controlled by
-            the 'interval_mode' parameter).
-        interval_mode: one of 'scheduled_start', 'actual_start', 'end'. Selects
-            what the starting time for the delay before the next run should be:
-            when the job was scheduled to start, when it actually started,
-            or when the job ends, respectively."""
-    assert interval_mode in {'scheduled_start', 'actual_start', 'end'}
-    scheduled_start = sys.argv[1]
-    actual_start = time.time()
-    run_again = timepoint_function()
-    if run_again:
-        end = time.time()
-        if interval_mode == 'scheduled_start':
-            start = float(scheduled_start)
-        elif interval_mode == 'actual_start':
-            start = actual_start
-        else:
-            start = end
-        print(start+next_run_interval)
+    To create a new timepoint acquisition, the user MUST subclass this class
+    from a file that resides INSIDE the desired data-acquisition directory. An
+    'experiment_metadata.json' file MUST be created in the same directory,
+    containing a dict with keys 'positions', 'z_max', and
+    'reference_positions'. The value of 'positions' MUST be a dict mapping
+    position names to (x,y,z) stage coords for data acquisition. 'z_max' MUST
+    be an single number representing the highest the stage can go during
+    autofocus. 'reference_positions' MUST be a list of one or more (x,y,z)
+    stage coords to obtain brightfield and fluorescence flatfield reference
+    data from.
 
-class TimepointHandler:
-    def __init__(self, data_dir, io_threads=4, loglevel=logging.INFO, scope_host='127.0.0.1'):
-        """Setup the basic code to take a single timepoint from a timecourse experiment.
+    The python file implementing the subclass MUST have the following stanza
+    at the bottom:
+        if __name__ == '__main__':
+            MySubclass.main()
+    where 'MySubclass' is replaced with whatever the name of the subclass is.
 
-        Parameters:
-            data_dir: directory where the data and metadata-files should be read/written.
-            io_threads: number of threads to use to save image data out.
-            loglevel: level from logging library at which to log information to the
-                logfile in data_dir. (Subclasses can log information with self.logger)
-            scope_host: IP address to connect to the scope server. If None, run without
-                a scope server.
+    The subclass MUST set the FILTER_CUBE attribute. In addition, if
+    fluorescent flat-field images are desired the subclass MAY set
+    FLUORESCENCE_FLATFIELD_LAMP to the name of a spectra X lamp that is
+    compatible with the selected filter cube. Other class attributes MAY be set
+    as desired; RUN_INTERVAL_MINUTES is of particular note.
+
+    The subclass MAY override configure_additional_acquisition_steps() to
+    add additional image acquisitions (after the initial default brightfield
+    acquisition). The base class docstring shows an example of adding a 200 ms
+    GFP exposure, which also requires adding the name of the image file to save
+    out to the self.image_names attribute.
+    """
+
+    # Attributes and functions subclasses MUST or MAY override are here:
+    # First: Really important attributes to override
+    FILTER_CUBE = 'Choose a filter cube!'
+    FLUORESCENCE_FLATFIELD_LAMP = None # MAKE SURE THIS IS COMPATIBLE WITH THE FILTER CUBE!!!
+    RUN_INTERVAL_MINUTES = 60*8
+
+    # Next: Potentially useful attributes to override
+    OBJECTIVE = 10
+    COARSE_FOCUS_RANGE = 1
+    COARSE_FOCUS_STEPS = 50
+    # 1 mm distance in 50 steps = 20 microns/step. So we should be somewhere within 20-40 microns of the right plane after the above autofocus.
+    # We want to get within 1-2 microns, so sweep over 100 microns with 75 steps.
+    FINE_FOCUS_RANGE = 0.1
+    FINE_FOCUS_STEPS = 75
+    PIXEL_READOUT_RATE = '100 MHz'
+    USE_LAST_FOCUS_POSITION = True
+
+    def configure_additional_acquisition_steps(self):
+        """Add more steps to the acquisition_sequencer's sequence as desired,
+        making sure to also add corresponding names to the image_name attribute.
+        For example, to add a 200 ms GFP acquisition, a subclass may override
+        this as follows:
+            def configure_additional_acquisition_steps(self):
+                self.scope.camera.acquisition_sequencer.add_step(exposure_ms=200,
+                    tl_enable=False, cyan=True)
+                self.image_names.append('gfp.png')
         """
-        self.data_dir = pathlib.Path(data_dir)
-        self.experiment_metadata_path = self.data_dir / 'experiment_metadata.json'
-        with self.experiment_metadata_path.open('r') as f:
-            self.experiment_metadata = json.load(f)
-        self.positions = self.experiment_metadata['positions'] # dict mapping names to (x,y,z) stage positions
-        if 'skip_positions' not in self.experiment_metadata:
-            # add in this metadata entry, which will be saved out later in finalize_timepoint()
-            self.experiment_metadata['skip_positions'] = []
-        self.skip_positions = set(self.experiment_metadata['skip_positions'])
-        if scope_host is not None:
-            from .. import scope_client
-            self.scope = scope_client.rpc_client_main(scope_host)
-        else:
-            self.scope = None
-        self.image_io = threaded_image_io.ThreadedIO(io_threads)
-        self.logger = log_util.get_logger(str(data_dir))
-        self.logger.setLevel(loglevel)
-        handler = logging.FileHandler(str(self.data_dir/'acquisitions.log'))
-        handler.setFormatter(log_util.get_formatter())
-        self.logger.addHandler(handler)
+        pass
 
-    def run_timepoint(self):
-        self.logger.info('Starting timepoint')
-        self.configure_timepoint()
-        for position_name, position_coords in sorted(self.positions.items()):
-            if position_name not in self.skip_positions:
-                self.run_position(position_name, position_coords)
-        self.experiment_metadata['skip_positions'] = list(self.skip_positions)
-        self.finalize_timepoint()
-        with self.experiment_metadata_path.open('w') as f:
-            self.experiment_metadata = json.dump(self.experiment_metadata, f)
-        if self.skip_positions == self.positions.keys():
-            # all positions are being skipped. Return False to tell the caller
-            # that this job should not be re-scheduled.
-            return False
-        else:
-            return True
-
+    # Internal implementation functions are below. Override with care.
     def configure_timepoint(self):
-        """Override this method with global configuration for the image acquisitions
-        (e.g. camera configuration). Member variables 'scope', 'experiment_metadata', and
-        'positions' may be specifically useful."""
-        pass
+        self.logger.info('Configuring acquisitions')
+        self.scope.async = False
+        self.scope.il.shutter_open = True
+        self.scope.tl.shutter_open = True
+        self.scope.tl.condenser_retracted = False
+        self.scope.il.filter_cube = self.FILTER_CUBE
+        self.scope.nosepiece.magnification = self.OBJECTIVE
+        self.scope.camera.sensor_gain = '16-bit (low noise & high well capacity)'
+        self.configure_calibrations() # sets self.bf_exposure and self.tl_intensity
+        self.scope.camera.acquisition_sequencer.new_sequence(readout_rate=self.PIXEL_READOUT_RATE)
+        self.scope.camera.acquisition_sequencer.add_step(exposure_ms=self.bf_exposure,
+            tl_enable=True, tl_intensity=self.tl_intensity, lamp_off_delay=25) # delay is in microseconds
+        self.image_names = ['bf.png']
+        self.configure_additional_acquisition_steps()
 
-    def finalize_timepoint(self):
-        """Override this method with global finalization after the images have been
-        acquired for each position. Useful for altering the self.experiment_metadata
-        dictionary before it is saved out.
+    def configure_calibrations(self):
+        self.dark_corrector = calibrate.DarkCurrentCorrector(self.scope)
+        ref_positions = self.experiment_metadata['reference positions']
 
-        Note that positions added to self.skip_positions are automatically added
-        to the metadata, so it is unnecessary to do this here.
-        """
-        pass
+        self.scope.stage.position = ref_positions[0]
+        with state_stack.pushed_state(self.scope.tl.lamp, enable=True):
+            calibrate.meter_exposure(self.scope, self.scope.tl.lamp)
+            bf_avg = calibrate.get_averaged_images(self.scope, ref_positions,
+                self.dark_corrector, frames_to_average=2)
+        vignette_mask = calibrate.get_vignette_mask(bf_avg)
+        bf_flatfield = calibrate.get_flat_field(bf_avg, vignette_mask)
+        cal_image_names = ['vignette_mask.png', 'bf_flatfield.tif']
+        cal_images = [vignette_mask.astype(numpy.uint8)*255, bf_flatfield]
 
-    def run_position(self, position_name, position_coords):
-        """Do everything required for taking a timepoint at a single position
-        EXCEPT focusing / image acquisition. This includes moving the stage to
-        the right x,y position, loading and saving metadata, and saving image
-        data, as generated by acquire_images()"""
-        self.logger.info('Acquiring position {} at {}', position_name, position_coords)
-        position_dir = self.data_dir / position_name
-        if not position_dir.exists():
-            position_dir.mkdir()
-        metadata_path = position_dir / 'position_metadata.json'
-        if metadata_path.exists():
-            with metadata_path.open('r') as f:
-                position_metadata = json.load(f)
-        else:
-            position_metadata = {'timepoints':[], 'values':[]}
-        timepoint_prefix = time.strftime('%Y-%m-%dt%H%M')
-        timestamp = time.time()
+        if self.FLUORESCENCE_FLATFIELD_LAMP:
+            self.scope.stage.position = ref_positions[0]
+            lamp = getattr(self.scope.il.spectra_x, self.FLUORESCENCE_FLATFIELD_LAMP)
+            with state_stack.pushed_state(lamp, enable=True):
+                calibrate.meter_exposure(self.scope, lamp)
+                fl_avg = calibrate.get_averaged_images(self.scope, ref_positions,
+                    self.dark_corrector, frames_to_average=5)
+            fl_flatfield = calibrate.get_flat_field(fl_avg, vignette_mask)
+            cal_image_names.append('fl_flatfield.tif')
+            cal_images.append(fl_flatfield)
 
-        if self.scope is not None:
-            self.scope.stage.position = position_coords
-        previous_timepoints = position_metadata['timepoints']
-        previous_metadata = position_metadata['values']
-        images, image_names, new_metadata = self.acquire_images(position_name, position_dir,
-            timepoint_prefix, previous_timepoints, previous_metadata)
-        image_paths = [position_dir / (timepoint_prefix + ' ' + name) for name in image_names]
-        self.image_io.write(images, image_paths)
-        if new_metadata is None:
-            new_metadata = {}
-        new_metadata['timestamp'] = timestamp
-        position_metadata['timepoints'].append(timepoint_prefix)
-        position_metadata['values'].append(new_metadata)
-        with metadata_path.open('w') as f:
-             json.dump(position_metadata, f)
+        # go to a data-acquisition position and figure out the right brightfield exposure
+        data_positions = self.experiment_metadata['positions']
+        some_pos = list(data_positions.values())[0]
+        self.scope.stage.position = some_pos
+        self.bf_exposure, self.tl_intensity = calibrate.meter_exposure(self.scope, self.scope.tl.lamp)
+
+        # save out calibration information
+        calibration_dir = self.data_dir / 'calibrations'
+        if not calibration_dir.exists():
+            calibration_dir.mkdir()
+        cal_image_paths = [position_dir / (self.timepoint_prefix + ' ' + name) for name in cal_names]
+        self.image_io.write(cal_images, cal_image_paths)
+        metering = self.experiment_metadata.setdefault('brightfield metering', {})
+        metering[self.timepoint_prefix] = dict(exposure=self.bf_exposure, intensity=self.tl_intensity)
+
 
     def acquire_images(self, position_name, position_dir, timepoint_prefix, previous_timepoints, previous_metadata):
-        """Override this method in a subclass to define the image-acquisition sequence.
+        if self.USE_LAST_FOCUS_POSITION and previous_metadata:
+            z_start = previous_metadata[-1]['fine_z']
+        else:
+            x, y, z = self.positions[position_name]
+            z_start = z
+        z_max = self.experiment_metadata['z_max']
+        coarse_z, fine_z = autofocus.autofocus(self.scope, z_start, z_max,
+            self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
+            self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS)
 
-        All most subclasses will need to do is return the following as a tuple:
-        (images, image_names, new_metadata), where:
-            images is a list of the acquired images
-            image_names is a list of the generic names for each of these images
-                (not timepoint- or position-specific; e.g. 'GFP.png' or some such)
-            new_metadata is a dictionary of timepoint-specific information, such
-                as the latest focal plane z-position or similar. This will be
-                made available to future acquisition runs via the 'position_metadata'
-                argument described below.
+        self.logger.info('autofocus position: {}'.format(fine_z))
+        images = self.scope.camera.acquisition_sequencer.run()
+        exposures = self.scope.camera.acquisition_sequencer.exposure_times
+        images = [self.dark_corrector.correct(image, exposure) for image, exposure in zip(images, exposures)]
+        timestamps = numpy.array(self.scope.camera.acquisition_sequencer.latest_timestamps)
+        timestamps = (timestamps - timestamps[0]) / self.scope.camera.timestamp_hz
+        metadata = dict(coarse_z=coarse_z, fine_z=fine_z, image_timestamps=dict(zip(self.image_names, timestamps)))
+        return images, self.image_names, metadata
 
-        The images and metadata will be written out by the superclass, and
-        must not be written by the overriding subclass.
-
-        Optionally, subclasses may choose to enter 'position_name' into the
-        self.skip_positions set to indicate that in the future this position
-        should not be acquired. (E.g. the worm is dead.)
-
-        Parameters:
-            position_name: identifier for this image-acquisition position. Useful
-                for adding this position to the skip_positions set.
-            position_dir: pathlib.Path object representing the directory where
-                position-specific data files and outputs should be written. Useful
-                only if additional data needs to be read in or out during
-                acquisition. (E.g. a background model or similar.)
-            timepoint_prefix: name with which any output files from this
-                acquisition run should be prefixed. Useful only if additional
-                timepoint-specific data needs to be written out by this function.
-            previous_timepoints: list of all the prior 'timepoint_prefix' values
-                for this position, in chronological order.
-            previous_metadata: list of all the stored position metadata from the
-                previous timepoints, in chronological order. In particular, this
-                dictionary is guaranteed to contain 'timestamp' which is the
-                time.time() at which that acquisition was started. Other values
-                (such as the latest focal plane) stored by previous acquisition
-                runs will also be available. The most recent metadata will be in
-                previous_metadata[-1].
-        """
-        raise NotImplementedError()
-
-
+    @classmethod
+    def main(cls):
+        data_dir = pathlib.Path(inspect.getfile(cls)).parent
+        handler = cls(data_dir)
+        base_handler.main(timepoint_function=handler.run_timepoint,
+            next_run_interval=cls.RUN_INTERVAL_MINUTES*60, interval_mode='scheduled_start')

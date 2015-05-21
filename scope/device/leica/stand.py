@@ -38,13 +38,6 @@ class DM6000Device(message_device.LeicaAsyncDevice, property_device.PropertyDevi
         # access to the property_server etc.
         property_device.PropertyDevice.__init__(self, property_server, property_prefix)
         message_device.LeicaAsyncDevice.__init__(self, message_manager)
-        self._state_stack = []
-
-    def _set_state(self, **state):
-        """Set a number of device parameters at once using keyword arguments, e.g.
-        device.set_state(async=False, x=10)"""
-        for k, v in state.items():
-            getattr(self, 'set_'+k)(v)
 
     def push_state(self, **state):
         """Set a number of device parameters at once using keyword arguments, while
@@ -77,16 +70,6 @@ class DM6000Device(message_device.LeicaAsyncDevice, property_device.PropertyDevi
         if async is not None:
             self.set_async(async)
         self.wait() # no-op if not in async, otherwise wait for all setting to be done.
-
-    @contextlib.contextmanager
-    def _pushed_state(self, **state):
-        """context manager to push and pop state around a with-block"""
-        self.push_state(**state)
-        try:
-            yield
-        finally:
-            self.pop_state()
-
 
 class Stand(DM6000Device):
     def get_all_microscopy_methods(self):

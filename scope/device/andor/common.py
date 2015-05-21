@@ -74,7 +74,10 @@ class AndorError(RuntimeError):
 
 def _at_errcheck(result, func, args):
     if result != 0:
-        raise AndorError(_at_err_dict[result])
+        err_type = _at_err_dict[result]
+        func_name = func.__name__
+        arg_str = ' ,'.join(map(str, args))
+        raise AndorError('{} error when calling {}({})'.format(err_type, func_name, args))
     return args
 
 # NB: Callbacks should return AT_CALLBACK_SUCCESS, or, equivalently, 0

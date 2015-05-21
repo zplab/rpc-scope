@@ -56,5 +56,5 @@ class Footpedal:
 
     def wait_click(self):
         self._iotool.start_program(self._depress, self._delay, self._release)
-        self._iotool.wait_for_program_done()
+        self._iotool.wait_until_done()
         self._last_time = time.time()

@@ -1,3 +1,27 @@
+# The MIT License (MIT)
+#
+# Copyright (c) 2014-2015 WUSTL ZPLAB
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+# Authors: Zach Pincus
+
 import os
 import os.path
 import signal
@@ -8,7 +32,7 @@ from daemon import daemon
 from daemon import runner
 from lockfile import pidlockfile
 
-from ..util import logging
+from . import logging
 logger = logging.get_logger(__name__)
 
 def sigterm_handler(signal_number, stack_frame):
@@ -98,6 +122,9 @@ class Runner:
         if not self.is_running():
             raise RuntimeError('{} is not running (cannot find PID file "{}").'.format(self.name, self.pidfile.path))
 
+    def get_pid(self):
+        return self.pidfile.read_pid()
+
     def signal(self, sig):
         """Send a signal to the daemon process specified in the current PID file."""
         self.assert_daemon()
@@ -105,11 +132,15 @@ class Runner:
         if runner.is_pidfile_stale(self.pidfile):
             self.pidfile.break_lock()
         else:
-            pid = self.pidfile.read_pid()
-            os.kill(pid, sig)
+            os.kill(self.get_pid(), sig)
 
     def terminate(self):
+        """Send SIGTERM to the daemon: a handle-able request to cease."""
         self.signal(signal.SIGTERM)
+
+    def kill(self):
+        """Send SIGKILL to the daemon: a non-handle-able forcible exit."""
+        self.signal(signal.SIGKILL)
 
 
 def detach_process_context():

@@ -22,14 +22,18 @@
 #
 # Authors: Zach Pincus
 
-class PropertyDevice:
+from . import state_stack
+
+class PropertyDevice(state_stack.StateStackDevice):
     """A base class that provides convenience methods for microscope
     device classes that want to present a few properties to the server."""
+
     def __init__(self, property_server, property_prefix):
         """property_server is the property server instance to send property
         updates to. It is expected that property_server may be None if no
         property updates should be made. property_prefix will be prepended to
         the name of any property updates provided."""
+        super().__init__()
         self._property_server = property_server
         self._property_prefix = property_prefix
 

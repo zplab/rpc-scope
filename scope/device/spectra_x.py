@@ -27,6 +27,7 @@ import time
 
 from ..util import smart_serial
 from ..util import property_device
+from ..util import state_stack
 from ..config import scope_configuration
 
 def _make_dac_bytes(IIC_Addr, bit):
@@ -55,8 +56,9 @@ LAMP_SPECS = {
 
 LAMP_NAMES = set(LAMP_DAC_COMMANDS.keys())
 
-class Lamp:
+class Lamp(state_stack.StateStackDevice):
     def __init__(self, name, spectra_x):
+        super().__init__()
         self._name = name
         self._spectra_x = spectra_x
 
@@ -103,7 +105,6 @@ class SpectraX(property_device.PropertyDevice):
         self.lamps(**{lamp+'_intensity':255 for lamp in LAMP_NAMES})
         for name in LAMP_NAMES:
             setattr(self, name, Lamp(name, self))
-        self._state_stack = []
 
     def _timer_update_temp(self):
         while self._timer_running:
@@ -139,7 +140,7 @@ class SpectraX(property_device.PropertyDevice):
         r = self._serial_port.read(2)
         return ((r[0] << 3) | (r[1] >> 5)) * 0.125
 
-    def lamps(self, **lamp_parameters):
+    def _set_state(self, **lamp_parameters):
         """Set a number of lamp parameters at once using keyword arguments, e.g.
         spectra_x.lamps(red_enabled=True, red_intensity=255, blue_enabled=False)
 
@@ -147,18 +148,23 @@ class SpectraX(property_device.PropertyDevice):
         retrieved with get_lamp_specs().
         """
         for lamp_prop, value in lamp_parameters.items():
-            delim_pos = lamp_prop.rfind('_')
-            if delim_pos == -1:
-                raise ValueError('Lamp parameters must be in the form lampname_parametername=value')
-            lamp, prop = lamp_prop[:delim_pos], lamp_prop[delim_pos+1:]
-            if lamp not in LAMP_SPECS:
-                raise ValueError('Invalid lamp name')
+            lamp, prop = _get_lamp_and_prop(lamp_prop)
             if prop == 'intensity':
                 self._lamp_intensity(lamp, value)
-            elif prop == 'enabled':
-                self._lamp_enable(lamp, value)
             else:
-                raise ValueError('Invalid lamp parameter: must be "intensity" or "enabled"')
+                self._lamp_enable(lamp, value)
+
+    lamps = _set_state # provide a public interface to state-setting for Spectra X
+
+    def _get_lamp_and_prop(self, lamp_prop):
+        """Split a 'lamp_property' style string into a lamp and property value,
+        validating each."""
+        lamp, prop = lamp_prop.split('_')
+        if lamp not in LAMP_SPECS:
+            raise ValueError('Invalid lamp name')
+        if prop not in {'intensity', 'enabled'}:
+            raise ValueError('Invalid lamp parameter: must be "intensity" or "enabled"')
+        return lamp, prop
 
     def push_state(self, **lamp_parameters):
         """Set a number of parameters at once using keyword arguments, while
@@ -167,19 +173,11 @@ class SpectraX(property_device.PropertyDevice):
         push_state/pop_state pairs can be nested arbitrarily."""
         old_state = {}
         for lamp_prop in lamp_parameters.keys():
-            lamp, prop = lamp_prop.split('_')
-            if lamp not in LAMP_SPECS:
-                raise ValueError('Invalid lamp name')
+            lamp, prop = _get_lamp_and_prop(lamp_prop)
             if prop == 'intensity':
                 old_state[lamp_prop] = self._lamp_intensities[lamp]
-            elif prop == 'enabled':
-                old_state[lamp_prop] = self._lamp_enableds[lamp]
             else:
-                raise ValueError('Invalid lamp parameter: must be "intensity" or "enabled"')
+                old_state[lamp_prop] = self._lamp_enableds[lamp]
         self._state_stack.append(old_state)
-        self.lamps(**lamp_parameters)
+        self._set_state(**lamp_parameters)
 
-    def pop_state(self):
-        """Restore the most recent set of lamp parameters changed by a push_state()
-        call."""
-        self.lamps(**self._state_stack.pop())

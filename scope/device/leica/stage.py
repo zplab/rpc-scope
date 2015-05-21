@@ -23,6 +23,7 @@
 # Authors: Zach Pincus, Erik Hvatum
 
 from . import stand
+from ...util import state_stack
 
 GET_CONVERSION_FACTOR_X = 72034
 GET_CONVERSION_FACTOR_Y = 73034
@@ -211,7 +212,7 @@ class Stage(stand.DM6000Device):
         in the specified time, using the current speed ramp, or the max valid speed if
         the required speed would be too large.
 
-        If the distance is short enough that the stage would never get to speed, 
+        If the distance is short enough that the stage would never get to speed,
         return the min valid speed.
         """
         speed_ramp = self.get_z_ramp()
@@ -303,7 +304,7 @@ class Stage(stand.DM6000Device):
                     distances.append(d)
                     speeds.append(speed)
                     ramps.append(ramp)
-                with self._pushed_state(z_speed=speed, z_ramp=ramp, async=False):
+                with state_stack.pushed_state(self, z_speed=speed, z_ramp=ramp, async=False):
                     for d in test_distances:
                         time_move_to(z0 - d, d)
                         time_move_to(z0, d)

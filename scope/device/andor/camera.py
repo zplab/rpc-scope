@@ -130,7 +130,8 @@ class Camera(property_device.PropertyDevice):
         self._add_andor_enum('IOSelector', 'io_selector')
         self._add_andor_enum('PixelEncoding', 'pixel_encoding', readonly=True)
         self._add_andor_enum('PixelReadoutRate', 'pixel_readout_rate')
-        self._gain_enum = self._add_andor_enum('SimplePreAmpGainControl', 'sensor_gain', custom_setter=True) # setter defined below uses _gain_enum
+        self._gain_enum = self._add_andor_enum('SimplePreAmpGainControl',
+            'sensor_gain', readonly=True) # not actually readonly... we just custom-define a setter defined below, which uses _gain_enum
         self._add_andor_enum('ElectronicShutteringMode', 'shutter_mode')
         self._add_andor_enum('TriggerMode', 'trigger_mode')
         # TODO: figure out why TemperatureStatus never updates with a callback...
@@ -183,7 +184,6 @@ class Camera(property_device.PropertyDevice):
         self._update_property('live_mode', False)
         self._latest_live_data = None
         self._latest_timestamp = None
-        self._state_stack = []
 
     def _timer_update_temp(self):
         while self._timer_running:
@@ -206,7 +206,7 @@ class Camera(property_device.PropertyDevice):
         self._callback_properties[at_feature] = (getter, updater)
         self._andor_property_types[py_name] = at_type, readonly
 
-    def _add_andor_enum(self, at_feature, py_name, readonly=False, custom_setter=False):
+    def _add_andor_enum(self, at_feature, py_name, readonly=False):
         """Expose a camera setting presented by the Andor API as an enum (via GetEnumIndex,
         SetEnumIndex, and GetEnumStringByIndex) as an "enumerated" property."""
         if readonly:
@@ -217,7 +217,7 @@ class Camera(property_device.PropertyDevice):
         setattr(self, 'get_'+py_name, enum.get_value)
         self._add_property_data(at_feature, 'Enum', readonly, py_name, enum.get_value)
 
-        if not readonly and not custom_setter:
+        if not readonly:
             def setter(value):
                 with self._live_guarded():
                     enum.set_value(value)
@@ -290,12 +290,6 @@ class Camera(property_device.PropertyDevice):
             if live:
                 self.set_live_mode(True)
 
-    def _set_state(self, **state):
-        """Set a number of camera parameters at once using keyword arguments, e.g.
-        camera._set_state(exposure_time=50, frame_rate=10)"""
-        for k, v in state.items():
-            getattr(self, 'set_'+k)(v)
-
     def push_state(self, **state):
         """Set a number of camera parameters at once using keyword arguments, while
         saving the old values of those parameters. pop_state() will restore those
@@ -319,15 +313,6 @@ class Camera(property_device.PropertyDevice):
         if overlap is not None and lowlevel.IsWritable('Overlap'):
             self.set_overlap_enabled(overlap)
         self._set_state(**old_state)
-
-    @contextlib.contextmanager
-    def _pushed_state(self, **state):
-        """context manager to push and pop state around a with-block"""
-        self.push_state(**state)
-        try:
-            yield
-        finally:
-            self.pop_state()
 
     def get_readout_time(self):
         """Return sensor readout time in ms"""
@@ -423,7 +408,7 @@ class Camera(property_device.PropertyDevice):
 
     def get_safe_image_count_to_queue(self):
         """Return the maximum number of images that can be safely left on the camera head
-        before overflowing its limited memory. 
+        before overflowing its limited memory.
 
         Uses the current aoi and pixel-depth settings."""
         image_size_mb = self.get_image_byte_count() / 1024**2

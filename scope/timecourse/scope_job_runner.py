@@ -11,7 +11,8 @@ import email.mime.text as mimetext
 
 import lockfile
 
-from ..cli import base_daemon
+from ..util import json_encode
+from ..util import base_daemon
 from ..util import logging
 logger = logging.get_logger(__name__)
 
@@ -43,26 +44,26 @@ class JobRunner(base_daemon.Runner):
                 If not None, then these email addresses will be alerted if the job fails.
             next_run_time: either a time.time() style timestamp, or 'now'.
             """
-        self.assert_daemon()
         self.jobs.add(exec_file, alert_emails, next_run_time, STATUS_QUEUED)
-        self._awaken_daemon()
+        if self.is_running():
+            self._awaken_daemon()
 
     def remove_job(self, exec_file):
         """Remove the job specified by the given exec_file.
 
         Note: this will NOT terminate a currenlty-running job."""
-        self.assert_daemon()
         self.jobs.remove(exec_file)
-        self._awaken_daemon()
+        if self.is_running():
+            self._awaken_daemon()
 
     def suspend_job(self, exec_file):
         """Suspend further execution of the job specified by the given exec_file.
 
         Note: If the job is currently running, it will complete but further runs
         will not be executed."""
-        self.assert_daemon()
         self.jobs.update(exec_file, status=STATUS_SUSPENDED)
-        self._awaken_daemon()
+        if self.is_running():
+            self._awaken_daemon()
 
     def resume_job(self, exec_file, next_run_time=None):
         """Resume a job that was suspended manually or for reasons of error.
@@ -70,52 +71,74 @@ class JobRunner(base_daemon.Runner):
         If next_run_time is not None, it will be used as the new next_run_time,
         otherwise the previous run-time will be used. 'now' can be used to
         run the job immediately."""
-        self.assert_daemon()
         if next_run_time is None:
             # don't specify next_run_time to use the old value
             self.jobs.update(exec_file, status=STATUS_QUEUED)
         else:
             self.jobs.update(exec_file, status=STATUS_QUEUED, next_run_time=next_run_time)
-        self._awaken_daemon()
+        if self.is_running():
+            self._awaken_daemon()
 
     def status(self):
         """Print a status message listing the running and queued jobs, if any."""
-        self.assert_daemon()
-        current_job = self.current_job.get()
+        is_running = self.is_running()
+        if is_running:
+            print('Job-runner daemon is running (PID {}).'.format(self.get_pid()))
+            current_job = self.current_job.get()
+        else:
+            print('Job-runner daemon is NOT running.')
+            # In the unlikely event that the current_job file didn't get cleared before the daemon exited
+            # we should just ignore any stale entries in current_job.
+            current_job = None
         if current_job:
             print('Running job {}.'.format(current_job))
         jobs = self.jobs.get_jobs()
-        if not jobs:
-            print('No upcoming jobs.')
-        elif current_job and len(jobs) == 1:
-            print('No other queued jobs.')
-        else:
-            now = time.time()
-            if current_job:
-                print('Other queued jobs:')
+        upcoming_jobs = []
+        non_queued_jobs = []
+        for job in jobs:
+            if job.exec_file == current_job:
+                continue
+            if job.status == STATUS_QUEUED and job.next_run_time is not None:
+                upcoming_jobs.append(job)
             else:
-                print('Upcoming jobs:')
-            for job in jobs:
-                if job.exec_file == current_job:
-                    continue
-                interval = (job.next_run_time - now)
-                past = interval < 0
-                if past:
-                    interval = -interval
-                hours = int(interval // 60**2)
-                minutes = int(interval % 60**2 // 60)
-                seconds = int(interval % 60)
-                timediff = ''
-                if hours:
-                    timediff += str(hours) + 'h '
-                if hours or minutes:
-                    timediff += str(minutes) + 'm '
-                timediff += str(seconds) + 's'
-                if past:
-                    blurb = 'scheduled for {} ago'.format(timediff)
-                else:
-                    blurb = 'scheduled in {}'.format(timediff)
+                non_queued_jobs.append(job)
+        now = time.time()
+        if current_job and not upcoming_jobs:
+            print('No other upcoming jobs.')
+        elif not upcoming_jobs:
+            print('No upcoming jobs.')
+        else:
+            print('Upcoming jobs:')
+            for job in upcoming_jobs:
+                blurb = self._format_job_blurb(now, job)
                 print('{}: {} (status: {})'.format(blurb, job.exec_file, job.status))
+        if non_queued_jobs:
+            print('Jobs not queued:')
+            for job in non_queued_jobs:
+                blurb = self._format_job_blurb(now, job)
+                print('{}: {} (status: {})'.format(blurb, job.exec_file, job.status))
+
+    def _format_job_blurb(self, now, job):
+        if job.next_run_time is None:
+             return 'no additional runs scheduled'
+        interval = (job.next_run_time - now)
+        past = interval < 0
+        if past:
+            interval = -interval
+        hours = int(interval // 60**2)
+        minutes = int(interval % 60**2 // 60)
+        seconds = int(interval % 60)
+        timediff = ''
+        if hours:
+            timediff += str(hours) + 'h '
+        if hours or minutes:
+            timediff += str(minutes) + 'm '
+        timediff += str(seconds) + 's'
+        if past:
+            return 'scheduled for {} ago'.format(timediff)
+        else:
+            return 'scheduled in {}'.format(timediff)
+
 
     def start(self, log_dir, verbose):
         super().start(log_dir, verbose, SIGINT=self.sigint_handler, SIGHUP=self.sighup_handler)
@@ -159,6 +182,7 @@ class JobRunner(base_daemon.Runner):
 
     def initialize_daemon(self):
         self.jobs.update_job_lock()
+        self.current_job.clear()
 
     def run_daemon(self):
         """Main loop: get a job to run and run it, or sleep until the next run
@@ -176,8 +200,10 @@ class JobRunner(base_daemon.Runner):
             if job:
                 # Run a job if there was one
                 self.current_job.set(job)
-                self._run_job(job)
-                self.current_job.clear()
+                try:
+                    self._run_job(job)
+                finally:
+                    self.current_job.clear()
             else:
                 # if we're out of jobs, sleep for a while
                 self.asleep = True
@@ -299,7 +325,7 @@ class _JobList:
         """Write Job tuples as json to self.backing_file."""
         job_list = [[str(exec_file)] + rest for exec_file, *rest in jobs.values()]
         with self.jobs_lock, self.backing_file.open('w') as bf:
-            json.dump(job_list, bf)
+            json_encode.encode_legible_to_file(job_list, bf)
 
     def remove(self, exec_file):
         """Remove the job specified by exec_file from the list."""
