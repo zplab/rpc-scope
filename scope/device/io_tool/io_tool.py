@@ -36,7 +36,7 @@ class IOTool:
     case the microcontroller is used to drive and time TTL/PWM signals to various
     microscope hardware."""
     def __init__(self):
-        config = scope_configuration.get_config()
+        self._config = scope_configuration.get_config()
         try:
             self.reset()
         except (smart_serial.SerialTimeout, RuntimeError):
@@ -50,10 +50,10 @@ class IOTool:
         """Attempt to reset the IOTool device to a known-good state."""
         if hasattr(self, '_serial_port'):
             del self._serial_port
-        self._serial_port = smart_serial.Serial(config.IOTool.SERIAL_PORT, timeout=1)
+        self._serial_port = smart_serial.Serial(self._config.IOTool.SERIAL_PORT, timeout=1)
         self._serial_port.write(b'!\nreset\n')
         time.sleep(0.5) # give it time to reboot
-        self._serial_port = smart_serial.Serial(config.IOTool.SERIAL_PORT, timeout=1)
+        self._serial_port = smart_serial.Serial(self._config.IOTool.SERIAL_PORT, timeout=1)
         self._serial_port.write(_ECHO_OFF + b'\n') # disable echo
         echo_reply = self._wait_for_ready_prompt()
         assert echo_reply == _ECHO_OFF + b'\r\n' # read back echo of above (no further echoes will come)

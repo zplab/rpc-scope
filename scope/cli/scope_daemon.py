@@ -110,7 +110,7 @@ def main(argv):
             with open(server_args, 'r') as f:
                 server_args = json.load(f)
             args.public = server_args['public']
-            args.verbose = server_args['verbose'])
+            args.verbose = server_args['verbose']
         elif args.command == 'start':
             with open(server_args, 'w') as f:
                 json_encode.encode_legible_to_file(dict(public=args.public, verbose=args.verbose), f)

@@ -72,7 +72,7 @@ def main(argv):
                 runner.terminate()
             else:
                 runner.stop()
-        else args.command:
+        else:
             arg_dict = dict(vars(args))
             del arg_dict['command']
             del arg_dict['debug']
