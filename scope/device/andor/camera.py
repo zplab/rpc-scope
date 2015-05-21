@@ -355,7 +355,7 @@ class Camera(property_device.PropertyDevice):
         frame_rate = lowlevel.GetFloat('FrameRate')
         # in Andor SDK as of 2015-03-11, some frame rates are mis-calculated. Fix this up:
         if self.get_trigger_mode() == 'Software' and self.get_exposure_time() < self.get_readout_time():
-            frame_rate *= 2 # calculated frame rate needs to be doubled in this mode
+            frame_rate /= 2 # calculated frame rate is off by a factor of two in this mode
         return frame_rate
 
     def set_sensor_gain(self, value):
@@ -385,7 +385,6 @@ class Camera(property_device.PropertyDevice):
         return value - getattr(self, 'get_'+key)()
 
     def set_aoi(self, aoi_dict):
-        assert set(aoi_dict.keys()).issubset({'aoi_left', 'aoi_top', 'aoi_width', 'aoi_height'})
         # Although this property gives the appearence of setting multiple AOI parameters simultaneously,
         # each parameter is actually sent to the layer beneath us one at a time, and it is never permitted
         # to (even temporarily) specify an illegal AOI.
@@ -397,14 +396,19 @@ class Camera(property_device.PropertyDevice):
         # Performing AOI updates in ascending order of signed parameter value change ensures that setting
         # a collection of AOI parameters that are together legal does not require transitioning through
         # an illegal state.
-        aoi_list = [(key, value) for key, value in aoi_dict.items() if value is not None]
-        for key, value in sorted(aoi_list, key = self._delta_sort_key):
-            with self._live_guarded():
+        with self._live_guarded():
+            for key, value in sorted(aoi_dict.items(), key=self._delta_sort_key):
                 getattr(self, 'set_' + key)(value)
 
     def full_aoi(self):
         """Set the AOI to full frame"""
-        self._set_aoi({'aoi_height': 2160, 'aoi_left': 1, 'aoi_top': 1, 'aoi_width': 2560})
+        # set AOI in steps. First, set the top and left to the origin. This way,
+        # queries to get_aoi_[width|height]_range will return the maximum possible size.
+        # Otherwise, they will only return the valid range given the current left/top position.
+        self.set_aoi_left(1)
+        self.set_aoi_top(1)
+        self.set_aoi_width(self.get_aoi_width_range()[1])
+        self.set_aoi_height(self.get_aoi_height_range()[1])
 
     def get_safe_image_count_to_queue(self):
         """Return the maximum number of images that can be safely left on the camera head
