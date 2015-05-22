@@ -159,7 +159,7 @@ class SpectraX(property_device.PropertyDevice):
     def _get_lamp_and_prop(self, lamp_prop):
         """Split a 'lamp_property' style string into a lamp and property value,
         validating each."""
-        lamp, prop = lamp_prop.split('_')
+        lamp, prop = lamp_prop.rsplit('_', 1)
         if lamp not in LAMP_SPECS:
             raise ValueError('Invalid lamp name')
         if prop not in {'intensity', 'enabled'}:
