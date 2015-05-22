@@ -124,6 +124,14 @@ class IOTool:
     def stop(self):
         """Force-terminate a running program or single-command execution on the
         IOTool device, and wait to confirm that it actually stops."""
-        self._serial_port.write(b'!')
+        # if a command is running, the below will generate two ready prompts:
+        # one from breaking out with '!' and one from the newline.
+        # If no command is running, this will generate an error due to the
+        # out-of-place '!', and then a ready prompt.
+        self._serial_port.write(b'!\n')
         self._wait_for_ready_prompt()
-
+        # wait a bit to see if a second prompt is going to appear,
+        # and then clear the buffer. If
+        time.sleep(0.1)
+        buffered = self._serial_port.read_all_buffered()
+        assert buffered in {b'', b'>'} # we should have either gotten nothing or the second ready prompt
