@@ -331,6 +331,11 @@ class Camera(property_device.PropertyDevice):
             current_short = current_exposure_ms < read_time_ms
             new_short = ms < read_time_ms
             must_pause_live = current_short != new_short
+            # TODO: After new SDK release, check if this is fixed.
+            # in Andor SDK as of 2015-03-11, fast exposure switching with short exposures
+            # and rolling shutter fails. Fix this up:
+            if self.get_shutter_mode() == 'Rolling' and current_short and new_short:
+                must_pause_live = True
             if must_pause_live:
                 self.set_live_mode(False)
         lowlevel.SetFloat('ExposureTime', ms / 1000)
@@ -353,6 +358,7 @@ class Camera(property_device.PropertyDevice):
     def get_frame_rate(self):
         """Return the frame rate in Hz for the current camera configuration."""
         frame_rate = lowlevel.GetFloat('FrameRate')
+        # TODO: After new SDK release, check if this is fixed.
         # in Andor SDK as of 2015-03-11, some frame rates are mis-calculated. Fix this up:
         if self.get_trigger_mode() == 'Software' and self.get_exposure_time() < self.get_readout_time():
             frame_rate /= 2 # calculated frame rate is off by a factor of two in this mode
