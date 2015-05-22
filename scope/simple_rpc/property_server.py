@@ -116,6 +116,12 @@ class ZMQServer(PropertyServer):
         self.socket.bind(port)
         super().__init__()
 
+    def run(self):
+        try:
+            super().run()
+        finally:
+            self.socket.close()
+
     def _publish_update(self, property_name, value):
         # dump json first to catch "not serializable" errors before sending the first part of a two-part message
         json = json_encode.encode_compact_to_bytes(value)

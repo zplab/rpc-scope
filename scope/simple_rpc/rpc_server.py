@@ -175,6 +175,12 @@ class ZMQServer(RPCServer):
         self.socket = self.context.socket(zmq.REP)
         self.socket.bind(port)
 
+    def run(self):
+        try:
+            super().run()
+        finally:
+            self.socket.close()
+
     def _receive(self):
         json = self.socket.recv()
         try:
@@ -236,6 +242,12 @@ class ZMQInterrupter(Interrupter):
         self.socket = self.context.socket(zmq.PULL)
         self.socket.bind(port)
         super().__init__()
+
+    def run(self):
+        try:
+            super().run()
+        finally:
+            self.socket.close()
 
     def _receive(self):
         return str(self.socket.recv(), encoding='ascii')

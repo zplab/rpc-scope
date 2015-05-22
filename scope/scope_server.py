@@ -37,19 +37,22 @@ class ScopeServer:
         rpc_addr = scope_configuration.rpc_addr(host)
         interrupt_addr = scope_configuration.interrupt_addr(host)
         property_addr = scope_configuration.property_addr(host)
-        context = zmq.Context()
+        self.context = zmq.Context()
 
-        property_update_server = property_server.ZMQServer(property_addr, context=context)
+        property_update_server = property_server.ZMQServer(property_addr, context=self.context)
 
         scope_controller = scope.Scope(property_update_server)
         # add transfer_ism_buffer as hidden elements of the namespace, which RPC clients can use for seamless buffer sharing
         scope_controller._transfer_ism_buffer = transfer_ism_buffer
 
-        interrupter = rpc_server.ZMQInterrupter(interrupt_addr, context=context)
-        self.scope_server = rpc_server.ZMQServer(scope_controller, interrupter, rpc_addr, context=context)
+        interrupter = rpc_server.ZMQInterrupter(interrupt_addr, context=self.context)
+        self.scope_server = rpc_server.ZMQServer(scope_controller, interrupter, rpc_addr, context=self.context)
 
     def run(self):
-        self.scope_server.run()
+        try:
+            self.scope_server.run()
+        finally:
+            self.context.term()
 
 def simple_server_main(host, verbose=False):
     logging.set_verbose(verbose)

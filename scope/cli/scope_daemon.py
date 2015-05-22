@@ -33,6 +33,8 @@ class ScopeServerRunner(base_daemon.Runner):
             print('')
             if not client_tester.connected:
                 raise RuntimeError('Could not communicate with microscope server')
+            else:
+                print('Microscope server is responding to new connections.')
         else:
             print('Microscope server is NOT running.')
 
@@ -40,7 +42,7 @@ class ScopeServerRunner(base_daemon.Runner):
         if force:
             self.kill() # send SIGKILL -- immeiate exit
         else:
-            self.stop() # send SIGTERM -- allow for cleanup
+            self.terminate() # send SIGTERM -- allow for cleanup
 
         print('Waiting for server to terminate', end='', flush=True)
         terminated = False
@@ -64,7 +66,7 @@ class ScopeServerRunner(base_daemon.Runner):
 class ScopeClientTester(threading.Thread):
     def __init__(self):
         self.connected = False
-        super.__init__(self, daemon=True)
+        super().__init__(daemon=True)
         self.start()
 
     def run(self):
@@ -95,6 +97,7 @@ def main(argv):
     parser_stop = subparsers.add_parser('stop', help='stop the microscope server, if running')
     parser_stop.add_argument('-f', '--force', action='store_true', help='forcibly kill the server process')
     parser_restart = subparsers.add_parser('restart', help='restart the microscope server, if running')
+    parser_restart.add_argument('-f', '--force', action='store_true', help='forcibly kill the server process')
     parser_status = subparsers.add_parser('status', help='report whether the microscope server is running')
     args = parser.parse_args()
 
@@ -103,18 +106,16 @@ def main(argv):
         server_args = os.path.join(log_dir, 'server_options.json')
         if args.command == 'status':
             runner.status()
-        elif args.command == 'stop':
+        if args.command in {'stop', 'restart'}:
             runner.stop(args.force)
-        elif args.command == 'restart':
-            runner.stop()
+        if args.command == 'restart':
             with open(server_args, 'r') as f:
                 server_args = json.load(f)
             args.public = server_args['public']
             args.verbose = server_args['verbose']
-        elif args.command == 'start':
+        if args.command == 'start':
             with open(server_args, 'w') as f:
                 json_encode.encode_legible_to_file(dict(public=args.public, verbose=args.verbose), f)
-
         if args.command in {'start', 'restart'}:
             runner.server_host = config.Server.PUBLICHOST if args.public else config.Server.LOCALHOST
             runner.start(log_dir, args.verbose)
