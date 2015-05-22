@@ -148,7 +148,7 @@ class SpectraX(property_device.PropertyDevice):
         retrieved with get_lamp_specs().
         """
         for lamp_prop, value in lamp_parameters.items():
-            lamp, prop = _get_lamp_and_prop(lamp_prop)
+            lamp, prop = self._get_lamp_and_prop(lamp_prop)
             if prop == 'intensity':
                 self._lamp_intensity(lamp, value)
             else:
@@ -173,7 +173,7 @@ class SpectraX(property_device.PropertyDevice):
         push_state/pop_state pairs can be nested arbitrarily."""
         old_state = {}
         for lamp_prop in lamp_parameters.keys():
-            lamp, prop = _get_lamp_and_prop(lamp_prop)
+            lamp, prop = self._get_lamp_and_prop(lamp_prop)
             if prop == 'intensity':
                 old_state[lamp_prop] = self._lamp_intensities[lamp]
             else:

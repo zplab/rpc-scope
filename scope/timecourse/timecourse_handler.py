@@ -54,8 +54,15 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     The subclass MUST set the FILTER_CUBE attribute. In addition, if
     fluorescent flat-field images are desired the subclass MAY set
     FLUORESCENCE_FLATFIELD_LAMP to the name of a spectra X lamp that is
-    compatible with the selected filter cube. Other class attributes MAY be set
-    as desired; RUN_INTERVAL_MINUTES is of particular note.
+    compatible with the selected filter cube.
+
+    The subclass MUST override the get_next_run_interval() method to return
+    the desired time interval between the beginning of the current run and
+    the beginning of the next. To control the interpretation of this interval,
+    the subclass MAY set the INTERVAL_MODE attribute to one of 'scheduled
+    start', 'actual start', 'end'. This selects what the starting time for the
+    interval before the next run should be: when the job was scheduled to start,
+    when it actually started, or when the job ends, respectively.
 
     The subclass MAY override configure_additional_acquisition_steps() to
     add additional image acquisitions (after the initial default brightfield
@@ -68,7 +75,6 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     # First: Really important attributes to override
     FILTER_CUBE = 'Choose a filter cube!'
     FLUORESCENCE_FLATFIELD_LAMP = None # MAKE SURE THIS IS COMPATIBLE WITH THE FILTER CUBE!!!
-    RUN_INTERVAL_MINUTES = 60*8
 
     # Next: Potentially useful attributes to override
     OBJECTIVE = 10
@@ -80,6 +86,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     FINE_FOCUS_STEPS = 75
     PIXEL_READOUT_RATE = '100 MHz'
     USE_LAST_FOCUS_POSITION = True
+    INTERVAL_MODE = 'scheduled start'
 
     def configure_additional_acquisition_steps(self):
         """Add more steps to the acquisition_sequencer's sequence as desired,
@@ -92,6 +99,38 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
                 self.image_names.append('gfp.png')
         """
         pass
+
+    def get_next_run_interval(self, experiment_hours):
+        """Return the delay interval, in hours, before the experiment should be
+        run again.
+
+        The interval will be interpreted according to the INTERVAL_MODE attribute,
+        as described in the class documentation. Returning None indicates that
+        timepoints should not be acquired again.
+
+        Parameters:
+            experiment_hours: number of hours between the start of the first
+                timepoint and the start of this timepoint.
+        """
+        raise NotImplementedError()
+
+    def should_skip(self, position_dir, position_metadata, images):
+        """Return whether this position should be skipped for future timepoints.
+
+        Parameters:
+            position_dir: pathlib.Path object representing the directory where
+                position-specific data files and outputs are written. Useful for
+                reading previous image data.
+            position_metadata: list of all the stored position metadata from the
+                previous timepoints, in chronological order.
+            images: list of images acquired at this timepoint.
+
+        Returns: True if the position should be skipped in future runs, False
+            if not.
+        """
+        # TODO: determine appropriate thresholds for deciding if a worm is dead...
+        return False
+
 
     # Internal implementation functions are below. Override with care.
     def configure_timepoint(self):
@@ -121,7 +160,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
                 self.dark_corrector, frames_to_average=2)
         vignette_mask = calibrate.get_vignette_mask(bf_avg)
         bf_flatfield = calibrate.get_flat_field(bf_avg, vignette_mask)
-        cal_image_names = ['vignette_mask.png', 'bf_flatfield.tif']
+        cal_image_names = ['vignette_mask.png', 'bf_flatfield.tiff']
         cal_images = [vignette_mask.astype(numpy.uint8)*255, bf_flatfield]
 
         if self.FLUORESCENCE_FLATFIELD_LAMP:
@@ -132,7 +171,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
                 fl_avg = calibrate.get_averaged_images(self.scope, ref_positions,
                     self.dark_corrector, frames_to_average=5)
             fl_flatfield = calibrate.get_flat_field(fl_avg, vignette_mask)
-            cal_image_names.append('fl_flatfield.tif')
+            cal_image_names.append('fl_flatfield.tiff')
             cal_images.append(fl_flatfield)
 
         # go to a data-acquisition position and figure out the right brightfield exposure
@@ -150,13 +189,26 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         metering = self.experiment_metadata.setdefault('brightfield metering', {})
         metering[self.timepoint_prefix] = dict(exposure=self.bf_exposure, intensity=self.tl_intensity)
 
-
-    def acquire_images(self, position_name, position_dir, timepoint_prefix, previous_timepoints, previous_metadata):
-        if self.USE_LAST_FOCUS_POSITION and previous_metadata:
-            z_start = previous_metadata[-1]['fine_z']
+    def get_next_run_time(self):
+        assert self.INTERVAL_MODE in {'scheduled start', 'actual start', 'end'}
+        timestamps = self.experiment_metadata['timestamps']
+        elapsed_sec = timestamps[-1] - timestamps[0]
+        interval_hours = self.get_next_run_interval(elapsed_sec / (60 * 60))
+        if interval is None:
+            return None
+        if interval_mode == 'scheduled start':
+            start = self.scheduled_start
+        elif interval_mode == 'actual start':
+            start = self.start_time
         else:
-            x, y, z = self.positions[position_name]
-            z_start = z
+            start = self.end_time
+        return start + interval_hours * 60 * 60
+
+    def acquire_images(self, position_name, position_dir, position_metadata):
+        if self.USE_LAST_FOCUS_POSITION and position_metadata:
+            z_start = position_metadata[-1]['fine_z']
+        else:
+            z_start = self.positions[position_name][2]
         z_max = self.experiment_metadata['z_max']
         coarse_z, fine_z = autofocus.autofocus(self.scope, z_start, z_max,
             self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
@@ -169,11 +221,12 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         timestamps = numpy.array(self.scope.camera.acquisition_sequencer.latest_timestamps)
         timestamps = (timestamps - timestamps[0]) / self.scope.camera.timestamp_hz
         metadata = dict(coarse_z=coarse_z, fine_z=fine_z, image_timestamps=dict(zip(self.image_names, timestamps)))
+        if self.should_skip(position_dir, position_metadata, images):
+            self.skip_positions.append(position_name)
         return images, self.image_names, metadata
 
     @classmethod
     def main(cls):
         data_dir = pathlib.Path(inspect.getfile(cls)).parent
         handler = cls(data_dir)
-        base_handler.main(timepoint_function=handler.run_timepoint,
-            next_run_interval=cls.RUN_INTERVAL_MINUTES*60, interval_mode='scheduled_start')
+        base_handler.main(handler.run_timepoint)

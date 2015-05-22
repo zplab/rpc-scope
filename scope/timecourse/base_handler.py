@@ -32,7 +32,7 @@ from ..util import json_encode
 from ..util import threaded_image_io
 from ..util import log_util
 
-def main(timepoint_function, next_run_interval, interval_mode='scheduled_start'):
+def main(timepoint_function):
     """Main function designed to interact with the job running daemon, which
     starts a process with the timestamp of the scheduled start time as the first
     argument, and expects stdout to contain the timestamp of the next scheduled
@@ -41,28 +41,16 @@ def main(timepoint_function, next_run_interval, interval_mode='scheduled_start')
     Parameters:
         timepoint_function: function to call to do whatever the job is supposed
             to do during its invocation. Usually it will be the run_timepoint
-            method of a TimepointHandler subclass. If this function does not return
-            True, the job will not be scheduled again.
-        next_run_interval: in how many seconds should the job runner run this
-            job again. (The beginning point of the interval is controlled by
-            the 'interval_mode' parameter).
-        interval_mode: one of 'scheduled_start', 'actual_start', 'end'. Selects
-            what the starting time for the delay before the next run should be:
-            when the job was scheduled to start, when it actually started,
-            or when the job ends, respectively."""
-    assert interval_mode in {'scheduled_start', 'actual_start', 'end'}
+            method of a TimepointHandler subclass. The function must return
+            the number of seconds the job-runner should wait before running
+            the job again. If None is returned, then the job will not be re-run.
+            The scheduled starting timestamp will be passed to timepoint_function
+            as a parameter.
+    """
     scheduled_start = sys.argv[1]
-    actual_start = time.time()
-    run_again = timepoint_function()
-    if run_again:
-        end = time.time()
-        if interval_mode == 'scheduled_start':
-            start = float(scheduled_start)
-        elif interval_mode == 'actual_start':
-            start = actual_start
-        else:
-            start = end
-        print(start+next_run_interval)
+    next_run_time = timepoint_function(scheduled_start)
+    if next_run_time:
+        print(next_run_time)
 
 class TimepointHandler:
     def __init__(self, data_dir, io_threads=4, loglevel=logging.INFO, scope_host='127.0.0.1'):
@@ -94,23 +82,29 @@ class TimepointHandler:
         handler.setFormatter(log_util.get_formatter())
         self.logger.addHandler(handler)
 
-    def run_timepoint(self):
-        self.logger.info('Starting timepoint')
+    def run_timepoint(self, scheduled_start):
         self.timepoint_prefix = time.strftime('%Y-%m-%dt%H%M')
+        self.scheduled_start = scheduled_start
+        self.start_time = time.time()
+        self.logger.info('Starting timepoint {} ({:.0f} minutes after scheduled)'.format(self.timepoint_prefix,
+            (self.start_time-self.scheduled_start)/60))
+        # record the timepoint prefix and timestamp for this timepoint into the
+        # experiment metadata
+        self.experiment_metadata.setdefault('timepoints', []).append(self.timepoint_prefix)
+        self.experiment_metadata.setdefault('timestamps', []).append(self.start_time)
         self.configure_timepoint()
         for position_name, position_coords in sorted(self.positions.items()):
             if position_name not in self.skip_positions:
                 self.run_position(position_name, position_coords)
         self.experiment_metadata['skip_positions'] = list(self.skip_positions)
         self.finalize_timepoint()
+        self.end_time = time.time()
+        self.experiment_metadata.setdefault('durations', []).append(self.end_time - self.start_time)
         with self.experiment_metadata_path.open('w') as f:
             self.experiment_metadata = json_encode.encode_legible_to_file(self.experiment_metadata, f)
-        if self.skip_positions == self.positions.keys():
-            # all positions are being skipped. Return False to tell the caller
-            # that this job should not be re-scheduled.
-            return False
-        else:
-            return True
+        run_again = self.skip_positions != self.positions.keys() # don't run again if we're skipping all the positions
+        if run_again:
+            return self.get_next_run_time()
 
     def configure_timepoint(self):
         """Override this method with global configuration for the image acquisitions
@@ -128,6 +122,11 @@ class TimepointHandler:
         """
         pass
 
+    def get_next_run_time(self):
+        """Override this method to return when the next timepoint run should be
+        scheduled. Returning None means no future runs will be scheduled."""
+        return None
+
     def run_position(self, position_name, position_coords):
         """Do everything required for taking a timepoint at a single position
         EXCEPT focusing / image acquisition. This includes moving the stage to
@@ -142,26 +141,23 @@ class TimepointHandler:
             with metadata_path.open('r') as f:
                 position_metadata = json.load(f)
         else:
-            position_metadata = {'timepoints':[], 'values':[]}
+            position_metadata = []
         timestamp = time.time()
 
         if self.scope is not None:
             self.scope.stage.position = position_coords
-        previous_timepoints = position_metadata['timepoints']
-        previous_metadata = position_metadata['values']
         images, image_names, new_metadata = self.acquire_images(position_name, position_dir,
-            previous_timepoints, previous_metadata)
+            position_metadata)
         image_paths = [position_dir / (self.timepoint_prefix + ' ' + name) for name in image_names]
         self.image_io.write(images, image_paths)
         if new_metadata is None:
             new_metadata = {}
         new_metadata['timestamp'] = timestamp
-        position_metadata['timepoints'].append(self.timepoint_prefix)
-        position_metadata['values'].append(new_metadata)
+        position_metadata.append(new_metadata)
         with metadata_path.open('w') as f:
              json_encode.encode_legible_to_file(position_metadata, f)
 
-    def acquire_images(self, position_name, position_dir, previous_timepoints, previous_metadata):
+    def acquire_images(self, position_name, position_dir, position_metadata):
         """Override this method in a subclass to define the image-acquisition sequence.
 
         All most subclasses will need to do is return the following as a tuple:
@@ -188,14 +184,12 @@ class TimepointHandler:
                 position-specific data files and outputs should be written. Useful
                 only if additional data needs to be read in or out during
                 acquisition. (E.g. a background model or similar.)
-            previous_timepoints: list of all the prior 'timepoint_prefix' values
-                for this position, in chronological order.
-            previous_metadata: list of all the stored position metadata from the
+            position_metadata: list of all the stored position metadata from the
                 previous timepoints, in chronological order. In particular, this
                 dictionary is guaranteed to contain 'timestamp' which is the
                 time.time() at which that acquisition was started. Other values
                 (such as the latest focal plane) stored by previous acquisition
                 runs will also be available. The most recent metadata will be in
-                previous_metadata[-1].
+                position_metadata[-1].
         """
         raise NotImplementedError()
