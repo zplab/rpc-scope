@@ -1,6 +1,4 @@
 import argparse
-import os
-import signal
 import os.path
 import sys
 import time
@@ -51,13 +49,13 @@ class ScopeServerRunner(base_daemon.Runner):
         print('(Waiting for server to terminate', end='', flush=True)
         terminated = False
         for i in range(40):
-            if _is_valid_pid(pid):
+            if base_daemon.is_valid_pid(pid):
                 print('.', end='', flush=True)
                 time.sleep(0.5)
             else:
                 break
         print(')')
-        if _is_valid_pid(pid):
+        if base_daemon.is_valid_pid(pid):
             raise RuntimeError('Could not terminate microscope server')
         else:
             print('Microscope server is stopped.')
@@ -67,16 +65,6 @@ class ScopeServerRunner(base_daemon.Runner):
 
     def run_daemon(self):
         self.server.run()
-
-def _is_valid_pid(pid):
-    try:
-        os.kill(pid, signal.SIG_DFL)
-        return True
-    except OSError as exc:
-        if exc.errno == errno.ESRCH:
-            # The specified PID does not exist
-            return False
-
 
 class ScopeClientTester(threading.Thread):
     def __init__(self):

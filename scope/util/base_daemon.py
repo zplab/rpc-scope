@@ -25,6 +25,7 @@
 import os
 import os.path
 import signal
+import errno
 import sys
 import shutil
 
@@ -142,6 +143,14 @@ class Runner:
         """Send SIGKILL to the daemon: a non-handle-able forcible exit."""
         self.signal(signal.SIGKILL)
 
+def is_valid_pid(pid):
+    try:
+        os.kill(pid, signal.SIG_DFL)
+        return True
+    except OSError as exc:
+        if exc.errno == errno.ESRCH:
+            # The specified PID does not exist
+            return False
 
 def detach_process_context():
     """Detach the process context from parent and session.
