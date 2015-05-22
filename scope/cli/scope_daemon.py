@@ -1,4 +1,6 @@
 import argparse
+import os
+import signal
 import os.path
 import sys
 import time
@@ -23,14 +25,14 @@ class ScopeServerRunner(base_daemon.Runner):
         if is_running:
             print('Microscope server is running (PID {}).'.format(self.get_pid()))
             client_tester = ScopeClientTester()
-            print('Establishing connection to scope server', end='', flush=True)
+            print('(Establishing connection to scope server', end='', flush=True)
             for i in range(40):
                 if client_tester.connected:
                     break
                 else:
                     print('.', end='', flush=True)
                     time.sleep(0.5)
-            print('')
+            print(')')
             if not client_tester.connected:
                 raise RuntimeError('Could not communicate with microscope server')
             else:
@@ -39,29 +41,42 @@ class ScopeServerRunner(base_daemon.Runner):
             print('Microscope server is NOT running.')
 
     def stop(self, force=False):
+        self.assert_daemon()
+        pid = self.get_pid()
         if force:
             self.kill() # send SIGKILL -- immeiate exit
         else:
             self.terminate() # send SIGTERM -- allow for cleanup
 
-        print('Waiting for server to terminate', end='', flush=True)
+        print('(Waiting for server to terminate', end='', flush=True)
         terminated = False
         for i in range(40):
-            if self.is_running():
+            if _is_valid_pid(pid):
                 print('.', end='', flush=True)
-                time.sleep(0.1)
+                time.sleep(0.5)
             else:
                 break
-        print('')
-        if self.is_running():
+        print(')')
+        if _is_valid_pid(pid):
             raise RuntimeError('Could not terminate microscope server')
-
+        else:
+            print('Microscope server is stopped.')
     def initialize_daemon(self):
         self.server = scope_server.ScopeServer(self.server_host)
         logger.info('Scope Server Ready (Listening on {})', self.server_host)
 
     def run_daemon(self):
         self.server.run()
+
+def _is_valid_pid(pid):
+    try:
+        os.kill(pid, signal.SIG_DFL)
+        return True
+    except OSError as exc:
+        if exc.errno == errno.ESRCH:
+            # The specified PID does not exist
+            return False
+
 
 class ScopeClientTester(threading.Thread):
     def __init__(self):
