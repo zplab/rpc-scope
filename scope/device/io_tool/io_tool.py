@@ -64,9 +64,9 @@ class IOTool:
         self._assert_empty_buffer()
         responses = []
         for command in commands:
-            self._serial_port.write(bytes(command+'\n', encoding='ascii'))
+            self._serial_port.write((command+'\n').encode('ascii'))
             response = self.wait_until_done() # see if there was any output
-            responses.append(str(response, encoding='ascii') if response else None)
+            responses.append(response if response else None)
         if len(commands) == 1:
             responses = responses[0]
         self._assert_empty_buffer()
@@ -76,7 +76,7 @@ class IOTool:
         """Verify that there is no IOTool output that should have been read previously."""
         buffered = self._serial_port.read_all_buffered()
         if buffered:
-            raise RuntimeError('Unexpected IOTool output: {}'.format(str(buffered, encoding='ascii')))
+            raise RuntimeError('Unexpected IOTool output: {}'.format(buffered.decode('ascii')))
 
     def store_program(self, *commands):
         """Send a list of commands to IOTool to run as a program, but do not
@@ -116,7 +116,7 @@ class IOTool:
         that program. A keyboard interrupt while waiting will force-terminate
         the program/command on the IOTool device, via stop()"""
         try:
-            return self._wait_for_ready_prompt()
+            return self._wait_for_ready_prompt().decode('ascii')
         except KeyboardInterrupt as k:
             self.stop()
             raise k

@@ -34,6 +34,7 @@ class AcquisitionSequencer:
         self._spectra_x = spectra_x
         self._config = scope_configuration.get_config()
         self._latest_timestamps = None
+        self._exposures = None
         self._compiled = False
         self._num_acquisitions = 0
 
@@ -90,6 +91,7 @@ class AcquisitionSequencer:
         Note that the camera will be exposing during this delay, though no lights will be on."""
         assert 0 < delay < 2**16
         self._steps.append(self._io_tool.commands.delay_ms(int(delay)))
+        self._exposures[-1] += delay
 
     def add_delay_us(self, delay):
         """Add a delay of the given number of microseconds (uo to 2**16) to the acquisition).
@@ -100,6 +102,7 @@ class AcquisitionSequencer:
         if delay < 4:
             delay = 4
         self._steps.append(self._io_tool.commands.delay_us(int(delay)-4)) # delay command itself takes 4 us, so subtract off 4
+        self._exposures[-1] += delay / 1000
 
     def add_step(self, exposure_ms, tl_enable=None, tl_intensity=None, lamp_off_delay=None, **spectra_x_lamps):
         """Add an image acquisition step to the existing sequence.
@@ -115,12 +118,9 @@ class AcquisitionSequencer:
         """
         self._compiled = False
         self._num_acquisitions += 1
-        self._exposures.append(exposure_ms)
+        self._exposures.append(0) # the actual exposure time gets added in by the add_delay functions
         lamps = {lamp:True for lamp, value in spectra_x_lamps.items() if value}
         self._steps.append(self._io_tool.commands.wait_high(self._config.IOTool.CAMERA_PINS['arm']))
-        if self._num_acquisitions > 1:
-            self._steps.append(self._io_tool.commands.timer_end())
-        self._steps.append(self._io_tool.commands.timer_begin())
         self._steps.append(self._io_tool.commands.set_high(self._config.IOTool.CAMERA_PINS['trigger']))
         self._steps.append(self._io_tool.commands.set_low(self._config.IOTool.CAMERA_PINS['trigger']))
         self._steps.append(self._io_tool.commands.wait_high(self._config.IOTool.CAMERA_PINS['aux_out1'])) # set to 'FireAll'
@@ -135,7 +135,6 @@ class AcquisitionSequencer:
         self._steps.extend(self._io_tool.commands.spectra_x_lamps(**{lamp:False for lamp in lamps})) # turn lamps back off
         if lamp_off_delay:
             self.add_delay_us(lamp_off_delay)
-            self._exposures[-1] += lamp_off_delay / 1000
 
     def _compile(self):
         """Send the acquisition sequence to the IOTool box"""
@@ -143,7 +142,6 @@ class AcquisitionSequencer:
         # send one last trigger to end the final acquisition
         steps = list(self._steps)
         steps.append(self._io_tool.commands.wait_high(self._config.IOTool.CAMERA_PINS['arm']))
-        self._steps.append(self._io_tool.commands.timer_end())
         steps.append(self._io_tool.commands.set_high(self._config.IOTool.CAMERA_PINS['trigger']))
         steps.append(self._io_tool.commands.set_low(self._config.IOTool.CAMERA_PINS['trigger']))
 
@@ -166,16 +164,18 @@ class AcquisitionSequencer:
             for exposure in self._exposures:
                 names.append(self._camera.next_image(read_timeout_ms=exposure+1000))
                 self._latest_timestamps.append(self._camera.get_latest_timestamp())
-            timer_output = self._io_tool.wait_until_done()
+            self._io_tool.wait_until_done()
             self._camera.end_image_sequence_acquisition()
-        self._timer_output_ms = [int(timer_us)/1000 for timer_us in timer_output.split('\n')]
         return names
 
     def get_latest_timestamps(self):
         return self._latest_timestamps
 
     def get_exposure_times(self):
-        return self._exposures
+        """Return the full amount of time the camera was exposing for each image.
+        This is DIFFERENT than the amount of time that the light was on at each step,
+        which is the 'exposure_ms' parameter to add_step.
 
-    def get_measured_exposure_times(self):
-        return self._timer_output_ms
+        These exposure times also include the camera read time and any additional delays
+        added in the middle of the acquisition."""
+        return self._exposures

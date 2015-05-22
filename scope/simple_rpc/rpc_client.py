@@ -215,7 +215,7 @@ def _rich_proxy_function(doc, argspec, name, rpc_client, rpc_function, client_wr
         if not varargs:
             arg_parts.append('*')
         for arg in kwonly:
-            call_parts.append('{}={!r}'.format(arg, arg))
+            call_parts.append('{}={}'.format(arg, arg))
             if arg in kwdefaults:
                 arg_parts.append('{}={!r}'.format(arg, kwdefaults[arg]))
             else:
