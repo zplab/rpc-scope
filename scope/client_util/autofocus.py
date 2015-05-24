@@ -52,6 +52,6 @@ def _autofocus(scope, z_start, z_max, range_mm, steps, speed, **camera_params):
     start = z_start - offset
     end = min(z_start + offset, z_max)
     with state_stack.pushed_state(scope.camera, **camera_params):
-        focus_z, positions_and_scores = scope.camera.autofocus.autofocus_continuous_move(start, end
+        focus_z, positions_and_scores = scope.camera.autofocus.autofocus_continuous_move(start, end,
             steps=steps, max_speed=speed, metric='high pass + brenner', return_images=False)
     return focus_z

@@ -24,6 +24,7 @@
 
 import zmq
 import collections
+import contextlib
 
 class RPCClient:
     """Client for simple remote procedure calls. RPC calls can be dispatched
@@ -101,10 +102,10 @@ class RPCClient:
         client_namespaces = {}
         for parents, function_descriptions in server_namespaces.items():
             # make a custom class to have the right names and more importantly to receive the namespace-specific properties
-            class ClientNamespace:
+            class NewNamespace(RPCClient.ClientNamespace):
                 pass
-            ClientNamespace.__name__ = parents[-1] if parents else 'root'
-            ClientNamespace.__qualname__ = '.'.join(parents) if parents else 'root'
+            NewNamespace.__name__ = parents[-1] if parents else 'root'
+            NewNamespace.__qualname__ = '.'.join(parents) if parents else 'root'
             # create functions and gather property accessors
             accessors = collections.defaultdict(RPCClient._accessor_pair)
             for name, qualname, doc, argspec in function_descriptions:
@@ -119,10 +120,10 @@ class RPCClient:
                 elif name.startswith('set_'):
                     accessors[name[4:]].setter = client_func
                     name = '_'+name
-                setattr(ClientNamespace, name, client_func)
+                setattr(NewNamespace, name, client_func)
             for name, accessor_pair in accessors.items():
-                setattr(ClientNamespace, name, accessor_pair.get_property())
-            client_namespaces[parents] = ClientNamespace()
+                setattr(NewNamespace, name, accessor_pair.get_property())
+            client_namespaces[parents] = NewNamespace()
 
 
         # now assemble these namespaces into the correct hierarchy, fetching intermediate
@@ -151,6 +152,18 @@ class RPCClient:
         def get_property(self):
             # assume one of self.getter or self.setter is set
             return property(self.getter, self.setter, doc=self.getter.__doc__ if self.getter else self.setter.__doc__)
+
+    class ClientNamespace:
+        def __init__(self):
+            self.__attrs_locked = False
+        def _lock_attrs(self):
+            self.__attrs_locked = True
+            for v in self.__dict__.values():
+                if hasattr(v, '_lock_attrs'):
+                    v._lock_attrs()
+        def __setattr__(self, name, value):
+            if self.__attrs_locked and not hasattr(self, name):
+                raise RuntimeError('Attribute {} is not known, so its state cannot be communicated to the server.')
 
 class RPCError(RuntimeError):
     pass

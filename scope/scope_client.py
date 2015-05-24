@@ -61,6 +61,7 @@ def rpc_client_main(host='127.0.0.1', context=None):
     if not is_local:
         scope.camera.set_network_compression = get_data.set_network_compression
     scope._rpc_client = client
+    scope._lock_attrs() # prevent unwary users from setting new attributes that won't get communicated to the server
     return scope
 
 def property_client_main(host='127.0.0.1', context=None):

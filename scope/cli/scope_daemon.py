@@ -13,6 +13,22 @@ from ..util import json_encode
 from ..util import logging
 logger = logging.get_logger(__name__)
 
+def _wait_for_it(wait_condition, message, wait_time=15, output_interval=0.5, sleep_time=0.1):
+    wait_iters = int(wait_time // sleep_time)
+    output_iters = int(output_interval // sleep_time)
+    condition_true = False
+    print('(' + message_start, end='', flush=True)
+    for i in range(wait_iters):
+        condition_true = wait_condition()
+        if condition_true:
+            break
+        if i % output_iters == 0:
+            print('.', end='', flush=True)
+        time.sleep(sleep_time)
+    print(')')
+    return condition_true
+
+
 class ScopeServerRunner(base_daemon.Runner):
     def __init__(self, pidfile_path):
         super().__init__(name='Scope Server', pidfile_path=pidfile_path)
@@ -20,23 +36,16 @@ class ScopeServerRunner(base_daemon.Runner):
     # function is to be run only when not running as a daemon
     def status(self):
         is_running = self.is_running()
-        if is_running:
+        if not is_running:
+            print('Microscope server is NOT running.')
+        else:
             print('Microscope server is running (PID {}).'.format(self.get_pid()))
             client_tester = ScopeClientTester()
-            print('(Establishing connection to scope server', end='', flush=True)
-            for i in range(40):
-                if client_tester.connected:
-                    break
-                else:
-                    print('.', end='', flush=True)
-                    time.sleep(0.5)
-            print(')')
-            if not client_tester.connected:
-                raise RuntimeError('Could not communicate with microscope server')
-            else:
+            connected = lambda: client_tester.connected # wait for connection to be established
+            if _wait_for_it(connected, 'Establishing connection to scope server'):
                 print('Microscope server is responding to new connections.')
-        else:
-            print('Microscope server is NOT running.')
+            else:
+                raise RuntimeError('Could not communicate with microscope server')
 
     def stop(self, force=False):
         self.assert_daemon()
@@ -45,20 +54,12 @@ class ScopeServerRunner(base_daemon.Runner):
             self.kill() # send SIGKILL -- immeiate exit
         else:
             self.terminate() # send SIGTERM -- allow for cleanup
-
-        print('(Waiting for server to terminate', end='', flush=True)
-        terminated = False
-        for i in range(40):
-            if base_daemon.is_valid_pid(pid):
-                print('.', end='', flush=True)
-                time.sleep(0.5)
-            else:
-                break
-        print(')')
-        if base_daemon.is_valid_pid(pid):
-            raise RuntimeError('Could not terminate microscope server')
-        else:
+        exited = lambda: not base_daemon.is_valid_pid(pid) # wait for pid to become invalid (i.e. process no longer is running)
+        if _wait_for_it(exited, 'Waiting for server to terminate'):
             print('Microscope server is stopped.')
+        else:
+            raise RuntimeError('Could not terminate microscope server')
+
     def initialize_daemon(self):
         self.server = scope_server.ScopeServer(self.server_host)
         logger.info('Scope Server Ready (Listening on {})', self.server_host)
