@@ -49,7 +49,7 @@ class DarkCurrentCorrector:
         self.dark_images = []
         with state_stack.pushed_state(scope.il, shutter_open=False), \
              state_stack.pushed_state(scope.tl, shutter_open=False), \
-             state_stack.pushed_state(scopt.tl.lamp.enabled=False):
+             state_stack.pushed_state(scope.tl.lamp, enabled=False):
             for exp in self.exposures:
                 scope.camera.start_image_sequence_acquisition(exposure_time=exp,
                     frame_count=frames_to_average, trigger_mode='Internal')
@@ -183,6 +183,7 @@ def get_averaged_images(scope, positions, dark_corrector, frames_to_average=5):
     Returns: averaged image across frames and positions
     """
     position_images = []
+    exposure_ms = scope.camera.exposure_time
     with state_stack.pushed_state(scope.stage, async=False):
         for position in positions:
             scope.stage.position = position
@@ -210,7 +211,6 @@ def get_flat_field(image, vignette_mask):
         dark_corrector: DarkCurrentCorrector object
         vignette_mask: image mask that is True for regions that are NOT obscured
            by vignetting (the dark areas around the edge of the image).
-        frames_to_average: number of images to take at each position to average
 
     Returns: flat-field correction image. To correct an image, first apply the
         dark-current correction and then multiply by the flat-field correction
