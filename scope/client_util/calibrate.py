@@ -202,22 +202,24 @@ def get_flat_field(image, vignette_mask):
     a "flat-field correction image" that can be used to correct uneven
     illumination.
 
-    The input image should be well-exposed and without any visible features.
-    Ideally an averaged image using get_average_images()
+    The input image should be well-exposed and without any visible features,
+    and should be dark-current corrected. Ideally an averaged image using
+    get_average_images() will be used.
+
+    The returned correction image is used to correct an image as follows. First
+    apply the dark-current correction and then multiply by the flat-field
+    correction image. This yields an image with approximately the same overall
+    mean intensity but corrected for illumination inhomogeneities.
+
+    NB: Areas of the image that are determined to have been vignetted by the
+    vignette_mask parameter will be set to zero in the flat-field image.
 
     Parameters:
-        scope: scope client object
-        positions: list of (x,y,z) stage positions to acquire the flat-field images at
-        dark_corrector: DarkCurrentCorrector object
+        image: input image.
         vignette_mask: image mask that is True for regions that are NOT obscured
            by vignetting (the dark areas around the edge of the image).
 
-    Returns: flat-field correction image. To correct an image, first apply the
-        dark-current correction and then multiply by the flat-field correction
-        image. This yields an image with the same overall mean intensity but
-        corrected for illumination inhomogeneities. Areas of the image that
-        are determined to have been vignetted by the vignette_mask parameter
-        will be set to zero in the flat-field image.
+    Returns: flat-field correction image.
     """
     flat_field = numpy.array(image, dtype=float) # make a copy of the image because we modify it in-place
     near_vignette_mask = vignette_mask ^ ndimage.binary_erosion(vignette_mask, iterations=10)
