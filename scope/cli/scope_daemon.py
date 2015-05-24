@@ -17,7 +17,7 @@ def _wait_for_it(wait_condition, message, wait_time=15, output_interval=0.5, sle
     wait_iters = int(wait_time // sleep_time)
     output_iters = int(output_interval // sleep_time)
     condition_true = False
-    print('(' + message, end='', flush=True)
+    print('(' + message + '...', end='', flush=True)
     for i in range(wait_iters):
         condition_true = wait_condition()
         if condition_true:

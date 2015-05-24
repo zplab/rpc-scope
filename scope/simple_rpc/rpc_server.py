@@ -204,7 +204,7 @@ class ZMQServer(RPCServer):
                 reply_type = 'error'
                 reply = json_encode.encode_compact_to_bytes('Could not JSON-serialize return value.')
         self.socket.send_string(reply_type, flags=zmq.SNDMORE)
-        self.socket.send(reply, copy=False)
+        self.socket.send(reply) # TODO: profile to see if copy=False improves performance
 
 
 class Namespace:

@@ -77,7 +77,7 @@ class DarkCurrentCorrector:
             before_exp, after_exp = self.exposures[i-1], self.exposures[i]
             before_img, after_img = self.dark_images[i-1], self.dark_images[i]
             a = (exposure_ms - before_exp) / (after_exp - before_exp)
-            dark_image = (1-a) * before_img + a * after_image
+            dark_image = (1-a) * before_img + a * after_img
             dark_image.round()
             dark_image = dark_image.astype(numpy.uint16)
         int_image = image.astype(numpy.int32) - dark_image
@@ -108,7 +108,7 @@ def meter_exposure(scope, lamp):
     Returns: exposure_time, lamp_intensity
     """
     exposures = 2**numpy.arange(1, 5)
-    intensities = 2**numpy.arange(8, 3)
+    intensities = 2**numpy.arange(3, 8)[::-1]
     intensities[0] = 255
     with state_stack.pushed_state(lamp, enabled=True):
         bit_depth = int(scope.camera.sensor_gain[:2])
@@ -221,11 +221,11 @@ def _circular_mask(s):
   xs, ys = numpy.indices((s, s)).astype(float) / (s-1)
   return (xs**2 + ys**2) <= 1
 
-_m9 = _circular_mask(9,9)
+_m9 = _circular_mask(9)
 
 def _smooth_flat_field(image):
     image = ndimage.gaussian_filter(image.astype(numpy.float32), 15, mode='nearest')
     image = image[::2, ::2]
     image = ndimage.median_filter(image, footprint=_m9)
     image = ndimage.zoom(image, 2)
-return ndimage.gaussian_filter(image, 5)
+    return ndimage.gaussian_filter(image, 5)

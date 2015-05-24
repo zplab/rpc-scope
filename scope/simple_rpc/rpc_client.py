@@ -26,6 +26,8 @@ import zmq
 import collections
 import contextlib
 
+from ..util import json_encode
+
 class RPCClient:
     """Client for simple remote procedure calls. RPC calls can be dispatched
     in three ways, given a client object 'client', and the desire to call
@@ -154,8 +156,7 @@ class RPCClient:
             return property(self.getter, self.setter, doc=self.getter.__doc__ if self.getter else self.setter.__doc__)
 
     class ClientNamespace:
-        def __init__(self):
-            self.__attrs_locked = False
+        __attrs_locked = False
         def _lock_attrs(self):
             self.__attrs_locked = True
             for v in self.__dict__.values():
@@ -163,7 +164,8 @@ class RPCClient:
                     v._lock_attrs()
         def __setattr__(self, name, value):
             if self.__attrs_locked and not hasattr(self, name):
-                raise RuntimeError('Attribute {} is not known, so its state cannot be communicated to the server.')
+                raise RuntimeError('Attribute "{}" is not known, so its state cannot be communicated to the server.'.format(name))
+            super().__setattr__(name, value)
 
 class RPCError(RuntimeError):
     pass
@@ -182,7 +184,8 @@ class ZMQClient(RPCClient):
         self.interrupt_socket.connect(interrupt_addr)
 
     def _send(self, command, args, kwargs):
-        self.socket.send_json((command, args, kwargs))
+        json = json_encode.encode_compact_to_bytes((command, args, kwargs))
+        self.socket.send(json)
 
     def _receive_reply(self):
         reply_type = self.socket.recv_string()
