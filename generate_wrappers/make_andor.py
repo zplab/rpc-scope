@@ -212,5 +212,5 @@ def generate_code(outfile):
 
 if __name__ == '__main__':
     import pathlib
-    wrapper_dst = pathlib.Path(__file__).parent.parent / 'scope' / 'device' / 'andor' / 'wrapper.py'
+    wrapper_dst = pathlib.Path(__file__).absolute().parent.parent / 'scope' / 'device' / 'andor' / 'wrapper.py'
     generate_code(outfile=str(wrapper_dst))

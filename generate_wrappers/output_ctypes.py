@@ -181,15 +181,16 @@ def create_library_prototype(prototype, library, additional_definitions={}):
     prototype_name = '_prototype_{}'.format(function_name)
     prototype = '{} = ctypes.CFUNCTYPE({}{})'.format(prototype_name, return_type, ', '.join(('',) + arg_types))
     definition = '{}.{} = {}(("{}", {}), {})'.format(library, function_name, prototype_name, function_name, library, param_flags)
+    __name__ = '{}.{}.__name__ = "{}"'.format(library, function_name, function_name)
     if errcheck:
         errcheck = '{}.{}.errcheck = {}'.format(library, function_name, errcheck)
     if errcheck_def:
-        code = [prototype, errcheck_def, definition, errcheck]
+        code = [prototype, errcheck_def, definition, __name__, errcheck]
     else:
         if errcheck:
-            code = [prototype, definition, errcheck]
+            code = [prototype, definition, __name__, errcheck]
         else:
-            code = [prototype, definition]
+            code = [prototype, definition, __name__]
     return function_name, in_args, out_args, '\n'.join(code)
 
 def parse_prototype(prototype, additional_definitions={}):
