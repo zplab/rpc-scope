@@ -155,7 +155,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
 
         self.scope.stage.position = ref_positions[0]
         with state_stack.pushed_state(self.scope.tl.lamp, enable=True):
-            calibrate.meter_exposure(self.scope, self.scope.tl.lamp)
+            calibrate.meter_exposure(self.scope, self.scope.tl.lamp, max_exposure=32)
             bf_avg = calibrate.get_averaged_images(self.scope, ref_positions,
                 self.dark_corrector, frames_to_average=2)
         vignette_mask = calibrate.get_vignette_mask(bf_avg)
@@ -167,7 +167,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             self.scope.stage.position = ref_positions[0]
             lamp = getattr(self.scope.il.spectra_x, self.FLUORESCENCE_FLATFIELD_LAMP)
             with state_stack.pushed_state(lamp, enable=True):
-                calibrate.meter_exposure(self.scope, lamp)
+                calibrate.meter_exposure(self.scope, lamp, max_exposure=400)
                 fl_avg = calibrate.get_averaged_images(self.scope, ref_positions,
                     self.dark_corrector, frames_to_average=5)
             fl_flatfield = calibrate.get_flat_field(fl_avg, vignette_mask)

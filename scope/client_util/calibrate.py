@@ -48,7 +48,8 @@ class DarkCurrentCorrector:
         self.exposures = numpy.logspace(numpy.log10(min_exposure_ms), numpy.log10(max_exposure_ms), 10, base=10)
         self.dark_images = []
         with state_stack.pushed_state(scope.il, shutter_open=False), \
-             state_stack.pushed_state(scope.tl, shutter_open=False):
+             state_stack.pushed_state(scope.tl, shutter_open=False), \
+             state_stack.pushed_state(scopt.tl.lamp.enabled=False):
             for exp in self.exposures:
                 scope.camera.start_image_sequence_acquisition(exposure_time=exp,
                     frame_count=frames_to_average, trigger_mode='Internal')
@@ -84,7 +85,8 @@ class DarkCurrentCorrector:
         int_image[int_image < 0] = 0
         return int_image.astype(numpy.uint16)
 
-def meter_exposure(scope, lamp):
+def meter_exposure(scope, lamp, max_exposure=200, max_intensity=255,
+    min_intensity_fraction=0.3, max_intensity_fraction=0.75):
     """Find an appropriate brightfield exposure setting.
 
     This function searches through lamp intensities and camera exposure times
@@ -104,16 +106,30 @@ def meter_exposure(scope, lamp):
         scope: scope client object
         lamp: lamp object to adjust (should be scope.camera.tl.lamp or one of
             the several lamps in scope.il.spectra_x)
+        max_exposure: longest allowable exposure in ms
+        max_intensity: largest allowable lamp intensity
+        min_intensity_fraction: least bright value (in terms of the 95th
+            percentile of image intensities) allowed for the image to count as
+            'properly exposed', as a fraction of the camera bit depth.
+        max_intensity_fraction: brightest value (in terms of maximum image
+            intensity) allowed for the image to count as 'properly exposed', as
+            a fraction of the camera bit depth.
 
     Returns: exposure_time, lamp_intensity
     """
-    exposures = 2**numpy.arange(1, 5)
-    intensities = 2**numpy.arange(3, 8)[::-1]
-    intensities[0] = 255
+    max_exposure_exponent = numpy.log2(max_exposure)
+    # Exposure range is set by the curious property of the Zyla camera that
+    # short exposures with bright lights yield really noisy images. So avoid
+    # exposures < 2 ms...
+    # TODO: verify that this is still the case with new cameras once obtained
+    exposures = 2**numpy.arange(1, numpy.ceil(max_exposure_exponent)+1)
+    exposures[-1] = max_exposure
+    intensities = numpy.array([255, 224, 192, 160, 128,  96,  64,  32])
+    intensities = intensities[intensities <= max_intensity]
     with state_stack.pushed_state(lamp, enabled=True):
         bit_depth = int(scope.camera.sensor_gain[:2])
-        min_good_value = 0.4 * (2**bit_depth-1)
-        max_good_value = 0.75 * (2**bit_depth-1)
+        min_good_value = min_intensity_fraction * (2**bit_depth-1)
+        max_good_value = max_intensity_fraction * (2**bit_depth-1)
         good_intensity = None
         scope.camera.exposure_time = exposures[0]
         for intensity in intensities:
@@ -174,7 +190,7 @@ def get_averaged_images(scope, positions, dark_corrector, frames_to_average=5):
                 trigger_mode='Internal')
             images = [scope.camera.next_image() for i in range(frames_to_average)]
             scope.camera.end_image_sequence_acquisition()
-            images = [corrector.correct(image, exposure_ms) for image in images]
+            images = [dark_corrector.correct(image, exposure_ms) for image in images]
             position_images.append(numpy.mean(images, axis=0))
     return numpy.median(position_images, axis=0)
 
@@ -204,7 +220,7 @@ def get_flat_field(image, vignette_mask):
         will be set to zero in the flat-field image.
     """
     flat_field = numpy.array(image, dtype=float) # make a copy of the image because we modify it in-place
-    near_vignette_mask = vignette_mask ^ ndimage.binary_erosion(vignette_mask, 10)
+    near_vignette_mask = vignette_mask ^ ndimage.binary_erosion(vignette_mask, iterations=10)
     # set the vignetted region to a value that's the mean value of the pixels
     # nearest, so that when we do image smoothing those dark vignetted values
     # don't muck things up too much.
