@@ -130,8 +130,7 @@ class Camera(property_device.PropertyDevice):
         self._add_andor_enum('IOSelector', 'io_selector')
         self._add_andor_enum('PixelEncoding', 'pixel_encoding', readonly=True)
         self._add_andor_enum('PixelReadoutRate', 'pixel_readout_rate')
-        self._gain_enum = self._add_andor_enum('SimplePreAmpGainControl',
-            'sensor_gain', readonly=True) # not actually readonly... we just custom-define a setter defined below, which uses _gain_enum
+        self._gain_enum = self._add_andor_enum('SimplePreAmpGainControl', 'sensor_gain') # need to stash _gain_enum for custom setter defined below
         self._add_andor_enum('ElectronicShutteringMode', 'shutter_mode')
         self._add_andor_enum('TriggerMode', 'trigger_mode')
         # TODO: figure out why TemperatureStatus never updates with a callback...
@@ -206,7 +205,7 @@ class Camera(property_device.PropertyDevice):
         self._callback_properties[at_feature] = (getter, updater)
         self._andor_property_types[py_name] = at_type, readonly
 
-    def _add_andor_enum(self, at_feature, py_name, readonly=False):
+    def _add_andor_enum(self, at_feature, py_name, readonly=False, custom_setter=False):
         """Expose a camera setting presented by the Andor API as an enum (via GetEnumIndex,
         SetEnumIndex, and GetEnumStringByIndex) as an "enumerated" property."""
         if readonly:
@@ -217,11 +216,12 @@ class Camera(property_device.PropertyDevice):
         setattr(self, 'get_'+py_name, enum.get_value)
         self._add_property_data(at_feature, 'Enum', readonly, py_name, enum.get_value)
 
-        if not readonly:
+        setter_name = 'set_'+py_name
+        if not readonly and not hasattr(self, setter_name):
             def setter(value):
                 with self._live_guarded():
                     enum.set_value(value)
-            setattr(self, 'set_'+py_name, setter)
+            setattr(self, setter_name, setter)
         return enum
 
     def _add_andor_property(self, at_feature, py_name, at_type, readonly=False):

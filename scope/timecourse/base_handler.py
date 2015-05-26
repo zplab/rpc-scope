@@ -48,7 +48,7 @@ def main(timepoint_function):
             as a parameter.
     """
     scheduled_start = sys.argv[1]
-    next_run_time = timepoint_function(scheduled_start)
+    next_run_time = timepoint_function(float(scheduled_start))
     if next_run_time:
         print(next_run_time)
 

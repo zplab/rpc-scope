@@ -32,8 +32,8 @@ handler_template = string.Template(
 '''from scope.timecourse import timecourse_handler
 
 class Handler(timecourse_handler.BasicAcquisitionHandler):
-    FILTER_CUBE = $filter_cube
-    FLUORESCENCE_FLATFIELD_LAMP = $fl_flatfield_lamp
+    FILTER_CUBE = '$filter_cube'
+    FLUORESCENCE_FLATFIELD_LAMP = '$fl_flatfield_lamp'
     OBJECTIVE = 10
     PIXEL_READOUT_RATE = '100 MHz'
     USE_LAST_FOCUS_POSITION = True
@@ -133,7 +133,7 @@ def simple_get_positions(scope):
         except KeyboardInterrupt:
             break
         positions.append(scope.stage.position)
-        print('Position {} recorded as {}.'.format(len(positions), tuple(position)), end='')
+        print('Position {}: {}'.format(len(positions), tuple(positions[-1])), end='')
     return positions
 
 def _name_positions(num_positions, name_prefix):

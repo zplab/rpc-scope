@@ -76,7 +76,7 @@ def _at_errcheck(result, func, args):
     if result != 0:
         err_type = _at_err_dict[result]
         func_name = func.__name__
-        arg_str = ' ,'.join(map(str, args[1:])) # skip first arg, which is the Andor camera handle...
+        arg_str = ' ,'.join(map(str, args))
         raise AndorError('{} error when calling {}({})'.format(err_type, func_name, args))
     return args
 

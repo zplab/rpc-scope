@@ -167,7 +167,8 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             self.scope.stage.position = ref_positions[0]
             lamp = getattr(self.scope.il.spectra_x, self.FLUORESCENCE_FLATFIELD_LAMP)
             with state_stack.pushed_state(lamp, enable=True):
-                calibrate.meter_exposure(self.scope, lamp, max_exposure=400)
+                calibrate.meter_exposure(self.scope, lamp, max_exposure=400,
+                    min_intensity_fraction=0.1)
                 fl_avg = calibrate.get_averaged_images(self.scope, ref_positions,
                     self.dark_corrector, frames_to_average=5)
             fl_flatfield = calibrate.get_flat_field(fl_avg, vignette_mask)
@@ -178,7 +179,8 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         data_positions = self.experiment_metadata['positions']
         some_pos = list(data_positions.values())[0]
         self.scope.stage.position = some_pos
-        self.bf_exposure, self.tl_intensity = calibrate.meter_exposure(self.scope, self.scope.tl.lamp)
+        self.bf_exposure, self.tl_intensity = calibrate.meter_exposure(self.scope, self.scope.tl.lamp,
+            max_exposure=32, min_intensity_fraction=0.2, max_intensity_fraction=0.5)
 
         # save out calibration information
         calibration_dir = self.data_dir / 'calibrations'
@@ -192,7 +194,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     def get_next_run_time(self):
         assert self.INTERVAL_MODE in {'scheduled start', 'actual start', 'end'}
         timestamps = self.experiment_metadata['timestamps']
-        elapsed_sec = timestamps[-1] - timestamps[0]
+        elapsed_sec = timestamps[-1] - timestamps[0]# time since beginning of timecourse
         interval_hours = self.get_next_run_interval(elapsed_sec / (60 * 60))
         if interval is None:
             return None
