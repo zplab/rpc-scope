@@ -137,7 +137,10 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.logger.info('Configuring acquisitions')
         self.scope.async = False
         self.scope.il.shutter_open = True
+        self.scope.il.spectra_x.lamps(**{lamp+'_enabled':False for lamp in
+            scope.il.spectra_x.lamp_specs.keys()}
         self.scope.tl.shutter_open = True
+        self.scope.tl.lamp.enabled = False
         self.scope.tl.condenser_retracted = False
         self.scope.il.filter_cube = self.FILTER_CUBE
         self.scope.nosepiece.magnification = self.OBJECTIVE
@@ -186,7 +189,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         calibration_dir = self.data_dir / 'calibrations'
         if not calibration_dir.exists():
             calibration_dir.mkdir()
-        cal_image_paths = [position_dir / (self.timepoint_prefix + ' ' + name) for name in cal_names]
+        cal_image_paths = [calibration_dir / (self.timepoint_prefix + ' ' + name) for name in cal_image_names]
         self.image_io.write(cal_images, cal_image_paths)
         metering = self.experiment_metadata.setdefault('brightfield metering', {})
         metering[self.timepoint_prefix] = dict(exposure=self.bf_exposure, intensity=self.tl_intensity)

@@ -101,7 +101,7 @@ class TimepointHandler:
         self.end_time = time.time()
         self.experiment_metadata.setdefault('durations', []).append(self.end_time - self.start_time)
         with self.experiment_metadata_path.open('w') as f:
-            self.experiment_metadata = json_encode.encode_legible_to_file(self.experiment_metadata, f)
+            json_encode.encode_legible_to_file(self.experiment_metadata, f)
         run_again = self.skip_positions != self.positions.keys() # don't run again if we're skipping all the positions
         if run_again:
             return self.get_next_run_time()
