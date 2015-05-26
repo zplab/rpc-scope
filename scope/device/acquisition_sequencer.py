@@ -163,12 +163,12 @@ class AcquisitionSequencer:
                 overlap_enabled=True, auxiliary_out_source='FireAll', selected_io_pin_inverted=False)
             readout_ms = self._camera.get_readout_time() # get this after setting the relevant camera modes above
             self._exposures = [exp + readout_ms for exp in self._exposures]
-            self._output = self._iotool.start_program()
+            self._iotool.start_program()
             names, self._latest_timestamps = [], []
             for exposure in self._exposures:
                 names.append(self._camera.next_image(read_timeout_ms=exposure+1000))
                 self._latest_timestamps.append(self._camera.get_latest_timestamp())
-            self._iotool.wait_until_done()
+            self._output = self._iotool.wait_until_done()
             self._camera.end_image_sequence_acquisition()
         return names
 
