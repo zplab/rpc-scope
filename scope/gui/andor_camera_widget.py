@@ -43,7 +43,7 @@ class AndorCameraWidget(device_widget.DeviceWidget):
         'aoi_width',
         'aoi_height',
         'sensor_gain',
-        'pixel_readout_rate',
+        'readout_rate',
         'shutter_mode',
         'overlap_enabled',
         'cycle_mode',

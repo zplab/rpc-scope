@@ -109,7 +109,7 @@ def get_metric(metric, shape):
     return METRICS[metric](shape)
 
 class Autofocus:
-    _CAMERA_MODE = dict(trigger_mode='Software', pixel_readout_rate='280 MHz', shutter_mode='Rolling')
+    _CAMERA_MODE = dict(trigger_mode='Software', readout_rate='280 MHz', shutter_mode='Rolling')
     def __init__(self, camera, stage):
         self._camera = camera
         self._stage = stage

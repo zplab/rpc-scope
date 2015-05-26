@@ -145,8 +145,9 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.scope.il.filter_cube = self.FILTER_CUBE
         self.scope.nosepiece.magnification = self.OBJECTIVE
         self.scope.camera.sensor_gain = '16-bit (low noise & high well capacity)'
+        self.scope.camera.readout_rate = self.PIXEL_READOUT_RATE
         self.configure_calibrations() # sets self.bf_exposure and self.tl_intensity
-        self.scope.camera.acquisition_sequencer.new_sequence(readout_rate=self.PIXEL_READOUT_RATE)
+        self.scope.camera.acquisition_sequencer.new_sequence()
         self.scope.camera.acquisition_sequencer.add_step(exposure_ms=self.bf_exposure,
             tl_enabled=True, tl_intensity=self.tl_intensity, lamp_off_delay=25) # delay is in microseconds
         self.image_names = ['bf.png']

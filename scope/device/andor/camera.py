@@ -129,7 +129,7 @@ class Camera(property_device.PropertyDevice):
         self._add_andor_enum('FanSpeed', 'fan', readonly=True)
         self._add_andor_enum('IOSelector', 'io_selector')
         self._add_andor_enum('PixelEncoding', 'pixel_encoding', readonly=True)
-        self._add_andor_enum('PixelReadoutRate', 'pixel_readout_rate')
+        self._add_andor_enum('PixelReadoutRate', 'readout_rate')
         self._gain_enum = self._add_andor_enum('SimplePreAmpGainControl', 'sensor_gain') # need to stash _gain_enum for custom setter defined below
         self._add_andor_enum('ElectronicShutteringMode', 'shutter_mode')
         self._add_andor_enum('TriggerMode', 'trigger_mode')
@@ -465,7 +465,7 @@ class Camera(property_device.PropertyDevice):
         if self._live_mode:
             return
         lowlevel.Flush()
-        self.push_state(overlap_enabled=False, cycle_mode='Continuous', trigger_mode='Software', pixel_readout_rate='280 MHz')
+        self.push_state(overlap_enabled=False, cycle_mode='Continuous', trigger_mode='Software', readout_rate='280 MHz')
         trigger_interval = self._calculate_live_trigger_interval()
         namebase = 'live@-'+str(time.time())
         buffer_maker = BufferFactory(namebase, frame_count=1, cycle=True)
