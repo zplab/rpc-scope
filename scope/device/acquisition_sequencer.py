@@ -120,13 +120,13 @@ class AcquisitionSequencer:
         self._steps.append(self._iotool.commands.wait_high(self._config.IOTool.CAMERA_PINS['arm']))
         self._steps.append(self._iotool.commands.set_high(self._config.IOTool.CAMERA_PINS['trigger']))
         self._steps.append(self._iotool.commands.set_low(self._config.IOTool.CAMERA_PINS['trigger']))
-        self.add_delay_us(50) # wait a little while for the arm signal to clear
-        self._steps.append(self._iotool.commands.timer_begin())
+        self.add_delay_us(50) # wait a little while for the FireAll signal to clear
         self._steps.append(self._iotool.commands.wait_high(self._config.IOTool.CAMERA_PINS['aux_out1'])) # set to 'FireAll'
-        self._steps.append(self._iotool.commands.timer_end())
         if tl_enabled:
             self._steps.extend(self._iotool.commands.transmitted_lamp(tl_enabled, tl_intensity))
         self._steps.extend(self._iotool.commands.spectra_x_lamps(**lamps))
+        if lamp_off_delay:
+            self.add_delay_us(lamp_off_delay)
         if exposure_ms < 32.767:
             self.add_delay_us(round(exposure_ms*1000))
         else:
