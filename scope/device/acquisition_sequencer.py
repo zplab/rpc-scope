@@ -163,8 +163,8 @@ class AcquisitionSequencer:
         # restored properly. (The camera seems to not remember it after switching from
         # external exposure mode...)
         with state_stack.pushed_state(self._spectra_x, **self._starting_fl_lamp_state), \
-             state_stack.pushed_state(self._tl_lamp, enabled=False, intensity=self._tl_lamp.intensity), \
-             state_stack.pushed_state(self._camera, exposure_time=self._camera.exposure_time):
+             state_stack.pushed_state(self._tl_lamp, enabled=False, intensity=self._tl_lamp.get_intensity()), \
+             state_stack.pushed_state(self._camera, exposure_time=self._camera.get_exposure_time()):
             self._camera.set_io_selector('Aux Out 1')
             self._camera.start_image_sequence_acquisition(self._num_acquisitions, trigger_mode='External Exposure',
                 overlap_enabled=True, auxiliary_out_source='FireAll', selected_io_pin_inverted=False)
