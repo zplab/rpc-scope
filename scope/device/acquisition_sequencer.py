@@ -72,8 +72,8 @@ class AcquisitionSequencer:
         self._steps = []
         self._exposures = [] # contains the actual exposure times that the camera is on, not just the length of time the light was on
         self._compiled = False
-        # set the wait time low because we have clean shielded cables
-        self._steps.append(self._iotool.commands.wait_time(2))
+        # set the wait time reasonably low because we have clean shielded cables
+        self._steps.append(self._iotool.commands.wait_time(20))
         # turn off all the spectra x lamps
         lamp_names = self._spectra_x.get_lamp_specs().keys()
         self._starting_fl_lamp_state = {lamp+'_enabled': False for lamp in lamp_names}
@@ -121,6 +121,7 @@ class AcquisitionSequencer:
         self._steps.append(self._iotool.commands.wait_high(self._config.IOTool.CAMERA_PINS['arm']))
         self._steps.append(self._iotool.commands.set_high(self._config.IOTool.CAMERA_PINS['trigger']))
         self._steps.append(self._iotool.commands.set_low(self._config.IOTool.CAMERA_PINS['trigger']))
+        self.add_delay_us(50) # wait a little while for the arm signal to clear
         self._steps.append(self._iotool.commands.timer_begin())
         self._steps.append(self._iotool.commands.wait_high(self._config.IOTool.CAMERA_PINS['aux_out1'])) # set to 'FireAll'
         self._steps.append(self._iotool.commands.timer_end())
