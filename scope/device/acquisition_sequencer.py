@@ -80,7 +80,6 @@ class AcquisitionSequencer:
         for lamp in lamp_names:
             intensity = spectra_x_intensities.get(lamp, 255)
             self._starting_fl_lamp_state[lamp+'_intensity'] = intensity
-        self._starting_tl_lamp_state = dict(enabled=False, intensity=255)
         self._num_acquisitions = 0
         self._latest_timestamps = None
 
@@ -157,8 +156,15 @@ class AcquisitionSequencer:
         """Run the assembled acquisition steps and return the images obtained."""
         if not self._compiled:
             self._compile()
+        # state stack: set tl_intensity to current intensity, so that if it gets set
+        # as part of the acquisition, it will be returned to the current value. Must set it to
+        # the current value here because if it's not set, setting it to something else
+        # is the wrong thing to do. Also push the exposure time so that it gets
+        # restored properly. (The camera seems to not remember it after switching from
+        # external exposure mode...)
         with state_stack.pushed_state(self._spectra_x, **self._starting_fl_lamp_state), \
-             state_stack.pushed_state(self._tl_lamp, **self._starting_tl_lamp_state):
+             state_stack.pushed_state(self._tl_lamp, enabled=False, intensity=self._tl_lamp.intensity), \
+             state_stack.pushed_state(self._camera, exposure_time=self._camera.exposure_time):
             self._camera.set_io_selector('Aux Out 1')
             self._camera.start_image_sequence_acquisition(self._num_acquisitions, trigger_mode='External Exposure',
                 overlap_enabled=True, auxiliary_out_source='FireAll', selected_io_pin_inverted=False)
