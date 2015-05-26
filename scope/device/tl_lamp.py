@@ -31,12 +31,12 @@ class TL_Lamp(property_device.PropertyDevice):
         self.set_enabled(False)
         self.set_intensity(255)
 
-    def set_enabled(self, enable):
+    def set_enabled(self, enabled):
         """Turn lamp on or off.
         """
-        self._enabled = enable
-        self._iotool.execute(*self._iotool.commands.transmitted_lamp(enable=enable))
-        self._update_property('enabled', enable)
+        self._enabled = enabled
+        self._iotool.execute(*self._iotool.commands.transmitted_lamp(enabled=enabled))
+        self._update_property('enabled', enabled)
 
     def get_enabled(self):
         return self._enabled

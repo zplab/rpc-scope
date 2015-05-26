@@ -94,30 +94,30 @@ class Commands:
         enable that lamp, False to disable, or None to do nothing (unspecified
         lamps are also not altered)."""
         commands = []
-        for lamp, enable in lamps.items():
-            if enable is None:
+        for lamp, enabled in lamps.items():
+            if enabled is None:
                 continue
             pin = self._config.IOTool.LUMENCOR_PINS[lamp]
-            if enable:
+            if enabled:
                 commands.append(self.set_high(pin))
             else:
                 commands.append(self.set_low(pin))
         return commands
 
-    def transmitted_lamp(self, enable=None, intensity=None):
+    def transmitted_lamp(self, enabled=None, intensity=None):
         """Produce a sequence of IOTool commands to enable/disable and control the
         intensity of the TL lamp.
 
         Parameters
-        enable: True (lamp on), False (lamp off), or None (no change).
-        intensity: None (no change) or value in the range [0, 255] for min to max.
+            enabled: True (lamp on), False (lamp off), or None (no change).
+            intensity: None (no change) or value in the range [0, 255].
         """
         commands = []
         if intensity is not None:
             assert 0 <= intensity <= self._config.IOTool.TL_PWM_MAX
             commands.append(self.pwm(self._config.IOTool.TL_PWM_PIN, intensity))
-        if enable is not None:
-            if enable:
+        if enabled is not None:
+            if enabled:
                 commands.append(self.set_high(self._config.IOTool.TL_ENABLE_PIN))
             else:
                 commands.append(self.set_low(self._config.IOTool.TL_ENABLE_PIN))

@@ -104,12 +104,12 @@ class AcquisitionSequencer:
         self._steps.append(self._io_tool.commands.delay_us(int(delay)-4)) # delay command itself takes 4 us, so subtract off 4
         self._exposures[-1] += delay / 1000
 
-    def add_step(self, exposure_ms, tl_enable=None, tl_intensity=None, lamp_off_delay=None, **spectra_x_lamps):
+    def add_step(self, exposure_ms, tl_enabled=None, tl_intensity=None, lamp_off_delay=None, **spectra_x_lamps):
         """Add an image acquisition step to the existing sequence.
 
         Parameters
         exposure_ms: exposure time in ms for the image.
-        tl_enable: should the transmitted lamp be on during the exposure?
+        tl_enabled: should the transmitted lamp be on during the exposure?
         tl_intensity: intensity of the transmitted lamp, should it be enabled.
         lamp_off_delay: how long, in microseconds, to wait for the lamp to be completely
             off before starting the next acquisition.
@@ -124,14 +124,14 @@ class AcquisitionSequencer:
         self._steps.append(self._io_tool.commands.set_high(self._config.IOTool.CAMERA_PINS['trigger']))
         self._steps.append(self._io_tool.commands.set_low(self._config.IOTool.CAMERA_PINS['trigger']))
         self._steps.append(self._io_tool.commands.wait_high(self._config.IOTool.CAMERA_PINS['aux_out1'])) # set to 'FireAll'
-        self._steps.extend(self._io_tool.commands.transmitted_lamp(tl_enable, tl_intensity))
+        self._steps.extend(self._io_tool.commands.transmitted_lamp(tl_enabled, tl_intensity))
         self._steps.extend(self._io_tool.commands.spectra_x_lamps(**lamps))
         if exposure_ms < 32.768:
             self.add_delay_us(round(exposure_ms*1000))
         else:
             self.add_delay_ms(round(exposure_ms))
-        if tl_enable:
-            self._steps.extend(self._io_tool.commands.transmitted_lamp(enable=False))
+        if tl_enabled:
+            self._steps.extend(self._io_tool.commands.transmitted_lamp(enabled=False))
         self._steps.extend(self._io_tool.commands.spectra_x_lamps(**{lamp:False for lamp in lamps})) # turn lamps back off
         if lamp_off_delay:
             self.add_delay_us(lamp_off_delay)

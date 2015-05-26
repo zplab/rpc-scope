@@ -95,7 +95,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         this as follows:
             def configure_additional_acquisition_steps(self):
                 self.scope.camera.acquisition_sequencer.add_step(exposure_ms=200,
-                    tl_enable=False, cyan=True)
+                    tl_enabled=False, cyan=True)
                 self.image_names.append('gfp.png')
         """
         pass
@@ -145,16 +145,16 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.configure_calibrations() # sets self.bf_exposure and self.tl_intensity
         self.scope.camera.acquisition_sequencer.new_sequence(readout_rate=self.PIXEL_READOUT_RATE)
         self.scope.camera.acquisition_sequencer.add_step(exposure_ms=self.bf_exposure,
-            tl_enable=True, tl_intensity=self.tl_intensity, lamp_off_delay=25) # delay is in microseconds
+            tl_enabled=True, tl_intensity=self.tl_intensity, lamp_off_delay=25) # delay is in microseconds
         self.image_names = ['bf.png']
         self.configure_additional_acquisition_steps()
 
     def configure_calibrations(self):
         self.dark_corrector = calibrate.DarkCurrentCorrector(self.scope)
-        ref_positions = self.experiment_metadata['reference positions']
+        ref_positions = self.experiment_metadata['reference_positions']
 
         self.scope.stage.position = ref_positions[0]
-        with state_stack.pushed_state(self.scope.tl.lamp, enable=True):
+        with state_stack.pushed_state(self.scope.tl.lamp, enabled=True):
             calibrate.meter_exposure(self.scope, self.scope.tl.lamp, max_exposure=32)
             bf_avg = calibrate.get_averaged_images(self.scope, ref_positions,
                 self.dark_corrector, frames_to_average=2)
@@ -166,7 +166,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         if self.FLUORESCENCE_FLATFIELD_LAMP:
             self.scope.stage.position = ref_positions[0]
             lamp = getattr(self.scope.il.spectra_x, self.FLUORESCENCE_FLATFIELD_LAMP)
-            with state_stack.pushed_state(lamp, enable=True):
+            with state_stack.pushed_state(lamp, enabled=True):
                 calibrate.meter_exposure(self.scope, lamp, max_exposure=400,
                     min_intensity_fraction=0.1)
                 fl_avg = calibrate.get_averaged_images(self.scope, ref_positions,

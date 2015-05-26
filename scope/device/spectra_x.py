@@ -69,8 +69,8 @@ class Lamp(state_stack.StateStackDevice):
     def get_intensity(self):
         return self._spectra_x._lamp_intensities[self._name]
 
-    def set_enabled(self, enable):
-        self._spectra_x._lamp_enable(self._name, enable)
+    def set_enabled(self, enabled):
+        self._spectra_x._lamp_enable(self._name, enabled)
 
     def get_enabled(self):
         return self._spectra_x._lamp_enableds[self._name]
@@ -124,10 +124,10 @@ class SpectraX(property_device.PropertyDevice):
         self._lamp_intensities[lamp] = value
         self._update_property(lamp+'.intensity', value)
 
-    def _lamp_enable(self, lamp, enable):
-        self._iotool.execute(*self._iotool.commands.spectra_x_lamps(**{lamp:enable}))
-        self._lamp_enableds[lamp] = enable
-        self._update_property(lamp+'.enabled', enable)
+    def _lamp_enable(self, lamp, enabled):
+        self._iotool.execute(*self._iotool.commands.spectra_x_lamps(**{lamp:enabled}))
+        self._lamp_enableds[lamp] = enabled
+        self._update_property(lamp+'.enabled', enabled)
 
     def get_lamp_specs(self):
         """Return a dict mapping lamp names to tuples of (peak_wavelength, bandwidth), in nm,
