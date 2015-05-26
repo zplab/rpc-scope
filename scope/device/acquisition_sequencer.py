@@ -81,7 +81,6 @@ class AcquisitionSequencer:
             intensity = spectra_x_intensities.get(lamp, 255)
             self._starting_fl_lamp_state[lamp+'_intensity'] = intensity
         self._starting_tl_lamp_state = dict(enabled=False, intensity=255)
-        self._readout_rate = readout_rate
         self._num_acquisitions = 0
         self._latest_timestamps = None
 
@@ -122,7 +121,9 @@ class AcquisitionSequencer:
         self._steps.append(self._iotool.commands.wait_high(self._config.IOTool.CAMERA_PINS['arm']))
         self._steps.append(self._iotool.commands.set_high(self._config.IOTool.CAMERA_PINS['trigger']))
         self._steps.append(self._iotool.commands.set_low(self._config.IOTool.CAMERA_PINS['trigger']))
+        self._steps.append(self._iotool.commands.timer_begin())
         self._steps.append(self._iotool.commands.wait_high(self._config.IOTool.CAMERA_PINS['aux_out1'])) # set to 'FireAll'
+        self._steps.append(self._iotool.commands.timer_end())
         if tl_enabled:
             self._steps.extend(self._iotool.commands.transmitted_lamp(tl_enabled, tl_intensity))
         self._steps.extend(self._iotool.commands.spectra_x_lamps(**lamps))
@@ -148,7 +149,6 @@ class AcquisitionSequencer:
         steps.append(self._iotool.commands.wait_high(self._config.IOTool.CAMERA_PINS['arm']))
         steps.append(self._iotool.commands.set_high(self._config.IOTool.CAMERA_PINS['trigger']))
         steps.append(self._iotool.commands.set_low(self._config.IOTool.CAMERA_PINS['trigger']))
-
         self._iotool.store_program(*steps)
         self._compiled = True
 
@@ -163,7 +163,7 @@ class AcquisitionSequencer:
                 overlap_enabled=True, auxiliary_out_source='FireAll', selected_io_pin_inverted=False)
             readout_ms = self._camera.get_readout_time() # get this after setting the relevant camera modes above
             self._exposures = [exp + readout_ms for exp in self._exposures]
-            self._iotool.start_program()
+            self._output = self._iotool.start_program()
             names, self._latest_timestamps = [], []
             for exposure in self._exposures:
                 names.append(self._camera.next_image(read_timeout_ms=exposure+1000))
@@ -183,3 +183,6 @@ class AcquisitionSequencer:
         These exposure times also include the camera read time and any additional delays
         added in the middle of the acquisition."""
         return self._exposures
+
+    def get_program_output(self):
+        return self._output
