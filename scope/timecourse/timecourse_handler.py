@@ -137,8 +137,8 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.logger.info('Configuring acquisitions')
         self.scope.async = False
         self.scope.il.shutter_open = True
-        self.scope.il.spectra_x.lamps(**{lamp+'_enabled':False for lamp in
-            scope.il.spectra_x.lamp_specs.keys()}
+        lamps = self.scope.il.spectra_x.lamp_specs.keys()
+        self.scope.il.spectra_x.lamps(**{lamp+'_enabled':False for lamp in lamps})
         self.scope.tl.shutter_open = True
         self.scope.tl.lamp.enabled = False
         self.scope.tl.condenser_retracted = False
@@ -199,7 +199,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         timestamps = self.experiment_metadata['timestamps']
         elapsed_sec = timestamps[-1] - timestamps[0]# time since beginning of timecourse
         interval_hours = self.get_next_run_interval(elapsed_sec / (60 * 60))
-        if interval is None:
+        if interval_hours is None:
             return None
         if interval_mode == 'scheduled start':
             start = self.scheduled_start

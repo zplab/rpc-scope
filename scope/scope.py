@@ -101,7 +101,7 @@ class Scope(message_device.AsyncDeviceNamespace):
             _log_exception('Could not connect to camera:', e)
 
         if has_camera and has_iotool and has_spectra_x:
-            self.camera.acquisition_sequencer = acquisition_sequencer.AcquisitionSequencer(self.camera, self.iotool, self.il.spectra_x)
+            self.camera.acquisition_sequencer = acquisition_sequencer.AcquisitionSequencer(self)
 
         if has_scope and has_camera:
             self.camera.autofocus = autofocus.Autofocus(self.camera, self.stage)

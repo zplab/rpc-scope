@@ -49,10 +49,10 @@ class DarkCurrentCorrector:
         self.dark_images = []
         with state_stack.pushed_state(scope.il, shutter_open=False), \
              state_stack.pushed_state(scope.tl, shutter_open=False), \
-             state_stack.pushed_state(scope.tl.lamp, enabled=False)
-             if hasattr(scope.il, 'spectra_x'):
-                 scope.il.spectra_x.push_state(**{lamp+'_enabled':False for lamp in
-                     scope.il.spectra_x.lamp_specs.keys()})
+             state_stack.pushed_state(scope.tl.lamp, enabled=False):
+            if hasattr(scope.il, 'spectra_x'):
+                scope.il.spectra_x.push_state(**{lamp+'_enabled':False for lamp in
+                    scope.il.spectra_x.lamp_specs.keys()})
             for exp in self.exposures:
                 scope.camera.start_image_sequence_acquisition(exposure_time=exp,
                     frame_count=frames_to_average, trigger_mode='Internal')
