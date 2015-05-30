@@ -141,7 +141,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.scope.il.spectra_x.lamps(**{lamp+'_enabled':False for lamp in lamps})
         self.scope.tl.shutter_open = True
         self.scope.tl.lamp.enabled = False
-        self.scope.tl.condenser_retracted = False
+        self.scope.tl.condenser_retracted = self.OBJECTIVE == 5 # only retract condenser for 5x objective
         self.scope.il.filter_cube = self.FILTER_CUBE
         self.scope.nosepiece.magnification = self.OBJECTIVE
         self.scope.camera.sensor_gain = '16-bit (low noise & high well capacity)'

@@ -23,6 +23,5 @@ class Handler(timecourse_handler.TimepointHandler):
         new_metadata = {'foobar':numpy.random.random()}
         return images, image_names, new_metadata
 
-
 handler = Handler(data_dir=pathlib.Path(__file__).parent, scope_host=None)
 timecourse_handler.main(timepoint_function=handler.run_timepoint, next_run_interval=45, interval_mode='scheduled_start')
