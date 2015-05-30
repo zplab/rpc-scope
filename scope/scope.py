@@ -51,7 +51,8 @@ class Scope(message_device.AsyncDeviceNamespace):
     def __init__(self, property_server=None):
         super().__init__()
 
-        config = scope_configuration.get_config()
+        self.get_configuration = scope_configuration.get_config
+        config = self.get_configuration()
 
         if property_server:
             self.rebroadcast_properties = property_server.rebroadcast_properties

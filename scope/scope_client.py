@@ -38,6 +38,8 @@ def rpc_client_main(host='127.0.0.1', context=None):
 
     client = rpc_client.ZMQClient(rpc_addr, interrupt_addr, context)
     is_local, get_data = transfer_ism_buffer.client_get_data_getter(client)
+
+    # define additional client wrapper functions
     def get_many_data(data_list):
         return [get_data(name) for name in data_list]
     def get_autofocus_data(return_values):
@@ -47,7 +49,11 @@ def rpc_client_main(host='127.0.0.1', context=None):
             return best_z, positions_and_scores, get_many_data(image_names)
         else:
             return best_z, positions_and_scores
+    def get_config(config_dict):
+        return scope_configuration.ConfigDict(config_dict)
+
     client_wrappers = {
+        'get_configuration': get_config,
         'camera.acquire_image': get_data,
         'camera.live_image': get_data,
         'camera.next_image': get_data,
