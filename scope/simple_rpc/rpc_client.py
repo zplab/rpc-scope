@@ -163,8 +163,13 @@ class RPCClient:
                 if hasattr(v, '_lock_attrs'):
                     v._lock_attrs()
         def __setattr__(self, name, value):
-            if self.__attrs_locked and not hasattr(self, name):
-                raise RuntimeError('Attribute "{}" is not known, so its state cannot be communicated to the server.'.format(name))
+            if self.__attrs_locked:
+                if not hasattr(self, name):
+                    raise RuntimeError('Attribute "{}" is not known, so its state cannot be communicated to the server.'.format(name))
+                else:
+                    cls = type(self)
+                    if not hasattr(cls, name) or not isinstance(getattr(cls, name), property):
+                        raise RuntimeError('Attribute "{}" is not a property value that can be communicated to the server.'.format(name))
             super().__setattr__(name, value)
 
 class RPCError(RuntimeError):
