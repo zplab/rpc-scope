@@ -52,13 +52,23 @@ GET_MAX_POS_IL_TURRET = 78032
 POS_ABS_KOND = 81022
 GET_POS_KOND = 81023
 
-# TL field and aperture diaphragm
+# TL field (LFBL) and aperture (APBL) diaphragm
 POS_ABS_LFBL_TL = 83022
 GET_POS_LFBL_TL = 83023
+GET_MAX_POS_LFBL_TL = 83027
+GET_MIN_POS_LFBL_TL = 83028
+
 POS_ABS_APBL_TL = 84022
 GET_POS_APBL_TL = 84023
+GET_MAX_POS_APBL_TL = 84027
+GET_MIN_POS_APBL_TL = 84028
 
-# IL field diaphragm
+# IL field wheel
+POS_ABS_LFWHEEL = 94022
+GET_POS_LFWHEEL = 94023
+GET_MAX_POS_LFWHEEL = 94027
+GET_MIN_POS_LFWHEEL = 94028
+GET_LFWHEEL_PROPERTIES = 94032
 
 class FilterCube(enumerated_properties.DictProperty):
     def __init__(self, il):
@@ -76,17 +86,43 @@ class FilterCube(enumerated_properties.DictProperty):
         # a name query for an empty position. I assume that it is "-" or "", but this assumption may require correction
         # if we ever do come to have an empty position.
         d = {}
-        for idx in range(min_pos, max_pos+1):
-            name = self._il.send_message(GET_CUBENAME, idx, async=False, intent="get filter cube name").response[1:].strip()
+        for i in range(min_pos, max_pos+1):
+            name = self._il.send_message(GET_CUBENAME, i, async=False, intent="get filter cube name").response[1:].strip()
             if len(name) != 0 and name != '-':
-                d[idx] = name
+                d[i] = name
         return d
 
     def _read(self):
         return int(self._il.send_message(GET_POS_IL_TURRET, async=False, intent="get filter turret position").response.split(' ')[0])
 
     def _write(self, value):
-        response = self._il.send_message(POS_ABS_IL_TURRET, value, intent="set filter turret position")
+        self._il.send_message(POS_ABS_IL_TURRET, value, intent="set filter turret position")
+
+class ILFieldWheel(enumerated_properties.DictProperty):
+    _shape_info = {'C': 'circle', 'R': 'rectangle', '-': ''}
+    def __init__(self, il):
+        self._il = il
+        super().__init__()
+
+    def _get_hw_to_usr(self):
+        min_pos = int(self._il.send_message(GET_MIN_POS_LFWHEEL, async=False, intent="get IL field wheel minimum position").response)
+        max_pos = int(self._il.send_message(GET_MAX_POS_LFWHEEL, async=False, intent="get IL field wheel maximum position").response)
+        d = {}
+        for i in range(min_pos, max_pos+1):
+            pos, shape, size, *special = self._il.send_message(GET_LFWHEEL_PROPERTIES, i, async=False, intent="get IL field wheel property values name").response.split(' ')
+
+            name = '{}{}'.format(self._shape_info[shape], size)
+            if special:
+                name += special[0]
+            d[i] = name
+        return d
+
+    def _read(self):
+        return int(self._il.send_message(GET_POS_LFWHEEL, async=False, intent="get IL field wheel position").response)
+
+    def _write(self, value):
+        self._il.send_message(POS_ABS_LFWHEEL, value, intent="set IL field wheel position")
+
 
 class _ShutterDevice(stand.DM6000Device):
     def get_shutter_open(self):
@@ -98,17 +134,21 @@ class _ShutterDevice(stand.DM6000Device):
         return bool(shutter_open)
 
     def set_shutter_open(self, shutter_open):
-        response = self.send_message(SET_SHUTTER_LAMP, self._shutter_idx, int(shutter_open), coalesce=False, intent="set shutter openedness")
+        self.send_message(SET_SHUTTER_LAMP, self._shutter_idx, int(shutter_open), coalesce=False, intent="set shutter openedness")
 
 class IL(_ShutterDevice):
     '''IL represents an interface into elements used in Incident Light (Fluorescence) mode.'''
     _shutter_idx = 1
-    # TODO(?): if needed, add DIC fine shearing, IL aperture control (size 0-6 or whatever / circle vs. square).
+    # TODO(?): if needed, add DIC fine shearing
     def _setup_device(self):
         self._filter_cube = FilterCube(self)
         self.get_filter_cube = self._filter_cube.get_value
         self.get_filter_cube_values = self._filter_cube.get_recognized_values
         self._update_property('filter_cube', self.get_filter_cube())
+        self._field_wheel = ILFieldWheel(self)
+        self.get_field_wheel = self._field_wheel.get_value
+        self.get_field_wheel_positions = self._field_wheel.get_recognized_values
+        self.set_field_wheel = self._field_wheel.set_value
 
     def set_filter_cube(self, cube):
         self._update_property('filter_cube', cube)
@@ -126,6 +166,26 @@ class TL(_ShutterDevice):
         return not bool(deployed)
 
     def set_condenser_retracted(self, retracted):
-        response = self.send_message(POS_ABS_KOND, int(not retracted), intent="set condenser position")
+        self.send_message(POS_ABS_KOND, int(not retracted), intent="set condenser position")
 
-    # TODO(?): if needed, add control over field and aperture diaphragms
+    def get_field_diaphragm(self):
+        return int(self.send_message(GET_POS_LFBL_TL, async=False, intent="get field diaphragm position").response)
+
+    def set_field_diaphragm(self, position):
+        self.send_message(POS_ABS_LFBL_TL, intent="set field diaphragm position")
+
+    def get_field_diaphragm_range(self):
+        pos_min = int(self.send_message(GET_MIN_POS_LFBL_TL, async=False, intent="get field diaphragm min position").response)
+        pos_max = int(self.send_message(GET_MAX_POS_LFBL_TL, async=False, intent="get field diaphragm max position").response)
+        return pos_min, pos_max
+
+    def get_aperture_diaphragm(self):
+        return int(self.send_message(GET_POS_APBL_TL, async=False, intent="get aperture diaphragm position").response)
+
+    def set_aperture_diaphragm(self, position):
+        self.send_message(POS_ABS_APBL_TL, intent="set aperture diaphragm position")
+
+    def get_aperture_diaphragm_range(self):
+        pos_min = int(self.send_message(GET_MIN_POS_APBL_TL, async=False, intent="get aperture diaphragm min position").response)
+        pos_max = int(self.send_message(GET_MAX_POS_APBL_TL, async=False, intent="get aperture diaphragm max position").response)
+        return pos_min, pos_max

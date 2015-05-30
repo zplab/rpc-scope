@@ -59,7 +59,7 @@ class ObjectiveTurret(stand.DM6000Device):
 
     def set_position(self, position):
         if position is not None:
-            response = self.send_message(POS_ABS_OBJ, position, intent="change objective turret position")
+            self.send_message(POS_ABS_OBJ, position, intent="change objective turret position")
 
     def get_position(self):
         '''Current objective turret position. Note that 0 is special and indicates that the objective turret is
@@ -75,7 +75,7 @@ class ObjectiveTurret(stand.DM6000Device):
         mag_positions = self._mags_to_positions[magnification]
         if len(mag_positions) > 1:
             raise ValueError('magnification value {} is ambiguous; objectives at positions {} all have this magnification.'.format(magnification, mag_positions))
-        response = self.send_message(POS_ABS_OBJ, mag_positions[0], intent="change objective turret position")
+        self.send_message(POS_ABS_OBJ, mag_positions[0], intent="change objective turret position")
 
     def get_magnification(self):
         '''The current objective's magnification. I.e., the magnification of the objective at the currently selected
@@ -93,7 +93,7 @@ class ObjectiveTurret(stand.DM6000Device):
         return self.send_message(GET_IMM_DRY, async=False, intent="get current objective medium").response
 
     def set_immersion_or_dry(self, medium):
-        response = self.send_message(SET_IMM_DRY, medium, intent="change to objective medium")
+        self.send_message(SET_IMM_DRY, medium, intent="change to objective medium")
 
     def get_all_objectives(self):
         '''Returns a list of objective magnifications. List index corresponds to objective position. None values
