@@ -79,6 +79,27 @@ class JobRunner(base_daemon.Runner):
         if self.is_running():
             self._awaken_daemon()
 
+    def suspend_all(self):
+        """Suspend further execution of all queued jobs."""
+        self._change_all_status(STATUS_QUEUED, STATUS_SUSPENDED)
+
+    def resume_all(self):
+        """Resume all suspended jobs.
+
+        Note that only jobs with 'suspended' status will be resumed. Thus jobs
+        that are not running due to errors and are marked with 'error' status
+        will not be resumed except by specifically calling resume_job()."""
+        self._change_all_status(STATUS_SUSPENDED, STATUS_QUEUED)
+
+    def _change_all_status(self, status_from, status_to):
+        """Change all jobs with status_from to have status_to instead."""
+        jobs = self.jobs.get_jobs()
+        for job in jobs:
+            if job.status == status_from:
+                self.jobs.update(job.exec_file, status=status_to)
+        if self.is_running():
+            self._awaken_daemon()
+
     def status(self):
         """Print a status message listing the running and queued jobs, if any."""
         is_running = self.is_running()
