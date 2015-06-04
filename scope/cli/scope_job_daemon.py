@@ -60,7 +60,10 @@ def main(argv):
     parser_resume.add_argument(metavar='py_file', dest='exec_file', help='python script to resume')
     parser_resume.add_argument('-d', '--delay', metavar='DELAY', type=parse_delay, dest='next_run_time',
         help='time to delay before next running the job (h, h:m, or h:m:s). If not specified, use the currently scheduled next-run time')
-
+    parser_suspend_all = subparsers.add_parser('suspend_all',
+        help='suspend all queued jobs (do not remove jobs from queue, but do not run again until it is resumed)')
+    parser_resume_all = subparsers.add_parser('resume_all',
+        help='resume all suspended jobs (except those not running due to "error" status)')
     args = parser.parse_args()
 
     try:
@@ -74,9 +77,13 @@ def main(argv):
                 runner.stop()
         else:
             arg_dict = dict(vars(args))
-            del arg_dict['command']
             del arg_dict['debug']
-            func = getattr(runner, arg_dict.pop('func'))
+            if 'func' in arg_dict:
+                func_name = arg_dict.pop('func')
+                del arg_dict['command']
+            else:
+                func_name = arg_dict.pop('command')
+            func = getattr(runner, func_name)
             func(**arg_dict)
     except Exception as e:
         if args.debug:

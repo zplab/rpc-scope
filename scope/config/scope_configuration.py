@@ -98,4 +98,4 @@ class ConfigDict(dict):
 
 def _load_config(config_file):
     module_globals = runpy.run_path(config_file)
-    return ConfigDict(module_globals)
+    return ConfigDict(module_globals['scope_configuration'])

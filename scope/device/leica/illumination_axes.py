@@ -111,7 +111,7 @@ class ILFieldWheel(enumerated_properties.DictProperty):
         for i in range(min_pos, max_pos+1):
             pos, shape, size, *special = self._il.send_message(GET_LFWHEEL_PROPERTIES, i, async=False, intent="get IL field wheel property values name").response.split(' ')
 
-            name = '{}{}'.format(self._shape_info[shape], size)
+            name = '{}:{}'.format(self._shape_info[shape], size)
             if special:
                 name += special[0]
             d[i] = name
@@ -172,7 +172,7 @@ class TL(_ShutterDevice):
         return int(self.send_message(GET_POS_LFBL_TL, async=False, intent="get field diaphragm position").response)
 
     def set_field_diaphragm(self, position):
-        self.send_message(POS_ABS_LFBL_TL, intent="set field diaphragm position")
+        self.send_message(POS_ABS_LFBL_TL, position, intent="set field diaphragm position")
 
     def get_field_diaphragm_range(self):
         pos_min = int(self.send_message(GET_MIN_POS_LFBL_TL, async=False, intent="get field diaphragm min position").response)
@@ -183,7 +183,7 @@ class TL(_ShutterDevice):
         return int(self.send_message(GET_POS_APBL_TL, async=False, intent="get aperture diaphragm position").response)
 
     def set_aperture_diaphragm(self, position):
-        self.send_message(POS_ABS_APBL_TL, intent="set aperture diaphragm position")
+        self.send_message(POS_ABS_APBL_TL, position, intent="set aperture diaphragm position")
 
     def get_aperture_diaphragm_range(self):
         pos_min = int(self.send_message(GET_MIN_POS_APBL_TL, async=False, intent="get aperture diaphragm min position").response)

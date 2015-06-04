@@ -44,7 +44,7 @@ class ReadonlySetProperty:
         of a read/write attribute, assigned to .value. Assigning anything not appearing
         in this list to a writeable attribute's .value causes a ValueError exception to
         be raised."""
-        return self._valid_set
+        return list(sorted(self._valid_set))
 
     def get_value(self):
         """The current value."""
@@ -90,7 +90,7 @@ class ReadonlyDictProperty:
 
     def get_recognized_values(self):
         """The list of recognized values for this property."""
-        return list(self._usr_to_hw.keys())
+        return list(sorted(self._usr_to_hw.keys()))
 
     def get_value(self):
         """The current value."""
