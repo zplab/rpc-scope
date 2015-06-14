@@ -519,8 +519,8 @@ class Camera(property_device.PropertyDevice):
         use the start_image_sequence_acquisition(), next_image(), and
         end_image_sequence_acquisition() functions, with software/internal/external
         triggering as appropriate."""
-        read_timeout_ms = self.get_exposure_time() + 1000 # exposure time + 1 second
         self.start_image_sequence_acquisition(frame_count=1, **camera_params)
+        read_timeout_ms = self.get_exposure_time() + 1000 # exposure time + 1 second
         name = self.next_image(read_timeout_ms)
         self.end_image_sequence_acquisition()
         return name
