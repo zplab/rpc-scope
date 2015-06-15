@@ -199,16 +199,27 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         assert self.INTERVAL_MODE in {'scheduled start', 'actual start', 'end'}
         timestamps = self.experiment_metadata['timestamps']
         elapsed_sec = timestamps[-1] - timestamps[0]# time since beginning of timecourse
-        interval_hours = self.get_next_run_interval(elapsed_sec / (60 * 60))
+        elapsed_hours = elapsed_sec / 60**2
+        interval_hours = self.get_next_run_interval(elapsed_hours)
+        interval_seconds = interval_hours * 60**2
         if interval_hours is None:
             return None
         if interval_mode == 'scheduled start':
-            start = self.scheduled_start
+            seconds_delayed = self.start_time - self.scheduled_start
+            if seconds_delayed > interval_seconds:
+                # we've fallen more than a full cycle behind!
+                # keep the relative phase of the cycle, but skip all the
+                # cycles that we've lost.
+                phase = seconds_delayed % interval_seconds
+                start = self.start_time - phase
+            else:
+                start = self.scheduled_start
+
         elif interval_mode == 'actual start':
             start = self.start_time
         else:
             start = self.end_time
-        return start + interval_hours * 60 * 60
+        return start + interval_seconds
 
     def acquire_images(self, position_name, position_dir, position_metadata):
         if self.USE_LAST_FOCUS_POSITION and position_metadata:
