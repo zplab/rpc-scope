@@ -32,8 +32,8 @@ handler_template = string.Template(
 '''from scope.timecourse import timecourse_handler
 
 class Handler(timecourse_handler.BasicAcquisitionHandler):
-    FILTER_CUBE = '$filter_cube'
-    FLUORESCENCE_FLATFIELD_LAMP = '$fl_flatfield_lamp'
+    FILTER_CUBE = $filter_cube
+    FLUORESCENCE_FLATFIELD_LAMP = $fl_flatfield_lamp
     OBJECTIVE = 10
     PIXEL_READOUT_RATE = '100 MHz'
     USE_LAST_FOCUS_POSITION = True
@@ -84,8 +84,8 @@ def create_acquire_file(data_dir, run_interval, filter_cube, fluorescence_flatfi
     data_dir = pathlib.Path(data_dir)
     if not data_dir.exists():
         data_dir.mkdir()
-    code = handler_template.substitute(filter_cube=filter_cube,
-        fl_flatfield_lamp=fluorescence_flatfield_lamp, run_interval=run_interval)
+    code = handler_template.substitute(filter_cube=repr(filter_cube),
+        fl_flatfield_lamp=repr(fluorescence_flatfield_lamp), run_interval=repr(run_interval))
     with (data_dir / 'acquire.py').open('w') as f:
         f.write(code)
 
