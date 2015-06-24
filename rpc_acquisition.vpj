@@ -78,10 +78,14 @@
 		<Folder Name="scope">
 			<Folder Name="cli">
 				<F N="scope/cli/__init__.py"/>
-				<F N="scope/cli/base_daemon.py"/>
 				<F N="scope/cli/scope_daemon.py"/>
 				<F N="scope/cli/scope_gui.py"/>
 				<F N="scope/cli/scope_job_daemon.py"/>
+			</Folder>
+			<Folder Name="client_util">
+				<F N="scope/client_util/__init__.py"/>
+				<F N="scope/client_util/autofocus.py"/>
+				<F N="scope/client_util/calibrate.py"/>
 			</Folder>
 			<Folder Name="config">
 				<F N="scope/config/__init__.py"/>
@@ -141,16 +145,21 @@
 			</Folder>
 			<Folder Name="timecourse">
 				<F N="scope/timecourse/__init__.py"/>
+				<F N="scope/timecourse/base_handler.py"/>
+				<F N="scope/timecourse/create_timecourse_dir.py"/>
 				<F N="scope/timecourse/scope_job_runner.py"/>
 				<F N="scope/timecourse/timecourse_handler.py"/>
 			</Folder>
 			<Folder Name="util">
 				<F N="scope/util/__init__.py"/>
+				<F N="scope/util/base_daemon.py"/>
 				<F N="scope/util/enumerated_properties.py"/>
+				<F N="scope/util/json_encode.py"/>
 				<F N="scope/util/log_util.py"/>
 				<F N="scope/util/logging.py"/>
 				<F N="scope/util/property_device.py"/>
 				<F N="scope/util/smart_serial.py"/>
+				<F N="scope/util/state_stack.py"/>
 				<F N="scope/util/threaded_image_io.py"/>
 				<F N="scope/util/transfer_ism_buffer.py"/>
 			</Folder>
