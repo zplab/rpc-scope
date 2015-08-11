@@ -126,19 +126,28 @@ def _client_unpack_data(buf, compressor='blosc'):
     # is stored as an un-sliceable 0-dim buffer. So we have to make a copy.
     # Also, blosc.decompress can't yet handle a memoryview object either, so
     # we'd need it as a bytes object at that point anyway.
-    # TODO: try removing the bytes(buf) line in mid-2015 to see if they have accepted my patches to fix these issues.
-    buf = bytes(buf)
+
+    # TODO: try replacing the blosc.decompress_ptr section with blosc.decompress in the style
+    # of the zlib section in mid-2016 to see if they have accepted Zach's patches to fix these issues.
+#   buf = bytes(buf)
     header_len = struct.unpack_from('<H', buf[:2])[0]
     dtype, shape, order = json.loads(bytes(buf[2:header_len+2]).decode('ascii'))
     array_buf = buf[header_len+2:]
     if compressor is None:
-        data = array_buf
+        array = numpy.ndarray(shape, dtype=dtype, order=order, buffer=array_buf)
+        array.flags.writeable = True
+        return array
     elif compressor == 'zlib':
         data = zlib.decompress(array_buf)
+        array = numpy.ndarray(shape, dtype=dtype, order=order, buffer=data)
+        array.flags.writeable = True
+        return array
     elif compressor == 'blosc':
         import blosc
-        data = blosc.decompress(array_buf)
-    return numpy.ndarray(shape, dtype=dtype, order=order, buffer=data)
+        # because blosc.compress can't handle a memoryview, we need to use blosc.decompress_ptr
+        array = numpy.empty(shape, dtype=dtype, order=order)
+        print(blosc.decompress_ptr(array_buf.ctypes.data, array.ctypes.data))
+        return array
 
 def _server_get_node():
     return platform.node()
