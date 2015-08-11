@@ -105,7 +105,11 @@ def _server_pack_data(name, compressor='blosc', **compressor_args):
     if compressor is None:
         output += memoryview(array.flatten(order=order))
     elif compressor == 'zlib':
-        output += zlib.compress(array.flatten(order=order), **compressor_args)
+        has_level_arg = 'level' in compressor_args
+        if len(compressor_args) - has_level_arg > 0:
+            raise RuntimeError('"level" is the only valid valid zlib compression option.')
+        zlib_compressor_args = [compressor_args['level']] if has_level_arg else []
+        output += zlib.compress(array.flatten(order=order), *zlib_compressor_args)
     elif compressor == 'blosc':
         import blosc
         # because blosc.compress can't handle a memoryview, we need to use blosc.compress_ptr
