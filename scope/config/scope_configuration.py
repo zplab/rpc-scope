@@ -45,7 +45,7 @@ def interrupt_addr(host=None):
         host = config.Server.LOCALHOST
     return _make_tcp_host(host, config.Server.RPC_INTERRUPT_PORT)
 
-def property_addr(config, host=None):
+def property_addr(host=None):
     config = get_config()
     if host is None:
         host = config.Server.LOCALHOST
