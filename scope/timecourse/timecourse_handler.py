@@ -196,7 +196,8 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         metering[self.timepoint_prefix] = dict(exposure=self.bf_exposure, intensity=self.tl_intensity)
 
     def get_next_run_time(self):
-        assert self.INTERVAL_MODE in {'scheduled start', 'actual start', 'end'}
+        interval_mode = self.INTERVAL_MODE
+        assert interval_mode in {'scheduled start', 'actual start', 'end'}
         timestamps = self.experiment_metadata['timestamps']
         elapsed_sec = timestamps[-1] - timestamps[0]# time since beginning of timecourse
         elapsed_hours = elapsed_sec / 60**2

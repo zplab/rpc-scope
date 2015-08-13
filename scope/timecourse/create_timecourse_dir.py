@@ -100,12 +100,6 @@ def create_metadata_file(data_dir, positions, z_max, reference_positions):
         z_max: maximum z-value allowed during autofocus
         reference_positions: list of (x,y,z) positions to be used to generate
             brightfield and optionally fluorescence flat-field images.
-        run_interval: desired number of minutes between starts of timepoint
-            acquisitions.
-        filter_cube: name of the filter cube to use
-        fluorescence_flatfield_lamp: if fluorescent flatfield images are
-            desired, provide the name of an appropriate spectra x lamp that is
-            compatible with the specified filter cube.
     """
     data_dir = pathlib.Path(data_dir)
     if not data_dir.exists():
