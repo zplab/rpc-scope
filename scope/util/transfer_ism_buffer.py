@@ -122,32 +122,29 @@ def _client_unpack_data(buf, compressor='blosc'):
     """Unpack (on the client side) data packed (on the server side) by _server_pack_data().
     The compressor name passed to _server_pack_data() must also be passed
     to this function."""
-    # buf comes from a ZMQ zero-copy memoryview, which unfortunately currently
-    # is stored as an un-sliceable 0-dim buffer. So we have to make a copy.
-    # Also, blosc.decompress can't yet handle a memoryview object either, so
-    # we'd need it as a bytes object at that point anyway.
-
-    # TODO: try replacing the blosc.decompress_ptr section with blosc.decompress in the style
-    # of the zlib section in mid-2016 to see if they have accepted Zach's patches to fix these issues.
-#   buf = bytes(buf)
     header_len = struct.unpack_from('<H', buf[:2])[0]
     dtype, shape, order = json.loads(bytes(buf[2:header_len+2]).decode('ascii'))
     array_buf = buf[header_len+2:]
+    # NB: If this function exits with an exception involving zero-length slices, please upgrade your pyzmq
+    # installation (the issue is known to be fixed pyzmq 14.6.0, and at the time this comment was written,
+    # "pip-3.4 install pyzmq" grabbed 14.7.0).
     if compressor is None:
-        array = numpy.ndarray(shape, dtype=dtype, order=order, buffer=array_buf)
-        array.flags.writeable = True
-        return array
+        data = array_buf
     elif compressor == 'zlib':
         data = zlib.decompress(array_buf)
-        array = numpy.ndarray(shape, dtype=dtype, order=order, buffer=data)
-        array.flags.writeable = True
-        return array
     elif compressor == 'blosc':
         import blosc
-        # because blosc.compress can't handle a memoryview, we need to use blosc.decompress_ptr
-        array = numpy.empty(shape, dtype=dtype, order=order)
-        print(blosc.decompress_ptr(array_buf.ctypes.data, array.ctypes.data))
-        return array
+        try:
+            # This works as of June 2 (pyblosc git repo commit ID 487fe5531abc38faebd47b92a34991a1489a7ac3)
+            data = blosc.decompress(array_buf)
+        except TypeError:
+            # However, as of Aug 11 2015, the version of pyblosc installed by pip-3.4 does not yet include
+            # the fix, so most lab machines will fall through to the following legacy method, which copies
+            # to a temporary intermediate buffer
+            data = blosc.decompress(bytes(array_buf))
+    array = numpy.ndarray(shape, dtype=dtype, order=order, buffer=data)
+    array.flags.writeable = True
+    return array
 
 def _server_get_node():
     return platform.node()
@@ -161,6 +158,7 @@ def client_get_data_getter(rpc_client, force_remote=False):
     hosts, then the data will be packed and serialized over RPC. In this case,
     get_data() will have a method, 'set_network_compression()' to allow the
     amount of compression applied to the packed data to be tuned."""
+
     if force_remote:
         is_local = False
     else:
