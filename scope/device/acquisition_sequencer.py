@@ -36,6 +36,7 @@ class AcquisitionSequencer:
         self._tl_lamp = scope.tl.lamp
         self._config = scope_configuration.get_config()
         self._latest_timestamps = None
+        self._base_exposures = None
         self._exposures = None
         self._compiled = False
         self._num_acquisitions = 0
@@ -70,7 +71,8 @@ class AcquisitionSequencer:
             set to full intensity.
         """
         self._steps = []
-        self._exposures = [] # contains the actual exposure times that the camera is on, not just the length of time the light was on
+        self._base_exposures = [] # contains the actual exposure times that the camera is on, not just the length of time the light was on
+        self._exposures = None
         self._compiled = False
         # set the wait time reasonably low because we have clean shielded cables
         self._steps.append(self._iotool.commands.wait_time(20))
@@ -88,7 +90,7 @@ class AcquisitionSequencer:
         Note that the camera will be exposing during this delay, though no lights will be on."""
         assert 0 < delay < 2**16
         self._steps.append(self._iotool.commands.delay_ms(int(delay)))
-        self._exposures[-1] += delay
+        self._base_exposures[-1] += delay
 
     def add_delay_us(self, delay):
         """Add a delay of the given number of microseconds (up to 2**15-1) to the acquisition).
@@ -99,7 +101,7 @@ class AcquisitionSequencer:
         if delay < 4:
             delay = 4
         self._steps.append(self._iotool.commands.delay_us(int(delay)-4)) # delay command itself takes 4 us, so subtract off 4
-        self._exposures[-1] += delay / 1000
+        self._base_exposures[-1] += delay / 1000
 
     def add_step(self, exposure_ms, tl_enabled=None, tl_intensity=None, lamp_off_delay=None, **spectra_x_lamps):
         """Add an image acquisition step to the existing sequence.
@@ -115,7 +117,7 @@ class AcquisitionSequencer:
         """
         self._compiled = False
         self._num_acquisitions += 1
-        self._exposures.append(0) # the actual exposure time gets added in by the add_delay functions
+        self._base_exposures.append(0) # the actual exposure time gets added in by the add_delay functions
         lamps = {lamp:True for lamp, value in spectra_x_lamps.items() if value}
         self._steps.append(self._iotool.commands.wait_high(self._config.IOTool.CAMERA_PINS['arm']))
         self._steps.append(self._iotool.commands.set_high(self._config.IOTool.CAMERA_PINS['trigger']))
@@ -143,6 +145,8 @@ class AcquisitionSequencer:
 
     def _compile(self):
         """Send the acquisition sequence to the IOTool box"""
+        if self._compiled:
+            return
         assert self._num_acquisitions > 0
         # send one last trigger to end the final acquisition
         steps = list(self._steps)
@@ -151,11 +155,15 @@ class AcquisitionSequencer:
         steps.append(self._iotool.commands.set_low(self._config.IOTool.CAMERA_PINS['trigger']))
         self._iotool.store_program(*steps)
         self._compiled = True
+        self._program = steps
+
+    def get_program(self):
+        self._compile()
+        return self._program
 
     def run(self):
         """Run the assembled acquisition steps and return the images obtained."""
-        if not self._compiled:
-            self._compile()
+        self._compile()
         # state stack: set tl_intensity to current intensity, so that if it gets set
         # as part of the acquisition, it will be returned to the current value. Must set it to
         # the current value here because if it's not set, setting it to something else
@@ -169,7 +177,7 @@ class AcquisitionSequencer:
             self._camera.start_image_sequence_acquisition(self._num_acquisitions, trigger_mode='External Exposure',
                 overlap_enabled=True, auxiliary_out_source='FireAll', selected_io_pin_inverted=False)
             readout_ms = self._camera.get_readout_time() # get this after setting the relevant camera modes above
-            self._exposures = [exp + readout_ms for exp in self._exposures]
+            self._exposures = [exp + readout_ms for exp in self._base_exposures]
             self._iotool.start_program()
             names, self._latest_timestamps = [], []
             for exposure in self._exposures:
@@ -186,6 +194,8 @@ class AcquisitionSequencer:
         """Return the full amount of time the camera was exposing for each image.
         This is DIFFERENT than the amount of time that the light was on at each step,
         which is the 'exposure_ms' parameter to add_step.
+
+        Exposures can only be retrieved AFTER the acquisition sequence is run.
 
         These exposure times also include the camera read time and any additional delays
         added in the middle of the acquisition."""

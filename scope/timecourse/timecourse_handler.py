@@ -232,7 +232,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
             self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS)
 
-        self.logger.info('autofocus position: {}'.format(fine_z))
+        self.logger.info('autofocus position: {}', fine_z)
         images = self.scope.camera.acquisition_sequencer.run()
         exposures = self.scope.camera.acquisition_sequencer.exposure_times
         images = [self.dark_corrector.correct(image, exposure) for image, exposure in zip(images, exposures)]

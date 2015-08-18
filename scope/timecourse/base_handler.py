@@ -86,28 +86,32 @@ class TimepointHandler:
         self.logger.addHandler(handler)
 
     def run_timepoint(self, scheduled_start):
-        self.timepoint_prefix = time.strftime('%Y-%m-%dt%H%M')
-        self.scheduled_start = scheduled_start
-        self.start_time = time.time()
-        self.logger.info('Starting timepoint {} ({:.0f} minutes after scheduled)'.format(self.timepoint_prefix,
-            (self.start_time-self.scheduled_start)/60))
-        # record the timepoint prefix and timestamp for this timepoint into the
-        # experiment metadata
-        self.experiment_metadata.setdefault('timepoints', []).append(self.timepoint_prefix)
-        self.experiment_metadata.setdefault('timestamps', []).append(self.start_time)
-        self.configure_timepoint()
-        for position_name, position_coords in sorted(self.positions.items()):
-            if position_name not in self.skip_positions:
-                self.run_position(position_name, position_coords)
-        self.experiment_metadata['skip_positions'] = list(self.skip_positions)
-        self.finalize_timepoint()
-        self.end_time = time.time()
-        self.experiment_metadata.setdefault('durations', []).append(self.end_time - self.start_time)
-        with self.experiment_metadata_path.open('w') as f:
-            json_encode.encode_legible_to_file(self.experiment_metadata, f)
-        run_again = self.skip_positions != self.positions.keys() # don't run again if we're skipping all the positions
-        if run_again:
-            return self.get_next_run_time()
+        try:
+            self.timepoint_prefix = time.strftime('%Y-%m-%dt%H%M')
+            self.scheduled_start = scheduled_start
+            self.start_time = time.time()
+            self.logger.info('Starting timepoint {} ({:.0f} minutes after scheduled)', self.timepoint_prefix,
+                (self.start_time-self.scheduled_start)/60)
+            # record the timepoint prefix and timestamp for this timepoint into the
+            # experiment metadata
+            self.experiment_metadata.setdefault('timepoints', []).append(self.timepoint_prefix)
+            self.experiment_metadata.setdefault('timestamps', []).append(self.start_time)
+            self.configure_timepoint()
+            for position_name, position_coords in sorted(self.positions.items()):
+                if position_name not in self.skip_positions:
+                    self.run_position(position_name, position_coords)
+            self.experiment_metadata['skip_positions'] = list(self.skip_positions)
+            self.finalize_timepoint()
+            self.end_time = time.time()
+            self.experiment_metadata.setdefault('durations', []).append(self.end_time - self.start_time)
+            with self.experiment_metadata_path.open('w') as f:
+                json_encode.encode_legible_to_file(self.experiment_metadata, f)
+            run_again = self.skip_positions != self.positions.keys() # don't run again if we're skipping all the positions
+            if run_again:
+                return self.get_next_run_time()
+        except:
+            self.logger.error('Exception in timepoint:', exc_info=True)
+            raise
 
     def configure_timepoint(self):
         """Override this method with global configuration for the image acquisitions
