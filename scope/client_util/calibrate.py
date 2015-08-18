@@ -74,11 +74,11 @@ class DarkCurrentCorrector:
 
         Returns: corrected image.
         """
+        if exposure_ms < self.exposures[0] or exposure_ms > self.exposures[-1]:
+            raise ValueError('Exposure time is outside of the calibration range')
         i = numpy.searchsorted(self.exposures, exposure_ms)
         if exposure_ms == self.exposures[i]:
             dark_image = self.dark_images[i]
-        elif i == 0 or i == len(self.dark_images):
-            raise ValueError('Exposure time is outside of the calibration range')
         else:
             before_exp, after_exp = self.exposures[i-1], self.exposures[i]
             before_img, after_img = self.dark_images[i-1], self.dark_images[i]
