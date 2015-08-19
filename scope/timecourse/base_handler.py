@@ -107,6 +107,8 @@ class TimepointHandler:
             with self.experiment_metadata_path.open('w') as f:
                 json_encode.encode_legible_to_file(self.experiment_metadata, f)
             run_again = self.skip_positions != self.positions.keys() # don't run again if we're skipping all the positions
+            self.logger.info('Timepoint {} ended ({:.0f} minutes after starting)', self.timepoint_prefix,
+                             (time.time()-self.start_time)/60)
             if run_again:
                 return self.get_next_run_time()
         except:
