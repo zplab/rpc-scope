@@ -303,7 +303,7 @@ class Stage(stand.DM6000Device):
                     distances.append(d)
                     speeds.append(speed)
                     ramps.append(ramp)
-                with self.pushed_state(z_speed=speed, z_ramp=ramp, async=False):
+                with self.in_state(z_speed=speed, z_ramp=ramp, async=False):
                     for d in test_distances:
                         time_move_to(z0 - d, d)
                         time_move_to(z0, d)

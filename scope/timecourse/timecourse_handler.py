@@ -157,7 +157,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         ref_positions = self.experiment_metadata['reference_positions']
 
         self.scope.stage.position = ref_positions[0]
-        with self.scope.tl.lamp.pushed_state(enabled=True):
+        with self.scope.tl.lamp.in_state(enabled=True):
             calibrate.meter_exposure(self.scope, self.scope.tl.lamp, max_exposure=32)
             bf_avg = calibrate.get_averaged_images(self.scope, ref_positions,
                 self.dark_corrector, frames_to_average=2)
@@ -169,7 +169,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         if self.FLUORESCENCE_FLATFIELD_LAMP:
             self.scope.stage.position = ref_positions[0]
             lamp = getattr(self.scope.il.spectra_x, self.FLUORESCENCE_FLATFIELD_LAMP)
-            with lamp.pushed_state(enabled=True):
+            with lamp.in_state(enabled=True):
                 calibrate.meter_exposure(self.scope, lamp, max_exposure=400,
                     min_intensity_fraction=0.1)
                 fl_avg = calibrate.get_averaged_images(self.scope, ref_positions,

@@ -33,24 +33,24 @@ from .util import transfer_ism_buffer
 from .util import state_stack
 from .config import scope_configuration
 
-def replace_pushed_state(namespace):
-    """Recurse through an RPC namespace and replace 'pushed_state' functions with
-    proper context managers. The existing pushed_state functions will not work
+def replace_in_state(namespace):
+    """Recurse through an RPC namespace and replace 'in_state' functions with
+    proper context managers. The existing in_state functions will not work
     client-side."""
     for attr in dir(namespace):
         if attr.startswith('_'):
             continue
-        if attr == 'pushed_state':
-            def pushed_state(**state):
+        if attr == 'in_state':
+            def in_state(**state):
                 """Context manager to set a number of device parameters at once using
                 keyword arguments. The old values of those parameters will be restored
                 upon exiting the with-block."""
-                return state_stack.pushed_state(namespace, **state)
-            setattr(namespace, attr, pushed_state)
+                return state_stack.in_state(namespace, **state)
+            setattr(namespace, attr, in_state)
         else:
             value = getattr(namespace, attr)
             if not callable(value):
-                replace_pushed_state(value)
+                replace_in_state(value)
 
 def rpc_client_main(host='127.0.0.1', context=None):
     rpc_addr = scope_configuration.rpc_addr(host)
@@ -87,7 +87,7 @@ def rpc_client_main(host='127.0.0.1', context=None):
     if not is_local:
         scope.camera.set_network_compression = get_data.set_network_compression
     scope._rpc_client = client
-    replace_pushed_state(scope)
+    replace_in_state(scope)
     scope._lock_attrs() # prevent unwary users from setting new attributes that won't get communicated to the server
     return scope
 
