@@ -72,7 +72,6 @@ class AndorCameraWidget(device_widget.DeviceWidget):
         self.setLayout(Qt.QGridLayout())
         self.camera = scope.camera
         property_types = self.camera.andor_property_types
-        print(property_types)
         advanced_properties = sorted(property_types.keys() - set(self.basic_properties))
         properties = [(property, False) for property in list(self.basic_properties)]
         properties+= [(advanced_property, True) for advanced_property in advanced_properties]
