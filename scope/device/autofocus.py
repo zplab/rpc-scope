@@ -32,7 +32,6 @@ import os.path
 
 from zplib.image import fast_fft
 from ..util import transfer_ism_buffer
-from ..util import state_stack
 
 FFTW_WISDOM = os.path.expanduser('~/fftw_wisdom')
 if os.path.exists(FFTW_WISDOM):
@@ -131,9 +130,8 @@ class Autofocus:
         """Move the stage stepwise from start to end, taking an image at
         each step. Apply the given autofocus metric and move to the best-focused
         position."""
-        with state_stack.pushed_state(self._camera, **self._CAMERA_MODE):
-            safe_images_to_queue = self._camera.get_safe_image_count_to_queue()
-            if steps < safe_images_to_queue:
+        with self._camera.pushed_state(**self._CAMERA_MODE):
+            if steps < self._camera.get_safe_image_count_to_queue():
                 sleep_time = 1/self._camera.get_frame_rate()
             else:
                 sleep_time = self._camera._calculate_live_trigger_interval()
@@ -142,7 +140,7 @@ class Autofocus:
         z_positions = numpy.linspace(start, end, steps)
         self._start_autofocus(metric)
         runner = MetricRunner(self._camera, self._metric, return_images)
-        with state_stack.pushed_state(self._stage, async=False):
+        with self._stage.pushed_state(async=False):
             for z in z_positions:
                 self._stage.set_z(z)
                 self._camera.send_software_trigger()
@@ -166,12 +164,12 @@ class Autofocus:
 
         Once the images are obtained, this function applies the autofocus metric
         to each image and moves to the best-focused position."""
-        with state_stack.pushed_state(self._camera, **self._CAMERA_MODE):
+        with self._camera.pushed_state(**self._CAMERA_MODE):
             oversize_trigger_interval = self._camera._calculate_live_trigger_interval()
             undersize_trigger_interval = 1/self._camera.get_frame_rate()
             safe_images_to_queue = self._camera.get_safe_image_count_to_queue()
         distance = abs(end - start)
-        with state_stack.pushed_state(self._stage, z_speed=max_speed):
+        with self._stage.pushed_state(z_speed=max_speed):
             movement_time = self._stage.calculate_z_movement_time(distance)
 
         if steps is None:
@@ -195,7 +193,7 @@ class Autofocus:
                 sleep_time = required_sleep_time
                 speed = max_speed
 
-        with state_stack.pushed_state(self._stage, async=True, z_speed=speed):
+        with self._stage.pushed_state(async=True, z_speed=speed):
             self._stage.set_z(start) # move to start position
             # while that's going on, set up some things
             self._start_autofocus(metric)

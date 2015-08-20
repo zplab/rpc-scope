@@ -22,7 +22,6 @@
 #
 # Authors: Zach Pincus
 
-from ..util import state_stack
 
 def autofocus(scope, z_start, z_max, coarse_range_mm, coarse_steps, fine_range_mm, fine_steps):
     """Run a two-stage (coarse/fine) autofocus.
@@ -40,7 +39,7 @@ def autofocus(scope, z_start, z_max, coarse_range_mm, coarse_steps, fine_range_m
     Returns: coarse_z, fine_z: the z-positions found at each autofocus stage
     """
     exposure_time = scope.camera.exposure_time
-    with state_stack.pushed_state(scope.tl.lamp, enabled=True):
+    with scope.tl.lamp.pushed_state(enabled=True):
         coarse_z = _autofocus(scope, z_start, z_max, coarse_range_mm, coarse_steps, speed=0.2,
             binning='4x4', exposure_time=exposure_time/16)
         fine_z = _autofocus(scope, coarse_z, z_max, fine_range_mm, fine_steps, speed=0.1,
@@ -51,7 +50,7 @@ def _autofocus(scope, z_start, z_max, range_mm, steps, speed, **camera_params):
     offset = range_mm / 2
     start = z_start - offset
     end = min(z_start + offset, z_max)
-    with state_stack.pushed_state(scope.camera, **camera_params):
+    with scope.camera.pushed_state(**camera_params):
         focus_z, positions_and_scores = scope.camera.autofocus.autofocus_continuous_move(start, end,
             steps=steps, max_speed=speed, metric='high pass + brenner', return_images=False)
     return focus_z

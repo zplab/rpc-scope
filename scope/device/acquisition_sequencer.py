@@ -26,7 +26,6 @@ import time
 import math
 
 from ..config import scope_configuration
-from ..util import state_stack
 
 class AcquisitionSequencer:
     def __init__(self, scope):
@@ -170,9 +169,9 @@ class AcquisitionSequencer:
         # is the wrong thing to do. Also push the exposure time so that it gets
         # restored properly. (The camera seems to not remember it after switching from
         # external exposure mode...)
-        with state_stack.pushed_state(self._spectra_x, **self._starting_fl_lamp_state), \
-             state_stack.pushed_state(self._tl_lamp, enabled=False, intensity=self._tl_lamp.get_intensity()), \
-             state_stack.pushed_state(self._camera, exposure_time=self._camera.get_exposure_time()):
+        with self._spectra_x.pushed_state(**self._starting_fl_lamp_state), \
+             self._tl_lamp.pushed_state(enabled=False, intensity=self._tl_lamp.get_intensity()), \
+             self._camera.pushed_state(exposure_time=self._camera.get_exposure_time()):
             self._camera.set_io_selector('Aux Out 1')
             self._camera.start_image_sequence_acquisition(self._num_acquisitions, trigger_mode='External Exposure',
                 overlap_enabled=True, auxiliary_out_source='FireAll', selected_io_pin_inverted=False)

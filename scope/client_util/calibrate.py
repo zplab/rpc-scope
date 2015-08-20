@@ -27,7 +27,6 @@ import numpy
 from scipy import ndimage
 from zplib.scalar_stats import mcd
 
-from ..util import state_stack
 
 class DarkCurrentCorrector:
     """Class that acquires dark-current images and corrects newly-acquired images
@@ -47,9 +46,9 @@ class DarkCurrentCorrector:
         """
         self.exposures = numpy.logspace(numpy.log10(min_exposure_ms), numpy.log10(max_exposure_ms), 10, base=10)
         self.dark_images = []
-        with state_stack.pushed_state(scope.il, shutter_open=False), \
-             state_stack.pushed_state(scope.tl, shutter_open=False), \
-             state_stack.pushed_state(scope.tl.lamp, enabled=False):
+        with scope.il.pushed_state(shutter_open=False), \
+             scope.tl.pushed_state(shutter_open=False), \
+             scope.tl.lamp.pushed_state(enabled=False):
             if hasattr(scope.il, 'spectra_x'):
                 scope.il.spectra_x.push_state(**{lamp+'_enabled':False for lamp in
                     scope.il.spectra_x.lamp_specs.keys()})
@@ -131,7 +130,7 @@ def meter_exposure(scope, lamp, max_exposure=200, max_intensity=255,
     exposures[-1] = max_exposure
     intensities = numpy.array([255, 224, 192, 160, 128,  96,  64,  32])
     intensities = intensities[intensities <= max_intensity]
-    with state_stack.pushed_state(lamp, enabled=True):
+    with lamp.pushed_state(enabled=True):
         bit_depth = int(scope.camera.sensor_gain[:2])
         min_good_value = min_intensity_fraction * (2**bit_depth-1)
         max_good_value = max_intensity_fraction * (2**bit_depth-1)
@@ -189,7 +188,7 @@ def get_averaged_images(scope, positions, dark_corrector, frames_to_average=5):
     """
     position_images = []
     exposure_ms = scope.camera.exposure_time
-    with state_stack.pushed_state(scope.stage, async=False):
+    with scope.stage.pushed_state(async=False):
         for position in positions:
             scope.stage.position = position
             scope.camera.start_image_sequence_acquisition(frame_count=frames_to_average,
