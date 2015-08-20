@@ -179,9 +179,10 @@ class Camera(property_device.PropertyDevice):
             self._timer_thread = threading.Thread(target=self._timer_update_temp, daemon=True)
             self._timer_thread.start()
 
-        self._update_live_frame = self._add_property('live_frame', None)
-        self._update_property('live_mode', False)
-        self._latest_live_data = None
+        self._frame_number = -1
+        self._update_property('frame_number', self._frame_number)
+        self._update_property('live_mode', self._live_mode)
+        self._latest_data = None
         self._latest_timestamp = None
 
     def _timer_update_temp(self):
@@ -297,22 +298,36 @@ class Camera(property_device.PropertyDevice):
         old_state = {k: getattr(self, 'get_'+k)() for k in state.keys()}
         self._state_stack.append(old_state)
         overlap = state.pop('overlap_enabled', None)
+        live = state.pop('live_mode', None)
+        if live is False:
+            # if we're turning off live mode, do that first thing
+            self.set_live_mode(False)
         self._set_state(**state)
         # overlap mode has complex dependencies, so it generally shouldn't be set until the very end
         # when presumably those dependencies are satisfied
         if overlap is not None and lowlevel.IsWritable('Overlap'):
             self.set_overlap_enabled(overlap)
+        if live is True:
+            # if we're turning on live mode, do it last
+            self.set_live_mode(True)
 
     def pop_state(self):
         """Restore the most recent set of camera parameters changed by a push_state()
         call."""
         old_state = self._state_stack.pop()
         overlap = old_state.pop('overlap_enabled', None)
+        live = old_state.pop('live_mode', None)
+        if live is False:
+            # if we're turning off live mode, do that first thing
+            self.set_live_mode(False)
         # overlap mode has complex dependencies, so it generally should be unset first, before
         # other changes make overlap mode no longer writable
         if overlap is not None and lowlevel.IsWritable('Overlap'):
             self.set_overlap_enabled(overlap)
         self._set_state(**old_state)
+        if live is True:
+            # if we're turning on live mode, do it last
+            self.set_live_mode(True)
 
     def get_readout_time(self):
         """Return sensor readout time in ms"""
@@ -438,17 +453,24 @@ class Camera(property_device.PropertyDevice):
             self._disable_live()
         self._update_property('live_mode', enabled)
 
-    def live_image(self):
-        """Get the latest live image from the camera."""
+    def latest_image(self):
+        """Get the latest image that the camera retrieved."""
         # Return the name of the shared memory buffer that the latest live image
         # was stored in. The scope_client code will transparently retrieve the
         # image bytes based on this name, either via the ISM_Buffer mechanism if
         # the client is on the same machine, or over the network.
-        if self._latest_live_data is None:
-            raise RuntimeError('No live image has been acquired.')
-        name, array, self._latest_timestamp = self._latest_live_data
+        if self._latest_data is None:
+            raise RuntimeError('No image has been acquired.')
+        name, array, self._latest_timestamp = self._latest_data
         transfer_ism_buffer.server_register_array_for_transfer(name, array)
         return name
+
+    def _update_image_data(self, name, array, timestamp):
+        """Update information about the latest image, and broadcast to the world
+        that another image has been retrieved."""
+        self._latest_data = name, array, timestamp
+        self._frame_number += 1
+        self._update_property('frame_number', self._frame_number)
 
     def _enable_live(self):
         """Turn on live-imaging mode. The basic strategy is to put the camera
@@ -471,9 +493,8 @@ class Camera(property_device.PropertyDevice):
         buffer_maker = BufferFactory(namebase, frame_count=1, cycle=True)
         self._live_mode = True
         lowlevel.Command('AcquisitionStart')
-        def update(frame_number):
-            self._latest_live_data = buffer_maker.convert_buffer()
-            self._update_live_frame(frame_number)
+        def update():
+            self._update_image_data(*buffer_maker.convert_buffer())
         self._live_reader = LiveReader(buffer_maker.queue_buffer, update, trigger_interval)
         self._live_trigger = LiveTrigger(trigger_interval, self._live_reader)
 
@@ -571,10 +592,8 @@ class Camera(property_device.PropertyDevice):
         else:
             cycle_mode = 'Fixed'
             camera_params['frame_count'] = frame_count
-        self._live_before_sequence_acquisition = self._live_mode
-        self.set_live_mode(False)
+        self.push_state(live_mode=False, cycle_mode=cycle_mode, trigger_mode=trigger_mode, **camera_params)
         lowlevel.Flush()
-        self.push_state(cycle_mode=cycle_mode, trigger_mode=trigger_mode, **camera_params)
         self._buffer_maker = BufferFactory(namebase, frame_count=frame_count, cycle=False)
         if frame_count is not None:
             # if we have a known number of images to acquire, create and queue buffers for them now.
@@ -591,13 +610,8 @@ class Camera(property_device.PropertyDevice):
         or an AndorError of TIMEDOUT will be raised."""
         self._buffer_maker.queue_if_needed()
         lowlevel.WaitBuffer(int(round(read_timeout_ms)))
-        name, output_array, self._latest_timestamp = self._buffer_maker.convert_buffer()
-        transfer_ism_buffer.server_register_array_for_transfer(name, output_array)
-        # Return the name of the shared memory buffer that the image
-        # was stored in. The scope_client code will transparently retrieve the
-        # image bytes based on this name, either via the ISM_Buffer mechanism if
-        # the client is on the same machine, or over the network.
-        return name
+        self._update_image_data(*self._buffer_maker.convert_buffer())
+        return self.latest_image()
 
     def get_latest_timestamp(self):
         """Return the timestamp of the most recent image acquired."""
@@ -609,7 +623,6 @@ class Camera(property_device.PropertyDevice):
         lowlevel.Command('AcquisitionStop')
         lowlevel.Flush()
         self.pop_state()
-        self.set_live_mode(self._live_before_sequence_acquisition)
         del self._buffer_maker
 
 
@@ -787,7 +800,7 @@ class LiveReader(LiveModeThread):
                 return
             else:
                 raise
-        self.update(self.image_count)
+        self.update()
         self.image_count += 1
         self.latest_intervals.append(time.time() - t)
 

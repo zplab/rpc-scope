@@ -30,7 +30,27 @@ import threading
 
 from .simple_rpc import rpc_client, property_client
 from .util import transfer_ism_buffer
+from .util import state_stack
 from .config import scope_configuration
+
+def replace_in_state(namespace):
+    """Recurse through an RPC namespace and replace 'in_state' functions with
+    proper context managers. The existing in_state functions will not work
+    client-side."""
+    for attr in dir(namespace):
+        if attr.startswith('_'):
+            continue
+        if attr == 'in_state':
+            def in_state(**state):
+                """Context manager to set a number of device parameters at once using
+                keyword arguments. The old values of those parameters will be restored
+                upon exiting the with-block."""
+                return state_stack.in_state(namespace, **state)
+            setattr(namespace, attr, in_state)
+        else:
+            value = getattr(namespace, attr)
+            if not callable(value):
+                replace_in_state(value)
 
 def rpc_client_main(host='127.0.0.1', context=None):
     rpc_addr = scope_configuration.rpc_addr(host)
@@ -67,6 +87,7 @@ def rpc_client_main(host='127.0.0.1', context=None):
     if not is_local:
         scope.camera.set_network_compression = get_data.set_network_compression
     scope._rpc_client = client
+    replace_in_state(scope)
     scope._lock_attrs() # prevent unwary users from setting new attributes that won't get communicated to the server
     return scope
 
@@ -96,23 +117,24 @@ class LiveStreamer:
         self.latest_intervals = collections.deque(maxlen=10)
         self._last_time = time.time()
         scope_properties.subscribe('scope.camera.live_mode', self._live_change, valueonly=True)
-        scope_properties.subscribe('scope.camera.live_frame', self._live_update, valueonly=True)
+        scope_properties.subscribe('scope.camera.frame_number', self._image_update, valueonly=True)
 
     def get_image(self):
         self.image_received.wait()
-        # stash our latest frame number, as self.frame_no could change if further updates occur while processing...
-        frame_no = self.frame_no
         # get image before re-enabling image-receiving because if this is over the network, it could take a while
-        image = self.scope.camera.live_image()
+        image = self.scope.camera.latest_image()
         t = time.time()
         self.latest_intervals.append(t - self._last_time)
         self._last_time = t
+        # stash our latest frame number, as self.frame_number could change if further updates occur
+        # after we clear the image_received Event...
+        frame_number = self.frame_number
         self.image_received.clear()
-        return image, frame_no
+        return image, frame_number
 
     def get_fps(self):
-        if not self.live:
-            return
+        if not self.latest_intervals:
+            return 0
         return 1/numpy.mean(self.latest_intervals)
 
     def _live_change(self, live):
@@ -121,18 +143,14 @@ class LiveStreamer:
         self.latest_intervals.clear()
         self._last_time = time.time()
 
-    def _live_update(self, frame_no):
+    def _image_update(self, frame_number):
         # called in property client's thread: note we can't do RPC calls...
         # Note: if we've already received an image, but nobody on the main thread
         # has called get_image() to retrieve it, then just ignore subsequent
-        # updates. However, always update the frame number so that get_image()
-        # can accurately report what the current frame is (in case the client
-        # cares to know if frames were dropped. There's a bit of a race-condition
-        # here if the frame is updated while get_image() is in action, but this
-        # is a pretty minimal issue and not worth adding locking around.
-        if frame_no is None:
+        # updates.
+        if frame_number is -1:
             return
-        self.frame_no = frame_no
         if not self.image_received.is_set():
+            self.frame_number = frame_number
             self.image_received.set()
             self.image_ready_callback()

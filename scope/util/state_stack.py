@@ -24,8 +24,10 @@
 import contextlib
 
 @contextlib.contextmanager
-def pushed_state(device, **state):
-    """context manager to push and pop state around a with-block"""
+def in_state(device, **state):
+    """Context manager to set a number of device parameters at once using
+    keyword arguments. The old values of those parameters will be restored
+    upon exiting the with-block."""
     device.push_state(**state)
     try:
         yield
@@ -57,3 +59,9 @@ class StateStackDevice:
         """
         old_state = self._state_stack.pop()
         self._set_state(**old_state)
+
+    def in_state(self, **state):
+        """Context manager to set a number of device parameters at once using
+        keyword arguments. The old values of those parameters will be restored
+        upon exiting the with-block."""
+        return in_state(self, **state)
