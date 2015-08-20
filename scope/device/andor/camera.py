@@ -520,12 +520,6 @@ class Camera(property_device.PropertyDevice):
         lowlevel.Command('AcquisitionStop')
         lowlevel.Flush()
         self._live_mode = False
-        self._update_live_frame(None)
-        # Note: do not set self._live_buffer_name or self._live_array to None.
-        # Instead let them stick around, so if any clients wanted to call live_image()
-        # to obtain the live array, they can still grab the last frame.
-        # This avoids the race condition where live mode is turned off right before
-        # a client tries to grab the image.
         self.pop_state()
 
     def get_live_fps(self):

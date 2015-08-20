@@ -35,7 +35,7 @@ from ..util import logging
 logger = logging.get_logger(__name__)
 
 class BaseRPCServer:
-    """Dispatch remote calls to callables specified in a dictionary.
+    """Dispatch remote calls to callables specified in a potentially-nested namespace.
     """
     def __init__(self, namespace):
         self.namespace = namespace
@@ -57,7 +57,7 @@ class BaseRPCServer:
             logger.info('Received unknown command: {}', command)
             return
         try:
-            self.run_command(py_command, args, kwargs)
+            response = self.run_command(py_command, args, kwargs)
             logger.debug('Sending response: {}', response)
 
         except (Exception, KeyboardInterrupt) as e:
@@ -70,7 +70,15 @@ class BaseRPCServer:
         return py_command(*args, **kwargs)
 
     def lookup(self, name):
-        return namespace.get(name, None)
+        """Look up a name in the namespace, allowing for multiple levels e.g. foo.bar.baz"""
+        # could just eval, but since command is coming from the network, that's a bad idea.
+        v = self.namespace
+        for k in name.split('.'):
+            try:
+                v = getattr(v, k)
+            except AttributeError:
+                return None
+        return v
 
     def _reply(self, reply, error=False):
         """Reply to clients with either a valid response or an error string."""
@@ -132,8 +140,8 @@ class BaseZMQServer(ZMQServerMixin, BaseRPCServer):
             port: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
             context: a ZeroMQ context to share, if one already exists.
         """
-        BaseRPCServer.__init__(self, namespace, interrupter)
-        ZMQRPCServerMixin.__init__(self, port, context)
+        BaseRPCServer.__init__(self, namespace)
+        ZMQServerMixin.__init__(self, port, context)
 
 
 class BackgroundBaseZMQServer(BaseZMQServer, threading.Thread):
@@ -226,19 +234,9 @@ class RPCServer(BaseRPCServer):
             with self.interrupter.armed():
                 return py_command(*args, **kwargs)
 
-    def lookup(self, name):
-        """Look up a name in the namespace, allowing for multiple levels e.g. foo.bar.baz"""
-        # could just eval, but since command is coming from the network, that's a bad idea.
-        v = self.namespace
-        for k in name.split('.'):
-            try:
-                v = getattr(v, k)
-            except AttributeError:
-                return None
-        return v
 
 class ZMQServer(ZMQServerMixin, RPCServer):
-    def __init__(self, namespace, interruptor, port, context=None):
+    def __init__(self, namespace, interrupter, port, context=None):
         """RPCServer subclass that uses ZeroMQ REQ/REP to communicate with clients.
         Parameters:
             namespace: contains a hierarchy of callable objects to expose to clients.
@@ -247,7 +245,7 @@ class ZMQServer(ZMQServerMixin, RPCServer):
             context: a ZeroMQ context to share, if one already exists.
         """
         RPCServer.__init__(self, namespace, interrupter)
-        ZMQRPCServerMixin.__init__(self, port, context)
+        ZMQServerMixin.__init__(self, port, context)
 
 class Interrupter(threading.Thread):
     """Interrupter runs in a background thread and creates KeyboardInterrupt
@@ -259,11 +257,11 @@ class Interrupter(threading.Thread):
 
     @contextlib.contextmanager
     def armed(self):
-        self.armed = True
+        self._armed = True
         try:
             yield
         finally:
-            self.armed = False
+            self._armed = False
 
     def run(self):
         self.running = True

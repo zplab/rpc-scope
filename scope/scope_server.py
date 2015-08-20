@@ -32,23 +32,27 @@ from .config import scope_configuration
 
 logger = logging.get_logger(__name__)
 
+class Namespace:
+    pass
+
 class ScopeServer:
     def __init__(self, host):
         addresses = scope_configuration.get_addresses(host)
         self.context = zmq.Context()
 
         property_update_server = property_server.ZMQServer(addresses['property'], context=self.context)
-
         scope_controller = scope.Scope(property_update_server)
+        async_namespace = Namespace()
+
         # add transfer_ism_buffer as hidden elements of the namespace, which RPC clients can use for seamless buffer sharing
         scope_controller._transfer_ism_buffer = transfer_ism_buffer
-
-        interrupter = rpc_server.ZMQInterrupter(addresses['interrupt'], context=self.context)
-        async_namespace = {}
+        async_namespace._transfer_ism_buffer = transfer_ism_buffer
         if hasattr(scope_controller, 'camera'):
-            async_namespace.update(latest_image=scope_controller.camera.latest_image)
-        async_server = rpc_server.BackgroxundBaseZMQServer(async_namespace,
+            async_namespace.latest_image=scope_controller.camera.latest_image
+
+        async_server = rpc_server.BackgroundBaseZMQServer(async_namespace,
             addresses['async_rpc'], context=self.context)
+        interrupter = rpc_server.ZMQInterrupter(addresses['interrupt'], context=self.context)
         self.scope_server = rpc_server.ZMQServer(scope_controller, interrupter,
             addresses['rpc'], context=self.context)
 

@@ -55,10 +55,11 @@ def _replace_in_state(client, scope):
 
         obj.in_state = _make_in_state_func(obj)
 
-def rpc_client_main(rpc_addr, interrupt_addr, async_addr, context=None):
+def _make_rpc_client(rpc_addr, interrupt_addr, async_addr, context=None):
     client = rpc_client.ZMQClient(rpc_addr, interrupt_addr, context)
     async_client = rpc_client.BaseZMQClient(async_addr, context)
     is_local, get_data = transfer_ism_buffer.client_get_data_getter(client)
+    is_local, async_get_data = transfer_ism_buffer.client_get_data_getter(async_client)
 
     # define additional client wrapper functions
     def get_many_data(data_list):
@@ -91,24 +92,20 @@ def rpc_client_main(rpc_addr, interrupt_addr, async_addr, context=None):
     scope._rpc_client = client
     scope._async_client = async_client
     if hasattr(scope, 'camera'):
-        scope.camera._synchronous_latest_image = scope.camera.latest_image
         def latest_image():
-            return get_data(async_client('latest_image'))
+            return async_get_data(async_client('latest_image'))
+        latest_image.__doc__ = scope.camera.latest_image.__doc__
+        scope.camera._synchronous_latest_image = scope.camera.latest_image
         scope.camera.latest_image = latest_image
     scope._lock_attrs() # prevent unwary users from setting new attributes that won't get communicated to the server
     return scope
-
-def property_client_main(property_addr, context=None):
-    property_addr = scope_configuration.property_addr(host)
-    scope_properties = property_client.ZMQClient(property_addr, context)
-    return scope_properties
 
 def client_main(host='127.0.0.1', context=None, subscribe_all=False):
     if context is None:
         context = zmq.Context()
     addresses = scope_configuration.get_addresses(host)
-    scope = rpc_client_main(addresses['rpc'], addresses['interrupt'], addresses['async'], context)
-    scope_properties = property_client_main(addresses['property'], context)
+    scope = _make_rpc_client(addresses['rpc'], addresses['interrupt'], addresses['async_rpc'], context)
+    scope_properties = property_client.ZMQClient(addresses['property'], context)
     if subscribe_all:
         # have the property client subscribe to all properties. Even with a no-op callback,
         # this causes the client to keep its internal 'properties' dictionary up-to-date
@@ -123,9 +120,11 @@ class LiveStreamer:
         self.image_received = threading.Event()
         self.live = scope.camera.live_mode
         self.latest_intervals = collections.deque(maxlen=10)
+        self.bit_depth = scope.camera.bit_depth
         self._last_time = time.time()
         scope_properties.subscribe('scope.camera.live_mode', self._live_change, valueonly=True)
         scope_properties.subscribe('scope.camera.frame_number', self._image_update, valueonly=True)
+        scope_properties.subscribe('scope.camera.bit_depth', self._depth_update, valueonly=True)
 
     def get_image(self):
         self.image_received.wait()
@@ -162,3 +161,6 @@ class LiveStreamer:
             self.frame_number = frame_number
             self.image_received.set()
             self.image_ready_callback()
+
+    def _depth_update(self, depth):
+        self.bit_depth = depth

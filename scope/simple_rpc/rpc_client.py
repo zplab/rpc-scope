@@ -199,7 +199,7 @@ class BaseZMQClient(RPCClient):
         pass
 
 
-class ZMQClient(SimpleZMQClient):
+class ZMQClient(BaseZMQClient):
     def __init__(self, rpc_addr, interrupt_addr, context=None):
         """RPCClient subclass that uses ZeroMQ REQ/REP to communicate, and can
         send interrupts.

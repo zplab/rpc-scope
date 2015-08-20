@@ -46,7 +46,7 @@ class LiveViewerWidget(ris_widget.RisWidget):
             image, frame_no = self.live_streamer.get_image()
             if self.bottom_layer is None:
                 self.bottom_layer = self.LayerClass()
-            self.bottom_layer.image = self.ImageClass(image, is_twelve_bit=self.live_streamer.scope.camera.bit_depth=='12 Bit')
+            self.bottom_layer.image = self.ImageClass(image, is_twelve_bit=self.live_streamer.bit_depth=='12 Bit')
             return True
         return super().event(e)
 
