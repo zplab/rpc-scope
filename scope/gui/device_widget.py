@@ -78,17 +78,23 @@ class DeviceWidget(Qt.QWidget):
         if property_setter in self.rpc_functions:
             return self.rpc_client.proxy_function(property_setter)
         else:
-            return lambda x: None
+            return None
 
     def is_property_readonly(self, property):
         return self._get_property_setter(property) is None
 
     def subscribe(self, property, callback):
+        """Register a callback to be updated with new values for a given property.
+
+        If the property is writable, this function returns an "update" function to
+        call to provide new property values. Otherwise None is returned.
+        """
         rpc_updater = self._get_property_setter(property)
         handler = _PropertyHandler(rpc_updater, callback)
         self.scope_properties.subscribe(property, self._emit_property_changed)
         self._subscribed_properties[property].add(handler)
-        return handler.update_device_if_needed
+        if rpc_updater is not None:
+            return handler.update_device_if_needed
 
 class _PropertyHandler:
     def __init__(self, rpc_updater, callback):
@@ -101,6 +107,8 @@ class _PropertyHandler:
         self.callback(value)
 
     def update_device_if_needed(self, value):
+        if self.rpc_updater is None:
+            raise TypeError('Property is not writable!')
         if value != self.value: # no cyclic updates, thankyouverymuch
             try:
                 self.rpc_updater(value)

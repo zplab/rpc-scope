@@ -14,7 +14,7 @@ scope_configuration = dict(
     ),
 
     Camera = dict(
-        MODEL = 'ZYLA-5.5-CL3'
+        MODEL = 'ZYLA-5.5-USB3'
     ),
 
     IOTool = dict(

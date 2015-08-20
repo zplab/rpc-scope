@@ -72,6 +72,7 @@ class AndorCameraWidget(device_widget.DeviceWidget):
         self.setLayout(Qt.QGridLayout())
         self.camera = scope.camera
         property_types = self.camera.andor_property_types
+        print(property_types)
         advanced_properties = sorted(property_types.keys() - set(self.basic_properties))
         properties = [(property, False) for property in list(self.basic_properties)]
         properties+= [(advanced_property, True) for advanced_property in advanced_properties]
@@ -130,6 +131,8 @@ class AndorCameraWidget(device_widget.DeviceWidget):
         widget = Qt.QLineEdit()
         widget.setValidator(self.get_numeric_validator(property, type))
         update = self.subscribe(self.PROPERTY_ROOT + property, callback=lambda value: widget.setText(str(value)))
+        if update is None:
+            raise TypeError('{} is not a writable property!'.format(property))
         coerce_type = int if type == 'Int' else float
         def editing_finished():
             try:
@@ -180,6 +183,8 @@ class AndorCameraWidget(device_widget.DeviceWidget):
         indices = {v:i for i, v in enumerate(values)}
         widget.addItems(values)
         update = self.subscribe(self.PROPERTY_ROOT + property, callback=lambda value: widget.setCurrentIndex(indices[value]))
+        if update is None:
+            raise TypeError('{} is not a writable property!'.format(property))
         def changed(value):
             try:
                 update(value)
@@ -196,6 +201,8 @@ class AndorCameraWidget(device_widget.DeviceWidget):
     def make_bool_widget(self, property):
         widget = Qt.QCheckBox()
         update = self.subscribe(self.PROPERTY_ROOT + property, callback=widget.setChecked)
+        if update is None:
+            raise TypeError('{} is not a writable property!'.format(property))
         def changed(value):
             try:
                 update(value)

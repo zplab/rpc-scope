@@ -163,7 +163,7 @@ class Camera(property_device.PropertyDevice):
         #  custom getters and setters are defined for these features below
         self._add_property_data('ExposureTime', 'Float', False, 'exposure_time', self.get_exposure_time)
         self._add_property_data('ReadoutTime', 'Float', True, 'readout_time', self.get_readout_time)
-        self._add_property_data('FrameRate', 'Float', False, 'frame_rate', self.get_frame_rate)
+        self._add_property_data('FrameRate', 'Float', True, 'frame_rate', self.get_frame_rate)
         # Note: technically, frame rate is a read/write property -- frame rates can be set in for
         # certain internal triggered modes (RS long exposures without overlap, and GS long exposures
         # with and without overlap). But the complexity of supporting this while working around Andor
