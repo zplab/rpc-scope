@@ -33,23 +33,16 @@ import shutil
 def _make_tcp_host(host, port):
     return 'tcp://{}:{}'.format(host, port)
 
-def rpc_addr(host=None):
+def get_addresses(host=None):
     config = get_config()
     if host is None:
         host = config.Server.LOCALHOST
-    return _make_tcp_host(host, config.Server.RPC_PORT)
-
-def interrupt_addr(host=None):
-    config = get_config()
-    if host is None:
-        host = config.Server.LOCALHOST
-    return _make_tcp_host(host, config.Server.RPC_INTERRUPT_PORT)
-
-def property_addr(host=None):
-    config = get_config()
-    if host is None:
-        host = config.Server.LOCALHOST
-    return _make_tcp_host(host, config.Server.PROPERTY_PORT)
+    return dict(
+        rpc=_make_tcp_host(host, config.Server.RPC_PORT),
+        interrupt=_make_tcp_host(host, config.Server.RPC_INTERRUPT_PORT),
+        property=_make_tcp_host(host, config.Server.PROPERTY_PORT),
+        async_rpc=_make_tcp_host(host, config.Server.ASYNC_RPC_PORT)
+     )
 
 CONFIG_FILE = None
 _CONFIG = None

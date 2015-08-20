@@ -55,11 +55,9 @@ def _replace_in_state(client, scope):
 
         obj.in_state = _make_in_state_func(obj)
 
-def rpc_client_main(host='127.0.0.1', context=None):
-    rpc_addr = scope_configuration.rpc_addr(host)
-    interrupt_addr = scope_configuration.interrupt_addr(host)
-
+def rpc_client_main(rpc_addr, interrupt_addr, async_addr, context=None):
     client = rpc_client.ZMQClient(rpc_addr, interrupt_addr, context)
+    async_client = rpc_client.BaseZMQClient(async_addr, context)
     is_local, get_data = transfer_ism_buffer.client_get_data_getter(client)
 
     # define additional client wrapper functions
@@ -91,10 +89,16 @@ def rpc_client_main(host='127.0.0.1', context=None):
     if not is_local:
         scope.camera.set_network_compression = get_data.set_network_compression
     scope._rpc_client = client
+    scope._async_client = async_client
+    if hasattr(scope, 'camera'):
+        scope.camera._synchronous_latest_image = scope.camera.latest_image
+        def latest_image():
+            return get_data(async_client('latest_image'))
+        scope.camera.latest_image = latest_image
     scope._lock_attrs() # prevent unwary users from setting new attributes that won't get communicated to the server
     return scope
 
-def property_client_main(host='127.0.0.1', context=None):
+def property_client_main(property_addr, context=None):
     property_addr = scope_configuration.property_addr(host)
     scope_properties = property_client.ZMQClient(property_addr, context)
     return scope_properties
@@ -102,8 +106,9 @@ def property_client_main(host='127.0.0.1', context=None):
 def client_main(host='127.0.0.1', context=None, subscribe_all=False):
     if context is None:
         context = zmq.Context()
-    scope = rpc_client_main(host, context)
-    scope_properties = property_client_main(host, context)
+    addresses = scope_configuration.get_addresses(host)
+    scope = rpc_client_main(addresses['rpc'], addresses['interrupt'], addresses['async'], context)
+    scope_properties = property_client_main(addresses['property'], context)
     if subscribe_all:
         # have the property client subscribe to all properties. Even with a no-op callback,
         # this causes the client to keep its internal 'properties' dictionary up-to-date

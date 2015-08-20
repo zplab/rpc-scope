@@ -124,8 +124,6 @@ class RPCClient:
                 setattr(NewNamespace, name, accessor_pair.get_property())
             client_namespaces[parents] = NewNamespace()
 
-        if len(client_wrappers) != 0:
-            raise RuntimeError('Not all requested functions to be wrapped could be found!')
         # now assemble these namespaces into the correct hierarchy, fetching intermediate
         # namespaces from the proxy_namespaces dict as required.
         root = client_namespaces[()]
@@ -173,18 +171,16 @@ class ClientNamespace:
 class RPCError(RuntimeError):
     pass
 
-class ZMQClient(RPCClient):
-    def __init__(self, rpc_addr, interrupt_addr, context=None):
+class BaseZMQClient(RPCClient):
+    def __init__(self, rpc_addr, context=None):
         """RPCClient subclass that uses ZeroMQ REQ/REP to communicate.
         Parameters:
-            rpc_addr, interrupt_addr: a string ZeroMQ port identifier, like ''tcp://127.0.0.1:5555''.
+            rpc_addr: a string ZeroMQ port identifier, like ''tcp://127.0.0.1:5555''.
             context: a ZeroMQ context to share, if one already exists.
         """
         self.context = context if context is not None else zmq.Context()
         self.socket = self.context.socket(zmq.REQ)
         self.socket.connect(rpc_addr)
-        self.interrupt_socket = self.context.socket(zmq.PUSH)
-        self.interrupt_socket.connect(interrupt_addr)
 
     def _send(self, command, args, kwargs):
         json = json_encode.encode_compact_to_bytes((command, args, kwargs))
@@ -198,6 +194,23 @@ class ZMQClient(RPCClient):
         else:
             reply = self.socket.recv_json()
         return reply, reply_type == 'error'
+
+    def _send_interrupt(self, message):
+        pass
+
+
+class ZMQClient(SimpleZMQClient):
+    def __init__(self, rpc_addr, interrupt_addr, context=None):
+        """RPCClient subclass that uses ZeroMQ REQ/REP to communicate, and can
+        send interrupts.
+
+        Parameters:
+            rpc_addr, interrupt_addr: a string ZeroMQ port identifier, like ''tcp://127.0.0.1:5555''.
+            context: a ZeroMQ context to share, if one already exists.
+        """
+        super().__init__(rpc_addr, context)
+        self.interrupt_socket = self.context.socket(zmq.PUSH)
+        self.interrupt_socket.connect(interrupt_addr)
 
     def _send_interrupt(self, message):
         self.interrupt_socket.send(bytes(message, encoding='ascii'))

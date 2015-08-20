@@ -28,12 +28,123 @@ import inspect
 import threading
 import os
 import signal
+import contextlib
 
 from ..util import json_encode
 from ..util import logging
 logger = logging.get_logger(__name__)
 
-class RPCServer:
+class BaseRPCServer:
+    """Dispatch remote calls to callables specified in a dictionary.
+    """
+    def __init__(self, namespace):
+        self.namespace = namespace
+
+    def run(self):
+        """Run the RPC server. To quit the server from another thread,
+        set the 'running' attribute to False."""
+        self.running = True
+        while self.running:
+            command, args, kwargs = self._receive()
+            logger.debug("Received command: {}\n    args: {}\n    kwargs: {}", command, args, kwargs)
+            self.call(command, args, kwargs)
+
+    def call(self, command, args, kwargs):
+        """Call the named command with *args and **kwargs"""
+        py_command = self.lookup(command)
+        if py_command is None:
+            self._reply('No such command: {}'.format(command), error=True)
+            logger.info('Received unknown command: {}', command)
+            return
+        try:
+            self.run_command(py_command, args, kwargs)
+            logger.debug('Sending response: {}', response)
+
+        except (Exception, KeyboardInterrupt) as e:
+            exception_str = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
+            self._reply(exception_str, error=True)
+        else:
+            self._reply(response)
+
+    def run_command(self, py_command, args, kwargs):
+        return py_command(*args, **kwargs)
+
+    def lookup(self, name):
+        return namespace.get(name, None)
+
+    def _reply(self, reply, error=False):
+        """Reply to clients with either a valid response or an error string."""
+        raise NotImplementedError()
+
+    def _receive(self):
+        """Block until an RPC call is received from the client, then return the call
+        as (command_name, args, kwargs)."""
+        raise NotImplementedError()
+
+class ZMQServerMixin:
+    def __init__(self, port, context=None):
+        """Mixin for RPC servers that uses ZeroMQ REQ/REP to communicate with clients.
+        Parameters:
+            port: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
+            context: a ZeroMQ context to share, if one already exists.
+        """
+        self.context = context if context is not None else zmq.Context()
+        self.socket = self.context.socket(zmq.REP)
+        self.socket.bind(port)
+
+    def run(self):
+        try:
+            super().run()
+        finally:
+            self.socket.close()
+
+    def _receive(self):
+        json = self.socket.recv()
+        try:
+            command, args, kwargs = zmq.utils.jsonapi.loads(json)
+        except:
+            self._reply(error='Could not unpack command, arguments, and keyword arguments from JSON message.')
+        return command, args, kwargs
+
+    def _reply(self, reply, error=False):
+        if error:
+            reply_type = 'error'
+        elif isinstance(reply, (bytearray, bytes, memoryview)):
+            reply_type = 'bindata'
+        else:
+            reply_type = 'json'
+
+        if reply_type == 'error' or reply_type == 'json':
+            try:
+                reply = json_encode.encode_compact_to_bytes(reply)
+            except TypeError:
+                reply_type = 'error'
+                reply = json_encode.encode_compact_to_bytes('Could not JSON-serialize return value.')
+        self.socket.send_string(reply_type, flags=zmq.SNDMORE)
+        self.socket.send(reply) # TODO: profile to see if copy=False improves performance
+
+
+class BaseZMQServer(ZMQServerMixin, BaseRPCServer):
+    def __init__(self, namespace, port, context=None):
+        """BaseRPCServer subclass that uses ZeroMQ REQ/REP to communicate with clients.
+        Parameters:
+            namespace: contains a hierarchy of callable objects to expose to clients.
+            port: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
+            context: a ZeroMQ context to share, if one already exists.
+        """
+        BaseRPCServer.__init__(self, namespace, interrupter)
+        ZMQRPCServerMixin.__init__(self, port, context)
+
+
+class BackgroundBaseZMQServer(BaseZMQServer, threading.Thread):
+    """ZMQ server that runs in a background thread."""
+    def __init__(self, namespace, port, context=None):
+        BaseZMQServer.__init__(self, namespace, port, context)
+        threading.Thread.__init__(self, name='background RPC server', daemon=True)
+        self.start()
+
+
+class RPCServer(BaseRPCServer):
     """Dispatch remote calls to callable objects in a local namespace.
 
     Calls take the form of command names with a separate arg list and kwarg dict.
@@ -59,31 +170,20 @@ class RPCServer:
             kwonlydefaults: dict mapping keyword-only argument names to default values (if any)
     """
     def __init__(self, namespace, interrupter):
-        self.namespace = namespace
+        super().__init__(namespace)
         self.interrupter = interrupter
 
-    def run(self):
-        """Run the RPC server. To quit the server from another thread,
-        set the 'running' attribute to False."""
-        self.running = True
-        while self.running:
-            command, args, kwargs = self._receive()
-            logger.debug("Received command: {}\n    args: {}\n    kwargs: {}", command, args, kwargs)
-            self.process_command(command, args, kwargs)
 
-    def process_command(self, command, args, kwargs):
+    def call(self, command, args, kwargs):
         """Dispatch a command or deal with special keyword commands.
         Currently, only __DESCRIBE__ is supported.
         """
         if command == '__DESCRIBE__':
-            self.describe()
+            descriptions = []
+            self.gather_descriptions(descriptions, self.namespace)
+            self._reply(descriptions)
         else:
-            self.call(command, args, kwargs)
-
-    def describe(self):
-        descriptions = []
-        self.gather_descriptions(descriptions, self.namespace)
-        self._reply(descriptions)
+            super().call(command, args, kwargs)
 
     @staticmethod
     def gather_descriptions(descriptions, namespace, prefix=''):
@@ -122,24 +222,9 @@ class RPCServer:
                     continue
                 RPCServer.gather_descriptions(descriptions, subnamespace, prefixed_name)
 
-    def call(self, command, args, kwargs):
-        """Call the named command with *args and **kwargs"""
-        py_command = self.lookup(command)
-        if py_command is None:
-            self._reply('No such command: {}'.format(command), error=True)
-            logger.info('Received unknown command: {}', command)
-            return
-        try:
-            self.interrupter.armed = True
-            response = py_command(*args, **kwargs)
-            self.interrupter.armed = False
-            logger.debug('Sending response: {}', response)
-
-        except (Exception, KeyboardInterrupt) as e:
-            exception_str = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
-            self._reply(exception_str, error=True)
-        else:
-            self._reply(response)
+    def run_command(self, py_command, args, kwargs):
+            with self.interrupter.armed():
+                return py_command(*args, **kwargs)
 
     def lookup(self, name):
         """Look up a name in the namespace, allowing for multiple levels e.g. foo.bar.baz"""
@@ -152,17 +237,8 @@ class RPCServer:
                 return None
         return v
 
-    def _reply(self, reply, error=False):
-        """Reply to clients with either a valid response or an error string."""
-        raise NotImplementedError()
-
-    def _receive(self):
-        """Block until an RPC call is received from the client, then return the call
-        as (command_name, args, kwargs)."""
-        raise NotImplementedError()
-
-class ZMQServer(RPCServer):
-    def __init__(self, namespace, interrupter, port, context=None):
+class ZMQServer(ZMQServerMixin, RPCServer):
+    def __init__(self, namespace, interruptor, port, context=None):
         """RPCServer subclass that uses ZeroMQ REQ/REP to communicate with clients.
         Parameters:
             namespace: contains a hierarchy of callable objects to expose to clients.
@@ -170,66 +246,35 @@ class ZMQServer(RPCServer):
             port: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
             context: a ZeroMQ context to share, if one already exists.
         """
-        super().__init__(namespace, interrupter)
-        self.context = context if context is not None else zmq.Context()
-        self.socket = self.context.socket(zmq.REP)
-        self.socket.bind(port)
-
-    def run(self):
-        try:
-            super().run()
-        finally:
-            self.socket.close()
-
-    def _receive(self):
-        json = self.socket.recv()
-        try:
-            command, args, kwargs = zmq.utils.jsonapi.loads(json)
-        except:
-            self._reply(error='Could not unpack command, arguments, and keyword arguments from JSON message.')
-        return command, args, kwargs
-
-    def _reply(self, reply, error=False):
-        if error:
-            reply_type = 'error'
-        elif isinstance(reply, (bytearray, bytes, memoryview)):
-            reply_type = 'bindata'
-        else:
-            reply_type = 'json'
-
-        if reply_type == 'error' or reply_type == 'json':
-            try:
-                reply = json_encode.encode_compact_to_bytes(reply)
-            except TypeError:
-                reply_type = 'error'
-                reply = json_encode.encode_compact_to_bytes('Could not JSON-serialize return value.')
-        self.socket.send_string(reply_type, flags=zmq.SNDMORE)
-        self.socket.send(reply) # TODO: profile to see if copy=False improves performance
-
-
-class Namespace:
-    """Placeholder class to hold attribute values"""
-    pass
+        RPCServer.__init__(self, namespace, interrupter)
+        ZMQRPCServerMixin.__init__(self, port, context)
 
 class Interrupter(threading.Thread):
     """Interrupter runs in a background thread and creates KeyboardInterrupt
     events in the main thread when requested to do so."""
     def __init__(self):
         super().__init__(name='InterruptServer', daemon=True)
-        self.running = True
-        self.armed = False
+        self._armed = False
         self.start()
 
+    @contextlib.contextmanager
+    def armed(self):
+        self.armed = True
+        try:
+            yield
+        finally:
+            self.armed = False
+
     def run(self):
+        self.running = True
         while self.running:
             message = self._receive()
-            logger.debug('Interrupt received: {}, armed={}', message, self.armed)
-            if message == 'interrupt' and self.armed:
+            logger.debug('Interrupt received: {}, armed={}', message, self._armed)
+            if message == 'interrupt' and self._armed:
                 os.kill(os.getpid(), signal.SIGINT)
 
     def _receive(self):
         raise NotImplementedError()
-
 
 class ZMQInterrupter(Interrupter):
     def __init__(self, port, context=None):
@@ -251,3 +296,4 @@ class ZMQInterrupter(Interrupter):
 
     def _receive(self):
         return str(self.socket.recv(), encoding='ascii')
+

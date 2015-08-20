@@ -184,6 +184,7 @@ class Camera(property_device.PropertyDevice):
         self._update_property('live_mode', self._live_mode)
         self._latest_data = None
         self._latest_timestamp = None
+        self._latest_image_lock = threading.Lock()
 
     def _timer_update_temp(self):
         while self._timer_running:
@@ -459,11 +460,12 @@ class Camera(property_device.PropertyDevice):
         # was stored in. The scope_client code will transparently retrieve the
         # image bytes based on this name, either via the ISM_Buffer mechanism if
         # the client is on the same machine, or over the network.
-        if self._latest_data is None:
-            raise RuntimeError('No image has been acquired.')
-        name, array, self._latest_timestamp = self._latest_data
-        transfer_ism_buffer.server_register_array_for_transfer(name, array)
-        return name
+        with self._latest_image_lock:
+            if self._latest_data is None:
+                raise RuntimeError('No image has been acquired.')
+            name, array, self._latest_timestamp = self._latest_data
+            transfer_ism_buffer.server_register_array_for_transfer(name, array)
+            return name
 
     def _update_image_data(self, name, array, timestamp):
         """Update information about the latest image, and broadcast to the world
