@@ -297,22 +297,36 @@ class Camera(property_device.PropertyDevice):
         old_state = {k: getattr(self, 'get_'+k)() for k in state.keys()}
         self._state_stack.append(old_state)
         overlap = state.pop('overlap_enabled', None)
+        live = state.pop('live_mode', None)
+        if live is False:
+            # if we're turning off live mode, do that first thing
+            self.set_live_mode(False)
         self._set_state(**state)
         # overlap mode has complex dependencies, so it generally shouldn't be set until the very end
         # when presumably those dependencies are satisfied
         if overlap is not None and lowlevel.IsWritable('Overlap'):
             self.set_overlap_enabled(overlap)
+        if live is True:
+            # if we're turning on live mode, do it last
+            self.set_live_mode(True)
 
     def pop_state(self):
         """Restore the most recent set of camera parameters changed by a push_state()
         call."""
         old_state = self._state_stack.pop()
         overlap = old_state.pop('overlap_enabled', None)
+        live = old_state.pop('live_mode', None)
+        if live is False:
+            # if we're turning off live mode, do that first thing
+            self.set_live_mode(False)
         # overlap mode has complex dependencies, so it generally should be unset first, before
         # other changes make overlap mode no longer writable
         if overlap is not None and lowlevel.IsWritable('Overlap'):
             self.set_overlap_enabled(overlap)
         self._set_state(**old_state)
+        if live is True:
+            # if we're turning on live mode, do it last
+            self.set_live_mode(True)
 
     def get_readout_time(self):
         """Return sensor readout time in ms"""
@@ -571,10 +585,8 @@ class Camera(property_device.PropertyDevice):
         else:
             cycle_mode = 'Fixed'
             camera_params['frame_count'] = frame_count
-        self._live_before_sequence_acquisition = self._live_mode
-        self.set_live_mode(False)
+        self.push_state(live_mode=False, cycle_mode=cycle_mode, trigger_mode=trigger_mode, **camera_params)
         lowlevel.Flush()
-        self.push_state(cycle_mode=cycle_mode, trigger_mode=trigger_mode, **camera_params)
         self._buffer_maker = BufferFactory(namebase, frame_count=frame_count, cycle=False)
         if frame_count is not None:
             # if we have a known number of images to acquire, create and queue buffers for them now.
@@ -609,7 +621,6 @@ class Camera(property_device.PropertyDevice):
         lowlevel.Command('AcquisitionStop')
         lowlevel.Flush()
         self.pop_state()
-        self.set_live_mode(self._live_before_sequence_acquisition)
         del self._buffer_maker
 
 

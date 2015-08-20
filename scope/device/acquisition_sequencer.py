@@ -171,7 +171,7 @@ class AcquisitionSequencer:
         # external exposure mode...)
         with self._spectra_x.in_state(**self._starting_fl_lamp_state), \
              self._tl_lamp.in_state(enabled=False, intensity=self._tl_lamp.get_intensity()), \
-             self._camera.in_state(exposure_time=self._camera.get_exposure_time()):
+             self._camera.in_state(live_mode=False, exposure_time=self._camera.get_exposure_time()):
             self._camera.set_io_selector('Aux Out 1')
             self._camera.start_image_sequence_acquisition(self._num_acquisitions, trigger_mode='External Exposure',
                 overlap_enabled=True, auxiliary_out_source='FireAll', selected_io_pin_inverted=False)

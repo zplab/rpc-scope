@@ -108,14 +108,16 @@ def get_metric(metric, shape):
     return METRICS[metric](shape)
 
 class Autofocus:
-    _CAMERA_MODE = dict(trigger_mode='Software', readout_rate='280 MHz', shutter_mode='Rolling')
+    _CAMERA_MODE = dict(trigger_mode='Software', readout_rate='280 MHz',
+        shutter_mode='Rolling', live_mode=False)
+
     def __init__(self, camera, stage):
         self._camera = camera
         self._stage = stage
 
     def _start_autofocus(self, metric):
-        self._metric = get_metric(metric, self._camera.get_aoi_shape())
         self._camera.start_image_sequence_acquisition(frame_count=None, **self._CAMERA_MODE)
+        self._metric = get_metric(metric, self._camera.get_aoi_shape())
 
     def _stop_autofocus(self, z_positions):
         self._camera.end_image_sequence_acquisition()
@@ -130,15 +132,15 @@ class Autofocus:
         """Move the stage stepwise from start to end, taking an image at
         each step. Apply the given autofocus metric and move to the best-focused
         position."""
-        with self._camera.in_state(**self._CAMERA_MODE):
-            if steps < self._camera.get_safe_image_count_to_queue():
-                sleep_time = 1/self._camera.get_frame_rate()
-            else:
-                sleep_time = self._camera._calculate_live_trigger_interval()
+        self._start_autofocus(metric)
+
+        if steps < self._camera.get_safe_image_count_to_queue():
+            sleep_time = 1/self._camera.get_frame_rate()
+        else:
+            sleep_time = self._camera._calculate_live_trigger_interval()
 
         exp_time = self._camera.get_exposure_time()
         z_positions = numpy.linspace(start, end, steps)
-        self._start_autofocus(metric)
         runner = MetricRunner(self._camera, self._metric, return_images)
         with self._stage.in_state(async=False):
             for z in z_positions:
@@ -164,10 +166,11 @@ class Autofocus:
 
         Once the images are obtained, this function applies the autofocus metric
         to each image and moves to the best-focused position."""
-        with self._camera.in_state(**self._CAMERA_MODE):
-            oversize_trigger_interval = self._camera._calculate_live_trigger_interval()
-            undersize_trigger_interval = 1/self._camera.get_frame_rate()
-            safe_images_to_queue = self._camera.get_safe_image_count_to_queue()
+        self._start_autofocus(metric)
+
+        oversize_trigger_interval = self._camera._calculate_live_trigger_interval()
+        undersize_trigger_interval = 1/self._camera.get_frame_rate()
+        safe_images_to_queue = self._camera.get_safe_image_count_to_queue()
         distance = abs(end - start)
         with self._stage.in_state(z_speed=max_speed):
             movement_time = self._stage.calculate_z_movement_time(distance)
@@ -196,7 +199,6 @@ class Autofocus:
         with self._stage.in_state(async=True, z_speed=speed):
             self._stage.set_z(start) # move to start position
             # while that's going on, set up some things
-            self._start_autofocus(metric)
             runner = MetricRunner(self._camera, self._metric, return_images)
             zrecorder = ZRecorder(self._camera, self._stage)
             self._stage.wait() # wait for stage to get to start position
