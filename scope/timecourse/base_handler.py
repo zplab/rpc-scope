@@ -75,7 +75,7 @@ class TimepointHandler:
         self.skip_positions = set(self.experiment_metadata.setdefault('skip_positions', []))
         if scope_host is not None:
             from .. import scope_client
-            self.scope = scope_client.rpc_client_main(scope_host)
+            self.scope, self.scope_properties = scope_client.client_main(scope_host)
         else:
             self.scope = None
         self.image_io = threaded_image_io.ThreadedIO(io_threads)
