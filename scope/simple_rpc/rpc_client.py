@@ -104,17 +104,14 @@ class RPCClient:
         client_namespaces = {}
         for parents, function_descriptions in server_namespaces.items():
             # make a custom class to have the right names and more importantly to receive the namespace-specific properties
-            class NewNamespace(RPCClient.ClientNamespace):
+            class NewNamespace(ClientNamespace):
                 pass
             NewNamespace.__name__ = parents[-1] if parents else 'root'
             NewNamespace.__qualname__ = '.'.join(parents) if parents else 'root'
             # create functions and gather property accessors
             accessors = collections.defaultdict(RPCClient._accessor_pair)
             for name, qualname, doc, argspec in function_descriptions:
-                if qualname in client_wrappers:
-                    client_wrap_function = client_wrappers[qualname]
-                else:
-                    client_wrap_function = None
+                client_wrap_function = client_wrappers.pop(qualname, None)
                 client_func = _rich_proxy_function(doc, argspec, name, self, qualname, client_wrap_function)
                 if name.startswith('get_'):
                     accessors[name[4:]].getter = client_func
@@ -127,7 +124,8 @@ class RPCClient:
                 setattr(NewNamespace, name, accessor_pair.get_property())
             client_namespaces[parents] = NewNamespace()
 
-
+        if len(client_wrappers) != 0:
+            raise RuntimeError('Not all requested functions to be wrapped could be found!')
         # now assemble these namespaces into the correct hierarchy, fetching intermediate
         # namespaces from the proxy_namespaces dict as required.
         root = client_namespaces[()]
@@ -155,22 +153,22 @@ class RPCClient:
             # assume one of self.getter or self.setter is set
             return property(self.getter, self.setter, doc=self.getter.__doc__ if self.getter else self.setter.__doc__)
 
-    class ClientNamespace:
-        __attrs_locked = False
-        def _lock_attrs(self):
-            self.__attrs_locked = True
-            for v in self.__dict__.values():
-                if hasattr(v, '_lock_attrs'):
-                    v._lock_attrs()
-        def __setattr__(self, name, value):
-            if self.__attrs_locked:
-                if not hasattr(self, name):
-                    raise RuntimeError('Attribute "{}" is not known, so its state cannot be communicated to the server.'.format(name))
-                else:
-                    cls = type(self)
-                    if not hasattr(cls, name) or not isinstance(getattr(cls, name), property):
-                        raise RuntimeError('Attribute "{}" is not a property value that can be communicated to the server.'.format(name))
-            super().__setattr__(name, value)
+class ClientNamespace:
+    __attrs_locked = False
+    def _lock_attrs(self):
+        self.__attrs_locked = True
+        for v in self.__dict__.values():
+            if hasattr(v, '_lock_attrs'):
+                v._lock_attrs()
+    def __setattr__(self, name, value):
+        if self.__attrs_locked:
+            if not hasattr(self, name):
+                raise RuntimeError('Attribute "{}" is not known, so its state cannot be communicated to the server.'.format(name))
+            else:
+                cls = type(self)
+                if not hasattr(cls, name) or not isinstance(getattr(cls, name), property):
+                    raise RuntimeError('Attribute "{}" is not a property value that can be communicated to the server.'.format(name))
+        super().__setattr__(name, value)
 
 class RPCError(RuntimeError):
     pass

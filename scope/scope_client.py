@@ -33,24 +33,27 @@ from .util import transfer_ism_buffer
 from .util import state_stack
 from .config import scope_configuration
 
-def replace_in_state(namespace):
-    """Recurse through an RPC namespace and replace 'in_state' functions with
-    proper context managers. The existing in_state functions will not work
-    client-side."""
-    for attr in dir(namespace):
-        if attr.startswith('_'):
-            continue
-        if attr == 'in_state':
-            def in_state(**state):
-                """Context manager to set a number of device parameters at once using
-                keyword arguments. The old values of those parameters will be restored
-                upon exiting the with-block."""
-                return state_stack.in_state(namespace, **state)
-            setattr(namespace, attr, in_state)
+def _make_in_state_func(obj):
+    # have to do this in a separate function for each new obj, and not in a loop!
+    # otherwise previous values of "obj" get overwritten
+    def in_state(**state):
+        """Context manager to set a number of device parameters at once using
+        keyword arguments. The old values of those parameters will be restored
+        upon exiting the with-block."""
+        return state_stack.in_state(obj, **state)
+    return in_state
+
+def _replace_in_state(client, scope):
+    for qualname, doc, argspec in client('__DESCRIBE__'):
+        if qualname == 'in_state':
+            obj = scope
+        elif qualname.endswith('.in_state'):
+            parents, name = qualname.rsplit('.', maxsplit=1)
+            obj = eval(parents, scope.__dict__)
         else:
-            value = getattr(namespace, attr)
-            if not callable(value):
-                replace_in_state(value)
+            continue
+
+        obj.in_state = _make_in_state_func(obj)
 
 def rpc_client_main(host='127.0.0.1', context=None):
     rpc_addr = scope_configuration.rpc_addr(host)
@@ -75,19 +78,19 @@ def rpc_client_main(host='127.0.0.1', context=None):
     client_wrappers = {
         'get_configuration': get_config,
         'camera.acquire_image': get_data,
-        'camera.live_image': get_data,
+        'camera.latest_image': get_data,
         'camera.next_image': get_data,
         'camera.acquisition_sequencer.run': get_many_data,
         'camera.autofocus.autofocus': get_autofocus_data,
         'camera.autofocus.autofocus_continuous_move': get_autofocus_data
     }
     scope = client.proxy_namespace(client_wrappers)
+    _replace_in_state(client, scope)
     scope._get_data = get_data
     scope._is_local = is_local
     if not is_local:
         scope.camera.set_network_compression = get_data.set_network_compression
     scope._rpc_client = client
-    replace_in_state(scope)
     scope._lock_attrs() # prevent unwary users from setting new attributes that won't get communicated to the server
     return scope
 
