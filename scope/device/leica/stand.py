@@ -39,18 +39,13 @@ class DM6000Device(message_device.LeicaAsyncDevice, property_device.PropertyDevi
         property_device.PropertyDevice.__init__(self, property_server, property_prefix)
         message_device.LeicaAsyncDevice.__init__(self, message_manager)
 
-    def _order_state(self, state, pushing=True):
-         # set async first when pushing, revert async last when popping
-        async = state.pop('async', None)
-        keys = list(state.keys())
-        values = list(state.values())
-        if async is not None:
-            keys.append('async')
-            values.append(async)
-            if pushing:
-                keys.reverse()
-                values.reverse()
-        return keys, values
+
+    # set async first when pushing, revert async last when popping
+    def _get_push_weights(self, state):
+        return {'async':-1}
+
+    def _get_pop_weights(self, state):
+        return {'async':1}
 
     def push_state(self, **state):
         """Set a number of device parameters at once using keyword arguments, while
@@ -70,7 +65,7 @@ class DM6000Device(message_device.LeicaAsyncDevice, property_device.PropertyDevi
         If the device is in async mode, wait for the state to be restored before
         proceeding.
         """
-        super().pop_state(**state)
+        super().pop_state()
         self.wait() # no-op if not in async, otherwise wait for all setting to be done.
 
 class Stand(DM6000Device):

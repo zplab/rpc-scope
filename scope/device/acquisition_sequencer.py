@@ -166,15 +166,13 @@ class AcquisitionSequencer:
         # state stack: set tl_intensity to current intensity, so that if it gets set
         # as part of the acquisition, it will be returned to the current value. Must set it to
         # the current value here because if it's not set, setting it to something else
-        # is the wrong thing to do. Also push the exposure time so that it gets
-        # restored properly. (The camera seems to not remember it after switching from
-        # external exposure mode...)
+        # is the wrong thing to do.
+
+        self._camera.start_image_sequence_acquisition(self._num_acquisitions, trigger_mode='External Exposure',
+            overlap_enabled=True, auxiliary_out_source='FireAll', selected_io_pin_inverted=False)
         with self._spectra_x.in_state(**self._starting_fl_lamp_state), \
-             self._tl_lamp.in_state(enabled=False, intensity=self._tl_lamp.get_intensity()), \
-             self._camera.in_state(live_mode=False, exposure_time=self._camera.get_exposure_time()):
+             self._tl_lamp.in_state(enabled=False, intensity=self._tl_lamp.get_intensity()):
             self._camera.set_io_selector('Aux Out 1')
-            self._camera.start_image_sequence_acquisition(self._num_acquisitions, trigger_mode='External Exposure',
-                overlap_enabled=True, auxiliary_out_source='FireAll', selected_io_pin_inverted=False)
             readout_ms = self._camera.get_readout_time() # get this after setting the relevant camera modes above
             self._exposures = [exp + readout_ms for exp in self._base_exposures]
             self._iotool.start_program()

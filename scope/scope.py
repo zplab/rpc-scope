@@ -113,7 +113,3 @@ class Scope(message_device.AsyncDeviceNamespace):
         except SerialException as e:
             _log_exception('Could not connect to peltier controller:', e)
         
-
-    def sleep(self, t):
-        import time
-        time.sleep(t)

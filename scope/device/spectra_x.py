@@ -140,8 +140,8 @@ class SpectraX(property_device.PropertyDevice):
         r = self._serial_port.read(2)
         return ((r[0] << 3) | (r[1] >> 5)) * 0.125
 
-    def _set_state(self, properties, values):
-        for lamp_prop, value in zip(properties, values):
+    def _set_state(self, properties_and_values):
+        for lamp_prop, value in properties_and_values:
             lamp, prop = self._get_lamp_and_prop(lamp_prop)
             if prop == 'intensity':
                 self._lamp_intensity(lamp, value)
@@ -155,7 +155,7 @@ class SpectraX(property_device.PropertyDevice):
         Intensity values must be in the range [0, 255]. Valid lamp names can be
         retrieved with get_lamp_specs().
         """
-        self._set_state(self._order_state(lamp_parameters))
+        self._set_state(lamp_parameters.items())
 
     def _get_lamp_and_prop(self, lamp_prop):
         """Split a 'lamp_property' style string into a lamp and property value,
@@ -172,6 +172,10 @@ class SpectraX(property_device.PropertyDevice):
         saving the old values of those parameters. (See lamps() for a description
         of valid parameters.) pop_state() will restore those previous values.
         push_state/pop_state pairs can be nested arbitrarily."""
+        # Also note that we do not filter out identical states from being pushed.
+        # Since the enabled state can be fiddled with IOTool, there is good reason
+        # for pushing an enabled state identical to the current one, so that it
+        # will be restored after any such fiddling.
         old_state = {}
         for lamp_prop in lamp_parameters.keys():
             lamp, prop = self._get_lamp_and_prop(lamp_prop)
@@ -179,6 +183,5 @@ class SpectraX(property_device.PropertyDevice):
                 old_state[lamp_prop] = self._lamp_intensities[lamp]
             else:
                 old_state[lamp_prop] = self._lamp_enableds[lamp]
+        self._set_state(lamp_parameters.items())
         self._state_stack.append(old_state)
-        self._set_state(self._order_state(lamp_parameters))
-

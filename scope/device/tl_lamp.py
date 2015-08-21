@@ -50,3 +50,10 @@ class TL_Lamp(property_device.PropertyDevice):
 
     def get_intensity(self):
         return self._intensity
+
+    def _update_push_states(self, state, old_state):
+        # superclass prevents pushing a state identical to the current one.
+        # But for TL_Lamp, this is useful in case something is going to use
+        # IOTool to change the intensity behind the scenes and thus wants to
+        # push the current intensity/enabled state onto the stack.
+        pass

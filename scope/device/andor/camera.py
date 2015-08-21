@@ -195,12 +195,14 @@ class Camera(property_device.PropertyDevice):
 
     def return_to_default_state(self):
         """Set the camera to its default, baseline state. Always a good idea to do before doing anything else."""
-        with self._live_guarded():
-            if lowlevel.GetBool('CameraAcquiring'):
-                lowlevel.Command('AcquisitionStop')
-            lowlevel.Flush()
-            for feature, setter, value in self._CAMERA_DEFAULTS:
-                setter(feature, value)
+        try:
+            self.set_live_mode(False)
+        except:
+            pass
+        lowlevel.Command('AcquisitionStop')
+        lowlevel.Flush()
+        for feature, setter, value in self._CAMERA_DEFAULTS:
+            setter(feature, value)
 
     def _add_property_data(self, at_feature, at_type, readonly, py_name, getter):
         updater = self._add_property(py_name, getter())
@@ -221,7 +223,7 @@ class Camera(property_device.PropertyDevice):
         setter_name = 'set_'+py_name
         if not readonly and not hasattr(self, setter_name):
             def setter(value):
-                with self._live_guarded():
+                with self.in_state(live_mode=False):
                     enum.set_value(value)
             setattr(self, setter_name, setter)
         return enum
@@ -259,7 +261,7 @@ class Camera(property_device.PropertyDevice):
         if not readonly:
             andor_setter = getattr(lowlevel, 'Set'+at_type)
             def setter(value):
-                with self._live_guarded():
+                with self.in_state(live_mode=False):
                     andor_setter(at_feature, value)
             setattr(self, 'set_'+py_name, setter)
 
@@ -279,52 +281,36 @@ class Camera(property_device.PropertyDevice):
         'Bool', 'Float', or 'Enum', and read_only is a boolean value."""
         return self._andor_property_types
 
-    @contextlib.contextmanager
-    def _live_guarded(self):
-        """context manager to pause and resume live mode around a with-block
-        in which live imaging can't be allowed (e.g. during acquisition of another image.)"""
-        live = self._live_mode
-        if live:
-            self.set_live_mode(False)
-        try:
-            yield
-        finally:
-            if live:
-                self.set_live_mode(True)
+    # STATE-STACK HANDLING
+    # there are complex dependencies here. When pushing, better to set frame_count AFTER cycle_mode,
+    # and trigger_mode AFTER exposure_time, and overlap_mode after all the things it depends on.
+    # when popping, better to go in reverse order from setting the dependent parameters like overlap and frame_count
+    # In all cases, want to turn off live mode ASAP or turn it on only at the end.
+    # NB: low-value weights cause the property to be set sooner. All non-named properties get zero weight
+    def _get_push_weights(self, state):
+        weights = dict(frame_count=1, trigger_mode=2, overlap_enabled=3) # high weight = done later
+        if state.get('live_mode', False): # turning on live mode
+            live_weight = 4 # turn on last
+        else:
+            live_weight = -1 # turn off first
+        weights['live_mode'] = live_weight
+        return weights
 
-    def _order_state(self, state, pushing=True):
-        """Choose the best order to set state parameters when pushing and popping"""
-        # 1) if disabling live, do it first always
-        # 2) if enabling live, do it last always
-        # 3) set overlap last when pushing, and first when popping
-        #     (NB: overlap mode has complex dependencies, so when pushing, it
-        #     generally shouldn't be set until the very end when presumably those
-        #     dependencies are satisfied. On popping the reverse is the case.)
-        # 4) set frame_count last when pushing, and first when popping.
-        #     (frame_count has similar tricky dependencies, mostly with respect
-        #     to cycle_mode.)
-        overlap_enabled = state.pop('overlap_enabled', None)
-        live_mode = state.pop('live_mode', None)
-        frame_count = state.pop('frame_count', None)
-        keys = list(state.keys())
-        values = list(state.values())
-        if frame_count is not None:
-            keys.append('frame_count')
-            values.append(frame_count)
-        if overlap_enabled is not None:
-            keys.append('overlap_enabled')
-            values.append(overlap_enabled)
-        if not pushing:
-            keys.reverse()
-            values.reverse()
-        if live_mode is not None:
-            if live_mode: # enable last
-                keys.append('live_mode')
-                values.append(live_mode)
-            else: # disable first
-                keys.insert(0, 'live_mode')
-                values.insert(0, live_mode)
-        return keys, values
+    def _get_pop_weights(self, state):
+        weights = dict(frame_count=-1, trigger_mode=-2, overlap_enabled=-3) # low weight = done earlier
+        if state.get('live_mode', False): # turning on live mode
+            live_weight = 1 # turn on last
+        else:
+            live_weight = -4 # turn off first
+        weights['live_mode'] = live_weight
+        return weights
+
+    def _update_push_states(self, state, old_state):
+        super()._update_push_states(state, old_state)
+        if state.get('overlap_enabled', False):
+            # Setting overlap_enabled can clobber the exposure time, 
+            # so we need to make sure to save the existing exposure time.
+            old_state['exposure_time'] = self.get_exposure_time()
 
     def get_readout_time(self):
         """Return sensor readout time in ms"""
@@ -377,7 +363,7 @@ class Camera(property_device.PropertyDevice):
         return frame_rate
 
     def set_sensor_gain(self, value):
-        with self._live_guarded():
+        with self.in_state(live_mode=False):
             self._gain_enum.set_value(value)
             if value.startswith('12'):
                 # make sure we always use the packed encoding for 12-bit mode
@@ -414,7 +400,7 @@ class Camera(property_device.PropertyDevice):
         # Performing AOI updates in ascending order of signed parameter value change ensures that setting
         # a collection of AOI parameters that are together legal does not require transitioning through
         # an illegal state.
-        with self._live_guarded():
+        with self.in_state(live_mode=False):
             for key, value in sorted(aoi_dict.items(), key=self._delta_sort_key):
                 getattr(self, 'set_' + key)(value)
 
@@ -485,7 +471,7 @@ class Camera(property_device.PropertyDevice):
         if self._live_mode:
             return
         lowlevel.Flush()
-        self.push_state(overlap_enabled=False, cycle_mode='Continuous', trigger_mode='Software', readout_rate='280 MHz')
+        self.push_state(cycle_mode='Continuous', trigger_mode='Software', readout_rate='280 MHz')
         trigger_interval = self._calculate_live_trigger_interval()
         namebase = 'live@-'+str(time.time())
         buffer_maker = BufferFactory(namebase, frame_count=1, cycle=True)
@@ -636,9 +622,11 @@ class Camera(property_device.PropertyDevice):
 
         """
         desired_trigger_interval = 1/frame_rate
-        with self.in_state(trigger_mode='Internal', **camera_params):
-            # set to internal trigger mode so that we can enable overlap as needed
-            overlap_available = lowlevel.IsWritable('Overlap')
+        # set to internal trigger mode so that we can enable overlap as needed
+        with self.in_state(live_mode=False, trigger_mode='Internal', **camera_params):
+            # NB: setting overlap mode with a short exposure has the effect of setting the exposure time to 
+            # the readout time. So don't do this!
+            overlap_available = lowlevel.IsWritable('Overlap') and desired_trigger_interval > self.readout_time()
             with self.in_state(overlap_enabled=overlap_available):
                 internal_interval = 1/self.get_frame_rate()
             with self.in_state(trigger_mode='Software'):
@@ -666,8 +654,9 @@ class Camera(property_device.PropertyDevice):
                 threading.Thread(target=trigger).start()
             image_names = []
             timestamps = []
+            read_time = 1/self.get_max_interface_fps()
             for _ in range(frame_count):
-                image_names.append(self.next_image(3 * trigger_interval * 1000))
+                image_names.append(self.next_image(3 * read_time * 1000))
                 timestamps.append(self._latest_timestamp)
             self.end_image_sequence_acquisition()
         return image_names, timestamps, 1/trigger_interval
