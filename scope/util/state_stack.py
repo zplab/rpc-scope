@@ -38,11 +38,16 @@ class StateStackDevice:
     def __init__(self):
         self._state_stack = []
 
-    def _set_state(self, **state):
-        """Set a number of device parameters at once using keyword arguments, e.g.
-        device.set_state(foo=False, bar=10)"""
-        for k, v in state.items():
-            getattr(self, 'set_'+k)(v)
+    def _set_state(self, properties, values):
+        """Set a number of device properties at once, in the order specified"""
+        for p, v in zip(properties, values):
+            getattr(self, 'set_'+p)(v)
+
+    def _order_state(self, state, pushing=True):
+        """Order the state dictionary in the best way for setting the device
+        state. The 'pushing' parameter refers to whether the state is being
+        entered or exited via push or pop. Override if order matters."""
+        return state.keys(), state.values()
 
     def push_state(self, **state):
         """Set a number of device parameters at once using keyword arguments, while
@@ -51,14 +56,14 @@ class StateStackDevice:
         """
         old_state = {k: getattr(self, 'get_'+k)() for k in state.keys()}
         self._state_stack.append(old_state)
-        self._set_state(**state)
+        self._set_state(self._order_state(state, pushing=True))
 
     def pop_state(self):
         """Restore the most recent set of device parameters changed by a push_state()
         call.
         """
         old_state = self._state_stack.pop()
-        self._set_state(**old_state)
+        self._set_state(self._order_state(old_state, pushing=False))
 
     def in_state(self, **state):
         """Context manager to set a number of device parameters at once using

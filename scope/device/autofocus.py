@@ -114,8 +114,10 @@ class Autofocus:
         self._camera = camera
         self._stage = stage
 
-    def _start_autofocus(self, metric):
-        self._camera.start_image_sequence_acquisition(frame_count=None, **self._CAMERA_MODE)
+    def _start_autofocus(self, metric, camera_state):
+        camera_state = dict(camera_state)
+        camera_state.update(self._CAMERA_MODE)
+        self._camera.start_image_sequence_acquisition(frame_count=None, **camera_state)
         self._metric = get_metric(metric, self._camera.get_aoi_shape())
 
     def _stop_autofocus(self, z_positions):
@@ -127,11 +129,12 @@ class Autofocus:
         self._stage.wait() # no op if in sync mode, necessary in async mode
         return best_z, zip(z_positions, z_scores)
 
-    def autofocus(self, start, end, steps, metric='high pass + brenner', return_images=False):
+    def autofocus(self, start, end, steps, metric='high pass + brenner',
+        return_images=False, **camera_state):
         """Move the stage stepwise from start to end, taking an image at
         each step. Apply the given autofocus metric and move to the best-focused
         position."""
-        self._start_autofocus(metric)
+        self._start_autofocus(metric, camera_state)
 
         if steps < self._camera.get_safe_image_count_to_queue():
             sleep_time = 1/self._camera.get_frame_rate()
@@ -156,7 +159,8 @@ class Autofocus:
         else:
             return best_z, positions_and_scores
 
-    def autofocus_continuous_move(self, start, end, steps=None, max_speed=0.2, metric='high pass + brenner', return_images=False):
+    def autofocus_continuous_move(self, start, end, steps=None, max_speed=0.2,
+        metric='high pass + brenner', return_images=False, **camera_state):
         """Move the stage from 'start' to 'end' at a constant speed, taking images
         for autofocus constantly. If num_images is None, take images as fast as
         possible; otherwise take approximately the spcified number. If more images
@@ -165,7 +169,7 @@ class Autofocus:
 
         Once the images are obtained, this function applies the autofocus metric
         to each image and moves to the best-focused position."""
-        self._start_autofocus(metric)
+        self._start_autofocus(metric, camera_state)
 
         oversize_trigger_interval = self._camera._calculate_live_trigger_interval()
         undersize_trigger_interval = 1/self._camera.get_frame_rate()

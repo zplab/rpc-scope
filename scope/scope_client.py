@@ -64,6 +64,9 @@ def _make_rpc_client(rpc_addr, interrupt_addr, async_addr, context=None):
     # define additional client wrapper functions
     def get_many_data(data_list):
         return [get_data(name) for name in data_list]
+    def get_stream_data(return_values):
+        images_names, timestamps, attempted_frame_rate = return_values
+        return get_many_data(images_names), timestamps, attempted_frame_rate
     def get_autofocus_data(return_values):
         best_z, positions_and_scores = return_values[:2]
         if len(return_values) == 3:
@@ -79,6 +82,7 @@ def _make_rpc_client(rpc_addr, interrupt_addr, async_addr, context=None):
         'camera.acquire_image': get_data,
         'camera.latest_image': get_data,
         'camera.next_image': get_data,
+        'camera.stream_acquire': get_stream_data,
         'camera.acquisition_sequencer.run': get_many_data,
         'camera.autofocus.autofocus': get_autofocus_data,
         'camera.autofocus.autofocus_continuous_move': get_autofocus_data

@@ -292,43 +292,39 @@ class Camera(property_device.PropertyDevice):
             if live:
                 self.set_live_mode(True)
 
-    def push_state(self, **state):
-        """Set a number of camera parameters at once using keyword arguments, while
-        saving the old values of those parameters. pop_state() will restore those
-        previous values. push_state/pop_state pairs can be nested arbitrarily."""
-        old_state = {k: getattr(self, 'get_'+k)() for k in state.keys()}
-        self._state_stack.append(old_state)
-        overlap = state.pop('overlap_enabled', None)
-        live = state.pop('live_mode', None)
-        if live is False:
-            # if we're turning off live mode, do that first thing
-            self.set_live_mode(False)
-        self._set_state(**state)
-        # overlap mode has complex dependencies, so it generally shouldn't be set until the very end
-        # when presumably those dependencies are satisfied
-        if overlap is not None and lowlevel.IsWritable('Overlap'):
-            self.set_overlap_enabled(overlap)
-        if live is True:
-            # if we're turning on live mode, do it last
-            self.set_live_mode(True)
-
-    def pop_state(self):
-        """Restore the most recent set of camera parameters changed by a push_state()
-        call."""
-        old_state = self._state_stack.pop()
-        overlap = old_state.pop('overlap_enabled', None)
-        live = old_state.pop('live_mode', None)
-        if live is False:
-            # if we're turning off live mode, do that first thing
-            self.set_live_mode(False)
-        # overlap mode has complex dependencies, so it generally should be unset first, before
-        # other changes make overlap mode no longer writable
-        if overlap is not None and lowlevel.IsWritable('Overlap'):
-            self.set_overlap_enabled(overlap)
-        self._set_state(**old_state)
-        if live is True:
-            # if we're turning on live mode, do it last
-            self.set_live_mode(True)
+    def _order_state(self, state, pushing=True):
+        """Choose the best order to set state parameters when pushing and popping"""
+        # 1) if disabling live, do it first always
+        # 2) if enabling live, do it last always
+        # 3) set overlap last when pushing, and first when popping
+        #     (NB: overlap mode has complex dependencies, so when pushing, it
+        #     generally shouldn't be set until the very end when presumably those
+        #     dependencies are satisfied. On popping the reverse is the case.)
+        # 4) set frame_count last when pushing, and first when popping.
+        #     (frame_count has similar tricky dependencies, mostly with respect
+        #     to cycle_mode.)
+        overlap_enabled = state.pop('overlap_enabled', None)
+        live_mode = state.pop('live_mode', None)
+        frame_count = state.pop('frame_count', None)
+        keys = list(state.keys())
+        values = list(state.values())
+        if frame_count is not None:
+            keys.append('frame_count')
+            values.append(frame_count)
+        if overlap_enabled is not None:
+            keys.append('overlap_enabled')
+            values.append(overlap_enabled)
+        if not pushing:
+            keys.reverse()
+            values.reverse()
+        if live_mode is not None:
+            if live_mode: # enable last
+                keys.append('live_mode')
+                values.append(live_mode)
+            else: # disable first
+                keys.insert(0, 'live_mode')
+                values.insert(0, live_mode)
+        return keys, values
 
     def get_readout_time(self):
         """Return sensor readout time in ms"""
@@ -570,15 +566,14 @@ class Camera(property_device.PropertyDevice):
                  - 'External', where new acquisitions are triggered via TTL pulses
                 (usually from the IOTool box); or
                  - 'ExternalExposure', where TTL pulses determine the exposure time.
-
+            All other keyword arguments will be used to set the camera state (e.g.
+            exposure_time, readout_rate, etc.)
         After starting an image sequence, next_image() can be called to retrieve
         images from the camera, and after all images have been received,
         end_image_sequence_acquisition() will properly clean up the acquisition
         state.
 
         """
-        if hasattr(self, '_sequence_acquisition_state'):
-            raise RuntimeError('Already acquiring an image sequence.')
         if frame_count == 1:
             namebase = 'acquire@'+str(time.time())
         else:
@@ -620,6 +615,62 @@ class Camera(property_device.PropertyDevice):
         lowlevel.Flush()
         self.pop_state()
         del self._buffer_maker
+
+    def stream_acquire(self, frame_count, frame_rate, **camera_params):
+        """Acquire a given number of images at the specified frame rate, or
+        as fast as possible if the frame rate is unattainable given the current
+        camera configuration.
+
+        This function automatically determines whether internal triggering
+        and/or overlap mode can be used, for maximum frame rates. If possible
+        rolling shutter mode and the maximum possible readout rate should be
+        used to further optimize frame rates.
+
+        Parameters:
+            frame_count: number of frames to acquire
+            frame_rate: frames per second to acquire at (if possible)
+            All other keyword arguments will be used to set the camera state (e.g.
+            exposure_time, readout_rate, etc.)
+
+        Returns: images, timestamps, attempted_frame_rate
+
+        """
+        desired_trigger_interval = 1/frame_rate
+        with self.in_state(trigger_mode='Internal', **camera_params):
+            # set to internal trigger mode so that we can enable overlap as needed
+            overlap_available = lowlevel.IsWritable('Overlap')
+            with self.in_state(overlap_enabled=overlap_available):
+                internal_interval = 1/self.get_frame_rate()
+            with self.in_state(trigger_mode='Software'):
+                on_camera_software_interval = 1/self.get_frame_rate()
+                transfer_to_computer_interval = self._calculate_live_trigger_interval()
+            trigger_mode = 'Software'
+            overlap_enabled = False
+            if frame_count <= self.get_safe_image_count_to_queue():
+                if desired_trigger_interval < internal_interval:
+                    trigger_mode = 'Internal'
+                    overlap_enabled = overlap_available
+                    min_interval = internal_interval
+                else:
+                    min_interval = on_camera_software_interval
+            else:
+                min_interval = transfer_to_computer_interval
+            trigger_interval = max(min_interval, desired_trigger_interval)
+
+            self.start_image_sequence_acquisition(frame_count, trigger_mode, overlap_enabled=overlap_enabled)
+            if trigger_mode == 'Software':
+                def trigger():
+                    for _ in range(frame_count):
+                        self.send_software_trigger()
+                        time.sleep(trigger_interval)
+                threading.Thread(target=trigger).start()
+            image_names = []
+            timestamps = []
+            for _ in range(frame_count):
+                image_names.append(self.next_image(3 * trigger_interval * 1000))
+                timestamps.append(self._latest_timestamp)
+            self.end_image_sequence_acquisition()
+        return image_names, timestamps, 1/trigger_interval
 
 
 UINT8_P = ctypes.POINTER(ctypes.c_uint8)
@@ -754,7 +805,7 @@ class LiveReader(LiveModeThread):
     def __init__(self, queue_buffer, update, trigger_interval):
         """Repeatedly queue a buffer with the given queue_buffer() function,
         wait for it to be filled via the Andor API, then call
-        update(image_count) which (presumably) will deal with the buffer
+        update() which (presumably) will deal with the buffer
         contents. The argument image_count is the index of the frame retrieved
         since the start of this round of live imaging.
         NB: update() is called in this background thread, so any operations

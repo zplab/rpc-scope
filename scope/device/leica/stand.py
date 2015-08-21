@@ -39,6 +39,19 @@ class DM6000Device(message_device.LeicaAsyncDevice, property_device.PropertyDevi
         property_device.PropertyDevice.__init__(self, property_server, property_prefix)
         message_device.LeicaAsyncDevice.__init__(self, message_manager)
 
+    def _order_state(self, state, pushing=True):
+         # set async first when pushing, revert async last when popping
+        async = state.pop('async', None)
+        keys = list(state.keys())
+        values = list(state.values())
+        if async is not None:
+            keys.append('async')
+            values.append(async)
+            if pushing:
+                keys.reverse()
+                values.reverse()
+        return keys, values
+
     def push_state(self, **state):
         """Set a number of device parameters at once using keyword arguments, while
         saving the old values of those parameters. pop_state() will restore those
@@ -47,13 +60,7 @@ class DM6000Device(message_device.LeicaAsyncDevice, property_device.PropertyDevi
         If the device is in async mode, wait for the state to be set before
         proceeding.
         """
-        old_state = {k: getattr(self, 'get_'+k)() for k in state.keys()}
-        self._state_stack.append(old_state)
-        # set async mode first for predictable results
-        async = state.pop('async', None)
-        if async is not None:
-            self.set_async(async)
-        self._set_state(**state)
+        super().push_state(**state)
         self.wait() # no-op if not in async, otherwise wait for all setting to be done.
 
     def pop_state(self):
@@ -63,12 +70,7 @@ class DM6000Device(message_device.LeicaAsyncDevice, property_device.PropertyDevi
         If the device is in async mode, wait for the state to be restored before
         proceeding.
         """
-        old_state = self._state_stack.pop()
-        async = old_state.pop('async', None)
-        self._set_state(**old_state)
-        # unset async mode last for predictable results
-        if async is not None:
-            self.set_async(async)
+        super().pop_state(**state)
         self.wait() # no-op if not in async, otherwise wait for all setting to be done.
 
 class Stand(DM6000Device):

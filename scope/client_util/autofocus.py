@@ -23,7 +23,7 @@
 # Authors: Zach Pincus
 
 
-def autofocus(scope, z_start, z_max, coarse_range_mm, coarse_steps, fine_range_mm, fine_steps):
+def autofocus(scope, z_start, z_max, coarse_range_mm, coarse_steps, fine_range_mm, fine_steps, return_images=False):
     """Run a two-stage (coarse/fine) autofocus.
 
     Parameters:
@@ -35,22 +35,29 @@ def autofocus(scope, z_start, z_max, coarse_range_mm, coarse_steps, fine_range_m
         fine_range_mm: range to try to focus on, in mm around the optimal coarse
             focal point
         fine_steps: how many focus steps to take over the fine range
+        return_images: if True, return the coarse and fine images acquired
 
-    Returns: coarse_z, fine_z: the z-positions found at each autofocus stage
+    Returns:
+        If return_images is False, returns (coarse_z, fine_z) containing the
+            best z-position found at each autofocus stage.
+        If return_images is True, returns two pairs:
+            (coarse_z, coarse_images), (fine_z, fine_images)
     """
     exposure_time = scope.camera.exposure_time
     with scope.tl.lamp.in_state(enabled=True):
-        coarse_z = _autofocus(scope, z_start, z_max, coarse_range_mm, coarse_steps, speed=0.2,
-            binning='4x4', exposure_time=exposure_time/16)
-        fine_z = _autofocus(scope, coarse_z, z_max, fine_range_mm, fine_steps, speed=0.1,
-            binning='1x1')
-    return coarse_z, fine_z
+        coarse_result = _autofocus(scope, z_start, z_max, coarse_range_mm, coarse_steps, speed=0.2,
+            binning='4x4', exposure_time=exposure_time/16, return_images=return_images)
+        fine_result = _autofocus(scope, coarse_z, z_max, fine_range_mm, fine_steps, speed=0.1,
+            binning='1x1', return_images=return_images)
+    return coarse_result, fine_result
 
-def _autofocus(scope, z_start, z_max, range_mm, steps, speed, **camera_params):
+def _autofocus(scope, z_start, z_max, range_mm, steps, speed, return_images, **camera_params):
     offset = range_mm / 2
     start = z_start - offset
     end = min(z_start + offset, z_max)
-    with scope.camera.in_state(**camera_params):
-        focus_z, positions_and_scores = scope.camera.autofocus.autofocus_continuous_move(start, end,
-            steps=steps, max_speed=speed, metric='high pass + brenner', return_images=False)
-    return focus_z
+    values = scope.camera.autofocus.autofocus_continuous_move(start, end, steps=steps,
+        max_speed=speed, metric='high pass + brenner', return_images=return_images, **camera_params)
+    if return_images:
+        return values[0], values[2] # z-positions and images
+    else:
+        return values[0] # just z-positions

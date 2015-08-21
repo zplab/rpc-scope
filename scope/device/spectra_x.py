@@ -140,21 +140,22 @@ class SpectraX(property_device.PropertyDevice):
         r = self._serial_port.read(2)
         return ((r[0] << 3) | (r[1] >> 5)) * 0.125
 
-    def _set_state(self, **lamp_parameters):
-        """Set a number of lamp parameters at once using keyword arguments, e.g.
-        spectra_x.lamps(red_enabled=True, red_intensity=255, blue_enabled=False)
-
-        Intensity values must be in the range [0, 255]. Valid lamp names can be
-        retrieved with get_lamp_specs().
-        """
-        for lamp_prop, value in lamp_parameters.items():
+    def _set_state(self, properties, values):
+        for lamp_prop, value in zip(properties, values):
             lamp, prop = self._get_lamp_and_prop(lamp_prop)
             if prop == 'intensity':
                 self._lamp_intensity(lamp, value)
             else:
                 self._lamp_enable(lamp, value)
 
-    lamps = _set_state # provide a public interface to state-setting for Spectra X
+    def lamps(self, **lamp_parameters):
+        """Set a number of lamp parameters at once using keyword arguments, e.g.
+        spectra_x.lamps(red_enabled=True, red_intensity=255, blue_enabled=False)
+
+        Intensity values must be in the range [0, 255]. Valid lamp names can be
+        retrieved with get_lamp_specs().
+        """
+        self._set_state(self._order_state(lamp_parameters))
 
     def _get_lamp_and_prop(self, lamp_prop):
         """Split a 'lamp_property' style string into a lamp and property value,
@@ -179,5 +180,5 @@ class SpectraX(property_device.PropertyDevice):
             else:
                 old_state[lamp_prop] = self._lamp_enableds[lamp]
         self._state_stack.append(old_state)
-        self._set_state(**lamp_parameters)
+        self._set_state(self._order_state(lamp_parameters))
 
