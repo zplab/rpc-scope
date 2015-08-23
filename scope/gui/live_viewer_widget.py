@@ -4,7 +4,7 @@ from ris_widget import om, ris_widget
 from .. import scope_client
 
 class LiveViewerWidget(ris_widget.RisWidget):
-    RW_LIVE_STREAM_BINDING_LIVE_UPDATE_EVENT = 1001
+    RW_LIVE_STREAM_BINDING_LIVE_UPDATE_EVENT = Qt.QEvent.registerEventType()
 
     @staticmethod
     def can_run(scope):
@@ -14,7 +14,8 @@ class LiveViewerWidget(ris_widget.RisWidget):
             self,
             scope, scope_properties,
             window_title='RisWidget', parent=None, window_flags=Qt.Qt.WindowFlags(0), msaa_sample_count=2,
-            **kw):
+            **kw
+        ):
         super().__init__(
             window_title=window_title, parent=parent, window_flags=window_flags, msaa_sample_count=msaa_sample_count,
             **kw)
