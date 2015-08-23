@@ -43,10 +43,8 @@ class LiveViewerWidget(ris_widget.RisWidget):
     def event(self, e):
         # This is called by the main QT event loop to service the event posted in post_live_update().
         if e.type() == self.RW_LIVE_STREAM_BINDING_LIVE_UPDATE_EVENT:
-            image, frame_no = self.live_streamer.get_image()
-            if self.bottom_layer is None:
-                self.bottom_layer = self.LayerClass()
-            self.bottom_layer.image = self.ImageClass(image, is_twelve_bit=self.live_streamer.bit_depth=='12 Bit')
+            image_data, frame_no = self.live_streamer.get_image()
+            self.image = self.ImageClass(image_data, is_twelve_bit=self.live_streamer.bit_depth=='12 Bit')
             return True
         return super().event(e)
 
@@ -122,11 +120,8 @@ class PosTableView(Qt.QTableView):
         if midx.isValid():
             m.removeRow(midx.row())
 
-class PosTableModel(om.signaling_list.PropertyTableModel):
-    def flags(self, midx):
-        f = super().flags(midx) | Qt.Qt.ItemIsEditable
-        f |= Qt.Qt.ItemIsDragEnabled if midx.isValid() else Qt.Qt.ItemIsDropEnabled
-        return f
+class PosTableModel(om.signaling_list.DragDropModelBehavior, om.signaling_list.PropertyTableModel):
+    pass
 
 class Pos(Qt.QObject):
     changed = Qt.pyqtSignal(object)
