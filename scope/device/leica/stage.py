@@ -243,9 +243,9 @@ class Stage(stand.DM6000Device):
             return max_speed
 
 
-    def calculate_movement_position(self, distance, t):
+    def calculate_z_movement_position(self, distance, t):
         """Calculate where the stage will be (relative to the starting position)
-        for a move of a given distance (in mm) after t seconds have elapsed.
+        for a z-move of a given distance (in mm) after t seconds have elapsed.
         Distance must be positive."""
         final_speed = self.get_z_speed()
         speed_ramp = self.get_z_ramp()

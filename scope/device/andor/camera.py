@@ -291,14 +291,12 @@ class Camera(property_device.PropertyDevice):
         return self._andor_property_types
 
     def _maybe_update_frame_rate_and_range(self, at_feature):
-        """When setting a property, the frame rate range may change. If so, 
-        update the range and potentially set the frame rate to the max possible."""
+        """When setting a property, the frame rate range may change. If so,
+        update the range and set the frame rate to the max possible."""
         if at_feature in self._PROPERTIES_THAT_CAN_CHANGE_FRAME_RATE_RANGE:
             min, max = self.get_frame_rate_range()
             self._update_property('frame_rate_range',  '[{:.5f}, {:.5f}]'.format(min, max))
-            if at_feature != 'FrameRate':
-                # don't reset the frame rate when we're already trying to do that!!
-                self.set_frame_rate(max)
+            self.set_frame_rate(max)
 
 
     # STATE-STACK HANDLING
@@ -329,7 +327,7 @@ class Camera(property_device.PropertyDevice):
     def _update_push_states(self, state, old_state):
         super()._update_push_states(state, old_state)
         if state.get('overlap_enabled', False):
-            # Setting overlap_enabled can clobber the exposure time, 
+            # Setting overlap_enabled can clobber the exposure time,
             # so we need to make sure to save the existing exposure time.
             old_state['exposure_time'] = self.get_exposure_time()
 
@@ -422,10 +420,11 @@ class Camera(property_device.PropertyDevice):
         AOI is above or below the midline. (Ergo, each half-sensor readout chip must have its
         own RAM.) It depends not at all on the binning or bit depth.
 
-        The dependence is a bit weird:
+        The dependence is a bit weird, but the formula was derived empirically and
+        fits the actual data very closely:
             safe_images_to_queue = 126464 / max_lines + 29
         where max_lines is the maximum number of sensor lines to be read above or below
-        the midline. Note that to give a safety factor here, we actually use 20 in the 
+        the midline. Note that to give a safety factor here, we actually use 20 in the
         formula above...
         """
         binning = int(self.get_binning()[0])
@@ -438,7 +437,7 @@ class Camera(property_device.PropertyDevice):
             above = 1080 - top
             below = bottom - 1080
             lines = max(above, below)
-        return int(126464 / lines + 20) # use 20 here instead of 29 to give a fudge factor... 
+        return int(126464 / lines + 20) # use 20 here instead of 29 to give a safety factor...
 
     def reset_timestamp(self):
         """Reset timestamp clock to zero."""
@@ -642,7 +641,7 @@ class Camera(property_device.PropertyDevice):
             if frame_count > self.get_safe_image_count_to_queue():
                 live_fps = 1/self._calculate_live_trigger_interval()
                 frame_rate = min(live_fps, frame_rate)
-            # NB: setting overlap mode in global shutter mode with a short exposure has the effect of setting the exposure time to 
+            # NB: setting overlap mode in global shutter mode with a short exposure has the effect of setting the exposure time to
             # the readout time. So don't do this! Also can't use overlap mode with Rolling Shutter software triggering.
             try_overlap = True
             if self.get_shutter_mode() == 'Global' and desired_trigger_interval > self.readout_time():
@@ -674,7 +673,7 @@ class Camera(property_device.PropertyDevice):
         """Acquire a given number of images at the specified frame rate, or
         as fast as possible if the frame rate is unattainable given the current
         camera configuration. Overlap mode should not be specified as a camera
-        param, because this function will automatically determine whether it 
+        param, because this function will automatically determine whether it
         should be used.
 
         If possible rolling shutter mode and the maximum possible readout rate
@@ -689,7 +688,7 @@ class Camera(property_device.PropertyDevice):
         Returns: images, timestamps, attempted_frame_rate
 
         """
-        frame_rate, overlap = self.calculate_streaming_mode(frame_count, frame_rate, 
+        frame_rate, overlap = self.calculate_streaming_mode(frame_count, frame_rate,
             trigger_mode='Internal', **camera_params)
         self.start_image_sequence_acquisition(frame_count, frame_rate=frame_rate,
             trigger_mode='Internal', overlap_enabled=overlap, **camera_params)
