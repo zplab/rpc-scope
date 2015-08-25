@@ -75,6 +75,7 @@ class AcquisitionSequencer:
         self._compiled = False
         # set the wait time reasonably low because we have clean shielded cables
         self._steps.append(self._iotool.commands.wait_time(20))
+        self._steps.append(self._iotool.commands.wait_high(self._config.IOTool.CAMERA_PINS['arm']))
         # turn off all the spectra x lamps
         lamp_names = self._spectra_x.get_lamp_specs().keys()
         self._starting_fl_lamp_state = {lamp+'_enabled': False for lamp in lamp_names}
@@ -118,7 +119,6 @@ class AcquisitionSequencer:
         self._num_acquisitions += 1
         self._base_exposures.append(0) # the actual exposure time gets added in by the add_delay functions
         lamps = {lamp:True for lamp, value in spectra_x_lamps.items() if value}
-        self._steps.append(self._iotool.commands.wait_high(self._config.IOTool.CAMERA_PINS['arm']))
         self._steps.append(self._iotool.commands.set_high(self._config.IOTool.CAMERA_PINS['trigger']))
         self._steps.append(self._iotool.commands.set_low(self._config.IOTool.CAMERA_PINS['trigger']))
         self.add_delay_us(50) # wait a little while for the FireAll signal to clear
@@ -149,7 +149,6 @@ class AcquisitionSequencer:
         assert self._num_acquisitions > 0
         # send one last trigger to end the final acquisition
         steps = list(self._steps)
-        steps.append(self._iotool.commands.wait_high(self._config.IOTool.CAMERA_PINS['arm']))
         steps.append(self._iotool.commands.set_high(self._config.IOTool.CAMERA_PINS['trigger']))
         steps.append(self._iotool.commands.set_low(self._config.IOTool.CAMERA_PINS['trigger']))
         self._iotool.store_program(*steps)
