@@ -44,8 +44,6 @@ class IOTool:
             # explicitly clobber traceback from SerialTimeout exception
             raise smart_serial.SerialException('Could not communicate with IOTool device -- is it attached?')
         self.commands = commands.Commands()
-        self._serial_port.setTimeout(None) # change to infinite time-out once initialized and in known-good state,
-        # so that waiting for IOTool replies won't cause timeouts
 
     def reset(self):
         """Attempt to reset the IOTool device to a known-good state."""
@@ -64,6 +62,8 @@ class IOTool:
         echo_reply = self._wait_for_ready_prompt()
         assert echo_reply == _ECHO_OFF + b'\r\n' # read back echo of above (no further echoes will come)
         self._assert_empty_buffer()
+        self._serial_port.setTimeout(None) # change to infinite time-out once initialized and in known-good state,
+        # so that waiting for IOTool replies won't cause timeouts
 
     def execute(self, *commands):
         """Run a series of commands on the IOTool microcontroller."""

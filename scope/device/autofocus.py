@@ -108,19 +108,19 @@ def get_metric(metric, shape):
     return METRICS[metric](shape)
 
 class Autofocus:
-    _CAMERA_MODE = dict(trigger_mode='Software', readout_rate='280 MHz', shutter_mode='Rolling')
+    _CAMERA_MODE = dict(readout_rate='280 MHz', shutter_mode='Rolling')
 
     def __init__(self, camera, stage):
         self._camera = camera
         self._stage = stage
 
-    def _start_autofocus(self, metric, steps, **camera_state):
+    def _start_autofocus(self, metric, **camera_state):
         camera_state.update(self._CAMERA_MODE)
         self._camera.push_state(**camera_state)
         self._metric = get_metric(metric, self._camera.get_aoi_shape())
 
     def _stop_autofocus(self, z_positions):
-        self._camera._pop_state()
+        self._camera.pop_state()
         best_i, z_scores = self._metric.find_best_focus_index()
         best_z = z_positions[best_i]
         del self._metric
@@ -129,62 +129,78 @@ class Autofocus:
         return best_z, zip(z_positions, z_scores)
 
     def autofocus(self, start, end, steps, metric='high pass + brenner',
-        return_images=False, **camera_state):
+            return_images=False, **camera_state):
         """Move the stage stepwise from start to end, taking an image at
         each step. Apply the given autofocus metric and move to the best-focused
         position."""
         self._start_autofocus(metric, **camera_state)
-        frame_rate, overlap = self.calculate_streaming_mode(steps, trigger_mode='Software', desired_frame_rate=1000) # try to get the max possible frame rate...
-        self._camera.start_image_sequence_acquisition(frame_count=steps, overlap=overlap, trigger_mode='Software')
-        sleep_time = 1 / frame_rate
+        frame_rate, overlap = self._camera.calculate_streaming_mode(steps, trigger_mode='Software', desired_frame_rate=1000) # try to get the max possible frame rate...
+        self._camera.start_image_sequence_acquisition(frame_count=steps, overlap_enabled=overlap, trigger_mode='Software')
         z_positions = numpy.linspace(start, end, steps)
         runner = MetricRunner(self._camera, frame_rate, steps, self._metric, return_images)
-        with self._stage.in_state(async=False):
-            for z in z_positions:
-                t0 = time.time()
-                    self._stage.set_z(z)
-                    self._camera.send_software_trigger()
-                    if z != end:
-                        time.sleep(sleep_time - (time.time() - t0))
-            image_names, camera_timestamps = runner.join()
-            self._camera.end_image_sequence_acquisition()
-            best_z, positions_and_scores = self._stop_autofocus(z_positions)
-            if return_images:
-                return best_z, positions_and_scores, image_names
-            else:
+        runner.start()
+        for z in z_positions:
+            self._stage.set_z(z)
+            self._stage.wait()
+            self._camera.send_software_trigger()
+            if z != end:
+                time.sleep(sleep_time)
+        image_names, camera_timestamps = runner.join()
+        self._camera.end_image_sequence_acquisition()
+        best_z, positions_and_scores = self._stop_autofocus(z_positions)
+        if return_images:
+            return best_z, positions_and_scores, image_names
+        else:
             return best_z, positions_and_scores
 
     def autofocus_continuous_move(self, start, end, steps=None, max_speed=0.2,
-        metric='high pass + brenner', return_images=False, **camera_state):
+            metric='high pass + brenner', return_images=False, **camera_state):
         """Move the stage from 'start' to 'end' at a constant speed, taking images
         for autofocus constantly. If num_images is None, take images as fast as
-        possible; otherwise take approximately the spcified number. If more images
+        possible; otherwise take approximately the specified number. If more images
         are requested than can be obtained for a given stage speed, the stage will
         move more slowly.
 
         Once the images are obtained, this function applies the autofocus metric
         to each image and moves to the best-focused position."""
+        self._start_autofocus(metric, **camera_state)
         distance = abs(end - start)
         with self._stage.in_state(z_speed=max_speed):
             min_movement_time = self._stage.calculate_z_movement_time(distance)
-        self._start_autofocus(metric, trigger_mode='Internal', **camera_state)
         if steps is None:
-            steps = self._camera.get_safe_image_count_to_queue()
-        desired_frame_rate = steps / min_movement_time
-        frame_rate, overlap = self.calculate_streaming_mode(steps, desired_frame_rate)
-        time_required = steps / frame_rate
-        speed = self._stage.calculate_required_z_speed(distance, time_required)
+            speed = max_speed
+            with self._camera.in_state(live_mode=False, overlap_enabled=True, trigger_mode='Internal'):
+                min_overlap_frame_rate, max_overlap_frame_rate = self._camera.get_frame_rate_range()
+            steps = int(numpy.ceil(min_movement_time * max_overlap_frame_rate)) # overlap is fastest mode...
+            if steps <= self._camera.get_safe_image_count_to_queue():
+                frame_rate = max_overlap_frame_rate
+                overlap = True
+            else:
+                # back off on the frame rate to sustainable streaming rate
+                frame_rate = self._camera.get_max_interface_fps()
+                steps = int(numpy.ceil(min_movement_time * frame_rate))
+                overlap = frame_rate >= min_overlap_frame_rate
+        else:
+            desired_frame_rate = steps / min_movement_time
+            frame_rate, overlap = self._camera.calculate_streaming_mode(steps, desired_frame_rate, trigger_mode='Internal')
+            time_required = steps / frame_rate
+            speed = self._stage.calculate_required_z_speed(distance, time_required)
         runner = MetricRunner(self._camera, frame_rate, steps, self._metric, return_images)
         zrecorder = ZRecorder(self._camera, self._stage)
+        self._stage.set_z(start) # move to start position at original speed
+        self._stage.wait()
         with self._stage.in_state(async=False, z_speed=speed):
-            self._stage.set_z(start) # move to start position
             zrecorder.start()
             self._camera.start_image_sequence_acquisition(frame_count=steps, trigger_mode='Internal',
-              frame_rate=frame_rate, overlap=overlap)
+              frame_rate=frame_rate, overlap_enabled=overlap)
+            runner.start()
             self._stage.set_z(end)
         zrecorder.stop()
         image_names, camera_timestamps = runner.join()
         self._camera.end_image_sequence_acquisition()
+        if len(camera_timestamps) != steps:
+            self._camera.pop_state()
+            raise RuntimeError('Autofocus image acquisition failed: Expected {} images, got {}.'.format(steps, len(camera_timestamps)))
         z_positions = zrecorder.interpolate_zs(camera_timestamps)
         best_z, positions_and_scores = self._stop_autofocus(z_positions)
         if return_images:
@@ -195,7 +211,7 @@ class Autofocus:
 class MetricRunner(threading.Thread):
     def __init__(self, camera, frame_rate, frame_count, metric, retain_images):
         self.camera = camera
-        self.read_timeout_ms = 3 * 1/frame_rate * 1000
+        self.read_timeout_ms = 3 * 1/min(camera.get_max_interface_fps(), frame_rate) * 1000
         self.frames_left = frame_count
         self.metric = metric
         self.camera_timestamps = []
@@ -207,7 +223,6 @@ class MetricRunner(threading.Thread):
         # it in a single thread to keep out of the way of retrieving images.
         self.futures = []
         super().__init__()
-        self.start()
 
     def join(self):
         super().join()

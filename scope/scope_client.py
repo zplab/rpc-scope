@@ -133,14 +133,16 @@ class LiveStreamer:
     def get_image(self):
         self.image_received.wait()
         # get image before re-enabling image-receiving because if this is over the network, it could take a while
-        image = self.scope.camera.latest_image()
-        t = time.time()
-        self.latest_intervals.append(t - self._last_time)
-        self._last_time = t
-        # stash our latest frame number, as self.frame_number could change if further updates occur
-        # after we clear the image_received Event...
-        frame_number = self.frame_number
-        self.image_received.clear()
+        try:
+            image = self.scope.camera.latest_image()
+            t = time.time()
+            self.latest_intervals.append(t - self._last_time)
+            self._last_time = t
+            # stash our latest frame number, as self.frame_number could change if further updates occur
+            # after we clear the image_received Event...
+            frame_number = self.frame_number
+        finally:
+            self.image_received.clear()
         return image, frame_number
 
     def get_fps(self):

@@ -44,14 +44,14 @@ def autofocus(scope, z_start, z_max, coarse_range_mm, coarse_steps, fine_range_m
             (coarse_z, coarse_images), (fine_z, fine_images)
     """
     exposure_time = scope.camera.exposure_time
-    with scope.tl.lamp.in_state(enabled=True):
-        coarse_result = _autofocus(scope, z_start, z_max, coarse_range_mm, coarse_steps, speed=0.2,
+    with scope.tl.lamp.in_state(enabled=True), scope.stage.in_state(z_speed=1):
+        coarse_result = _autofocus(scope, z_start, z_max, coarse_range_mm, coarse_steps, speed=0.8,
             binning='4x4', exposure_time=exposure_time/16, return_images=return_images)
         if return_images:
             coarse_z = coarse_result[0]
         else:
             coarse_z = coarse_result
-        fine_result = _autofocus(scope, coarse_z, z_max, fine_range_mm, fine_steps, speed=0.1,
+        fine_result = _autofocus(scope, coarse_z, z_max, fine_range_mm, fine_steps, speed=0.3,
             binning='1x1', return_images=return_images)
     return coarse_result, fine_result
 

@@ -131,6 +131,7 @@ def meter_exposure(scope, lamp, max_exposure=200, max_intensity=255,
     intensities = numpy.array([255, 224, 192, 160, 128,  96,  64,  32])
     intensities = intensities[intensities <= max_intensity]
     with lamp.in_state(enabled=True):
+        scope.camera.start_image_sequence_acquisition(frame_count=len(exposures)+len(intensities), trigger_mode='Software')
         bit_depth = int(scope.camera.sensor_gain[:2])
         min_good_value = min_intensity_fraction * (2**bit_depth-1)
         max_good_value = max_intensity_fraction * (2**bit_depth-1)
@@ -138,7 +139,8 @@ def meter_exposure(scope, lamp, max_exposure=200, max_intensity=255,
         scope.camera.exposure_time = exposures[0]
         for intensity in intensities:
             lamp.intensity = intensity
-            image = scope.camera.acquire_image()
+            scope.camera.send_software_trigger()
+            image = scope.camera.next_image(1000)
             if image.max() < max_good_value:
                 good_intensity = intensity
                 break
@@ -146,15 +148,17 @@ def meter_exposure(scope, lamp, max_exposure=200, max_intensity=255,
             raise RuntimeError('Could not find a non-overexposed lamp intensity')
         for exposure in exposures:
             scope.camera.exposure_time = exposure
-            image = scope.camera.acquire_image()
+            scope.camera.send_software_trigger()
+            image = scope.camera.next_image(1000)
             if image.max() < max_good_value:
                 good_exposure = exposure
             else:
                 break
             if numpy.percentile(image, 95) > min_good_value:
                 break
-        scope.camera.exposure_time = good_exposure
-        return good_exposure, good_intensity
+    scope.camera.end_image_sequence_acquisition()
+    scope.camera.exposure_time = good_exposure
+    return good_exposure, good_intensity
 
 
 

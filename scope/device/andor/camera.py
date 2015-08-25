@@ -72,6 +72,7 @@ class Camera(property_device.PropertyDevice):
         ('AOIHeight', lowlevel.SetInt, 2160),
         ('AccumulateCount', lowlevel.SetInt, 1),
         ('AuxiliaryOutSource', lowlevel.SetEnumString, 'FireAll'),
+        ('TriggerMode', lowlevel.SetEnumString, 'Internal'), # need to set internal trigger mode to be able to set overlap and exposure time
         ('CycleMode', lowlevel.SetEnumString, 'Fixed'),
         ('ElectronicShutteringMode', lowlevel.SetEnumString, 'Rolling'),
         ('ExposureTime', lowlevel.SetFloat, 0.01),
@@ -89,7 +90,6 @@ class Camera(property_device.PropertyDevice):
         ('IOInvert', lowlevel.SetBool, False),
         ('MetadataEnable', lowlevel.SetBool, True),
         ('MetadataTimestamp', lowlevel.SetBool, True),
-        ('TriggerMode', lowlevel.SetEnumString, 'Internal'), # need to set internal trigger mode to be able to set overlap
         ('Overlap', lowlevel.SetBool, True),
         ('PixelReadoutRate', lowlevel.SetEnumString, '100 MHz'),
         ('SensorCooling', lowlevel.SetBool, True),
@@ -296,8 +296,9 @@ class Camera(property_device.PropertyDevice):
         if at_feature in self._PROPERTIES_THAT_CAN_CHANGE_FRAME_RATE_RANGE:
             min, max = self.get_frame_rate_range()
             self._update_property('frame_rate_range',  '[{:.5f}, {:.5f}]'.format(min, max))
-            self.set_frame_rate(max)
-
+            if lowlevel.IsWritable('FrameRate'):
+                lowlevel.SetFloat('FrameRate', max)
+                self._update_property('frame_rate', max)
 
     # STATE-STACK HANDLING
     # there are complex dependencies here. When pushing, better to set frame_count AFTER cycle_mode,
@@ -429,7 +430,7 @@ class Camera(property_device.PropertyDevice):
         """
         binning = int(self.get_binning()[0])
         height = self.get_aoi_height() * binning # binning doesn't change this
-        top = self.get_aoi_top * binning - 1 # convert to zero-based indexing
+        top = self.get_aoi_top() * binning - 1 # convert to zero-based indexing
         bottom = top + height
         if bottom < 1080 or top > 1080: # all above or all below
             lines = height
@@ -637,16 +638,18 @@ class Camera(property_device.PropertyDevice):
         """
         # possible options for Rolling Shutter: internal with or without overlap
         # possible options for Global Shutter: internal with or without overlap (long exposures) or internal without overlap (short exposures)
-        with self.in_state(**camera_params):
+        with self.in_state(live_mode=False, **camera_params):
             if frame_count > self.get_safe_image_count_to_queue():
-                live_fps = 1/self._calculate_live_trigger_interval()
-                frame_rate = min(live_fps, frame_rate)
+                live_fps = self.get_max_interface_fps()
+                frame_rate = min(live_fps, desired_frame_rate)
+            else:
+                frame_rate = desired_frame_rate
             # NB: setting overlap mode in global shutter mode with a short exposure has the effect of setting the exposure time to
             # the readout time. So don't do this! Also can't use overlap mode with Rolling Shutter software triggering.
             try_overlap = True
             if self.get_shutter_mode() == 'Global' and desired_trigger_interval > self.readout_time():
                 try_overlap = False
-            if self.get_shutter_mode() == 'Rolling' and self.get_trigger_mode('Software'):
+            if self.get_shutter_mode() == 'Rolling' and self.get_trigger_mode() == 'Software':
                 try_overlap = False
 
             with self.in_state(overlap_enabled=False):
