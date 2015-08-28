@@ -22,11 +22,15 @@
 #
 # Authors: Erik Hvatum, Zach Pincus
 
+import collections
+
 from . import stand
 from . import microscopy_method_names
 
 POS_ABS_OBJ = 76022
 GET_POS_OBJ = 76023
+SET_MODE = 76025
+GET_MODE = 76026
 SET_IMM_DRY = 76027
 GET_IMM_DRY = 76028
 SET_OBJPAR = 76032
@@ -39,27 +43,31 @@ class ObjectiveTurret(stand.DM6000Device):
     turret is between positions when it is in the process of responding to a position change request and also when
     manually placed there by physical intervention.'''
     def _setup_device(self):
+        self.set_safe_mode(False)
         self._minp = int(self.send_message(GET_MIN_POS_OBJ, async=False, intent="get minimum objective turret position").response)
         self._maxp = int(self.send_message(GET_MAX_POS_OBJ, async=False, intent="get maximum objective turret position").response)
         self._mags = [None for i in range(self._maxp + 1)]
-        self._mags_to_positions = {}
+        self._mags_to_positions = collections.defaultdict(list)
         for p in range(self._minp, self._maxp+1):
             mag = self.send_message(GET_OBJPAR, p, 1).response.split(' ')[2]
             # Note: dm6000b reports magnifications in integer units with a dash indicating no magnification / empty
             # turret position
             mag = None if mag == '-' else int(mag)
             self._mags[p] = mag
-            if mag not in self._mags_to_positions:
-                self._mags_to_positions[mag] = [p]
-            else:
-                self._mags_to_positions[mag].append(p)
+            self._mags_to_positions[mag].append(p)
 
         # Ensure that halogen variable spectra correction filter is always set to maximum (least attenuation)
         self._set_objectives_intensities(255)
 
     def set_position(self, position):
         if position is not None:
-            self.send_message(POS_ABS_OBJ, position, intent="change objective turret position")
+            try:
+                self.send_message(POS_ABS_OBJ, position, intent="change objective turret position")
+            except stand.message_device.LeicaError:
+                if self.get_safe_mode() and self._get_objpar(self.get_position(), 5) != self._get_objpar(position, 5):
+                    raise stand.message_device.LeicaError('Attempting to change to an objective with a different immersion/dry state is forbidden in safe mode.')
+                else:
+                    raise
 
     def get_position(self):
         '''Current objective turret position. Note that 0 is special and indicates that the objective turret is
@@ -81,18 +89,40 @@ class ObjectiveTurret(stand.DM6000Device):
         '''The current objective's magnification. I.e., the magnification of the objective at the currently selected
         objective turret position. Note that if the objective turret is between positions or is set to an empty position,
         this value will be None.'''
-        mag = self.send_message(GET_OBJPAR, self.get_position(), 1, async=False, intent="get magnification of objective at current position").response.split(' ')[2]
+        mag = self._get_objpar(self.get_position(), 1)
         if mag == '-':
             return None
         else:
             return int(mag)
 
-    def get_immersion_or_dry(self):
-        '''Returns 'I' or 'D' depending on whether the dm6000b is in immersion or dry mode. Setting this property to 'T'
-        causes the dm6000b to toggle between 'I' and 'D'.'''
-        return self.send_message(GET_IMM_DRY, async=False, intent="get current objective medium").response
+    def get_magnification_values(self):
+        return list(sorted(self._mags_to_positions.keys()))
 
-    def set_immersion_or_dry(self, medium):
+    def get_safe_mode(self):
+        '''True if the microscope must be explicitly set to "dry" or "immersion" mode before changing to
+        a dry or immersion lens.'''
+        return self.send_message(GET_MODE, async=False, intent="get objective turret mode").response == '1'
+
+
+    def set_safe_mode(self, mode):
+        '''If set to True, the microscope must be explicitly set to "dry" or "immersion" mode before changing to
+        a dry or immersion lens.'''
+        if mode:
+            leica_mode = 1
+        else:
+            leica_mode = 0
+        self.send_message(SET_MODE, leica_mode, intent="set objective turret mode")
+
+    def get_immersion_mode(self):
+        '''True if the microscope is in immersion mode.'''
+        return self.send_message(GET_IMM_DRY, async=False, intent="get current objective medium").response == 'I'
+
+    def set_immersion_mode(self, immersion):
+        '''If set to True, the microscope will be set to immersion mode.'''
+        if immersion:
+            medium = 'I'
+        else:
+            medium = 'D'
         self.send_message(SET_IMM_DRY, medium, intent="change to objective medium")
 
     def get_all_objectives(self):
@@ -103,7 +133,7 @@ class ObjectiveTurret(stand.DM6000Device):
         return self._mags
 
     def _get_objpar(self, obj_pos, objpar_idx):
-        param = self.send_message(GET_OBJPAR, p, 2, async=False).response.split(' ')[2:]
+        param = self.send_message(GET_OBJPAR, obj_pos, objpar_idx, async=False).response.split(' ')[2:]
         if len(param) == 1:
             return param[0]
         else:
@@ -124,7 +154,7 @@ class ObjectiveTurret(stand.DM6000Device):
         do things. It is therefore advisable to avoid querying this property from a script that runs regularly.'''
         objectives = [None for i in range(self._maxp + 1)]
         for p in range(self._minp, self._maxp+1):
-            mag = self.send_message(GET_OBJPAR, p, 1).response.split(' ')[2]
+            mag = self._get_objpar(p, 1)
             if mag != '-':
                 details = {
                     'magnification': int(mag),
@@ -143,8 +173,7 @@ class ObjectiveTurret(stand.DM6000Device):
                     meth_objpars = reversed(self._get_objpar(p, objpar_idx))
                     details[objpar_name] = { microscopy_method_names.NAMES[meth_idx]: int(meth_objpar)
                                                  for meth_idx, meth_objpar in enumerate(meth_objpars)}
-                method_mask = list(self.send_message(GET_OBJPAR, p, 4, async=False).response.split(' ')[2])
-                method_mask.reverse()
+                method_mask = reversed(list(self._get_objpar(p, 1)))
                 details['microscopy methods'] = [microscopy_method_names.NAMES[meth_idx] for meth_idx, v in enumerate(method_mask) if bool(int(v))]
                 objectives[p] = details
         return objectives
