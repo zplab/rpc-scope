@@ -125,6 +125,9 @@ class ILFieldWheel(enumerated_properties.DictProperty):
 
 
 class _ShutterDevice(stand.DM6000Device):
+    def _setup_device(self):
+        self._update_property('shutter_open', self.get_shutter_open())
+
     def get_shutter_open(self):
         '''True: shutter open, False: shutter closed.'''
         shutter_open = self.send_message(GET_SHUTTER_LAMP, async=False, intent="get shutter openedness").response.split(' ')[self._shutter_idx]
@@ -134,6 +137,7 @@ class _ShutterDevice(stand.DM6000Device):
         return bool(shutter_open)
 
     def set_shutter_open(self, shutter_open):
+        self._update_property('shutter_open', shutter_open)
         self.send_message(SET_SHUTTER_LAMP, self._shutter_idx, int(shutter_open), coalesce=False, intent="set shutter openedness")
 
 class IL(_ShutterDevice):
@@ -141,6 +145,7 @@ class IL(_ShutterDevice):
     _shutter_idx = 1
     # TODO(?): if needed, add DIC fine shearing
     def _setup_device(self):
+        super._setup_device()
         self._filter_cube = FilterCube(self)
         self.get_filter_cube = self._filter_cube.get_value
         self.get_filter_cube_values = self._filter_cube.get_recognized_values
