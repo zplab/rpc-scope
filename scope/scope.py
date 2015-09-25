@@ -65,6 +65,7 @@ class Scope(message_device.AsyncDeviceNamespace):
             self.stage = stage.Stage(manager, property_server, property_prefix='scope.stage.')
             self.il = illumination_axes.IL(manager, property_server, property_prefix='scope.il.')
             self.tl = illumination_axes.TL(manager, property_server, property_prefix='scope.tl.')
+            self._shutter_openedness_watcher = illumination_axes.ShutterOpenednessWatcher(manager, property_server, property_prefix='scope.')
             has_scope = True
         except SerialException as e:
             has_scope = False

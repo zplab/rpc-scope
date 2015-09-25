@@ -179,8 +179,8 @@ class LeicaAsyncDevice(AsyncDevice):
 
     def __init__(self, message_manager):
         super().__init__(message_manager)
-        self._setup_device()
         self._adapter_callbacks = {}
+        self._setup_device()
 
     def _setup_device(self):
         """Override in subclasses to perform device-specific setup."""

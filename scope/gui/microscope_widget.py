@@ -55,7 +55,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
     def can_run(cls, scope):
         # We're good if at least one of our properties can be read.  Properties that can not be read
         # when the widget is created are not shown in the GUI.
-        for ppath, *_ in prop_tuple in cls.PROPERTIES:
+        for ppath, *_ in cls.PROPERTIES:
             C = scope
             ppathcs = ppath.split('.')
             try:
@@ -94,7 +94,6 @@ class MicroscopeWidget(device_widget.DeviceWidget):
     def make_bool_widget(self, ptuple):
         widget = Qt.QCheckBox()
         update = self.subscribe(self.PROPERTY_ROOT + ptuple[0], callback=widget.setChecked)
-        print(self.PROPERTY_ROOT + ptuple[0])
         if update is None:
             raise TypeError('{} is not a writable property!'.format(property))
         def changed(value):
