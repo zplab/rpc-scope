@@ -72,6 +72,7 @@ class Camera(property_device.PropertyDevice):
         ('AOIHeight', lowlevel.SetInt, 2160),
         ('AccumulateCount', lowlevel.SetInt, 1),
         ('AuxiliaryOutSource', lowlevel.SetEnumString, 'FireAll'),
+        ('TriggerMode', lowlevel.SetEnumString, 'Internal'), # need to set internal trigger mode to be able to set overlap and exposure time
         ('CycleMode', lowlevel.SetEnumString, 'Fixed'),
         ('ElectronicShutteringMode', lowlevel.SetEnumString, 'Rolling'),
         ('ExposureTime', lowlevel.SetFloat, 0.01),
@@ -89,16 +90,25 @@ class Camera(property_device.PropertyDevice):
         ('IOInvert', lowlevel.SetBool, False),
         ('MetadataEnable', lowlevel.SetBool, True),
         ('MetadataTimestamp', lowlevel.SetBool, True),
-        ('TriggerMode', lowlevel.SetEnumString, 'Internal'), # need to set internal trigger mode to be able to set overlap
-        ('Overlap', lowlevel.SetBool, False),
+        ('Overlap', lowlevel.SetBool, True),
         ('PixelReadoutRate', lowlevel.SetEnumString, '100 MHz'),
         ('SensorCooling', lowlevel.SetBool, True),
         ('SimplePreAmpGainControl', lowlevel.SetEnumString, '16-bit (low noise & high well capacity)'),
         ('SpuriousNoiseFilter', lowlevel.SetBool, True),
         ('StaticBlemishCorrection', lowlevel.SetBool, True),
         ('TriggerMode', lowlevel.SetEnumString, 'Software'), # now back to software triggering
-#        ('VerticallyCenterAOI', lowlevel.SetBool, False)
+        #('VerticallyCenterAOI', lowlevel.SetBool, False)
     ]
+
+    _PROPERTIES_THAT_CAN_CHANGE_FRAME_RATE_RANGE = set([
+        'AOITop',
+        'AOIHeight',
+        'PixelReadoutRate',
+        'ElectronicShutteringMode',
+        'TriggerMode',
+        'Overlap',
+        'ExposureTime'
+    ])
 
     def __init__(self, property_server=None, property_prefix=''):
         super().__init__(property_server, property_prefix)
@@ -133,7 +143,6 @@ class Camera(property_device.PropertyDevice):
         self._gain_enum = self._add_andor_enum('SimplePreAmpGainControl', 'sensor_gain') # need to stash _gain_enum for custom setter defined below
         self._add_andor_enum('ElectronicShutteringMode', 'shutter_mode')
         self._add_andor_enum('TriggerMode', 'trigger_mode')
-        # TODO: figure out why TemperatureStatus never updates with a callback...
         self._add_andor_enum('TemperatureStatus', 'temperature_status', readonly=True)
 
         # Directly expose certain plain camera properties from Andor API
@@ -146,7 +155,7 @@ class Camera(property_device.PropertyDevice):
         self._add_andor_property('CameraAcquiring', 'is_acquiring', 'Bool', readonly=True)
         self._add_andor_property('CameraModel', 'model_name', 'String', readonly=True)
         self._add_andor_property('FrameCount', 'frame_count', 'Int')
-        # self._add_andor_property('FrameRate', 'frame_rate', 'Float') # buggy frame-rate return values need to be hacked around
+        self._add_andor_property('FrameRate', 'frame_rate', 'Float')
         self._add_andor_property('ImageSizeBytes', 'image_byte_count', 'Int', readonly=True)
         self._add_andor_property('InterfaceType', 'interface_type', 'String', readonly=True)
         self._add_andor_property('IOInvert', 'selected_io_pin_inverted', 'Bool')
@@ -163,11 +172,6 @@ class Camera(property_device.PropertyDevice):
         #  custom getters and setters are defined for these features below
         self._add_property_data('ExposureTime', 'Float', False, 'exposure_time', self.get_exposure_time)
         self._add_property_data('ReadoutTime', 'Float', True, 'readout_time', self.get_readout_time)
-        self._add_property_data('FrameRate', 'Float', True, 'frame_rate', self.get_frame_rate)
-        # Note: technically, frame rate is a read/write property -- frame rates can be set in for
-        # certain internal triggered modes (RS long exposures without overlap, and GS long exposures
-        # with and without overlap). But the complexity of supporting this while working around Andor
-        # bugs is high, and the utility is low compared to software triggering to achieve a given FPS.
 
         if property_server:
             self._c_callback = lowlevel.FeatureCallback(self._andor_callback)
@@ -182,15 +186,15 @@ class Camera(property_device.PropertyDevice):
         self._frame_number = -1
         self._update_property('frame_number', self._frame_number)
         self._update_property('live_mode', self._live_mode)
+        self._maybe_update_frame_rate_and_range('ExposureTime') # pretend exposure time was updated, to force the frame rate range to get updated
         self._latest_data = None
         self._latest_timestamp = None
         self._latest_image_lock = threading.Lock()
 
     def _timer_update_temp(self):
+        getter, updater = self._callback_properties['SensorTemperature']
         while self._timer_running:
-            for property in ('SensorTemperature', 'TemperatureStatus'):
-                getter, updater = self._callback_properties[property]
-                updater(getter())
+            updater(getter())
             time.sleep(self._sleep_time)
 
     def return_to_default_state(self):
@@ -199,7 +203,10 @@ class Camera(property_device.PropertyDevice):
             self.set_live_mode(False)
         except:
             pass
-        lowlevel.Command('AcquisitionStop')
+        try:
+            lowlevel.Command('AcquisitionStop')
+        except:
+            pass
         lowlevel.Flush()
         for feature, setter, value in self._CAMERA_DEFAULTS:
             setter(feature, value)
@@ -225,6 +232,7 @@ class Camera(property_device.PropertyDevice):
             def setter(value):
                 with self.in_state(live_mode=False):
                     enum.set_value(value)
+                    self._maybe_update_frame_rate_and_range(at_feature)
             setattr(self, setter_name, setter)
         return enum
 
@@ -263,6 +271,7 @@ class Camera(property_device.PropertyDevice):
             def setter(value):
                 with self.in_state(live_mode=False):
                     andor_setter(at_feature, value)
+                    self._maybe_update_frame_rate_and_range(at_feature)
             setattr(self, 'set_'+py_name, setter)
 
     def _andor_callback(self, camera_handle, at_feature, context):
@@ -281,25 +290,36 @@ class Camera(property_device.PropertyDevice):
         'Bool', 'Float', or 'Enum', and read_only is a boolean value."""
         return self._andor_property_types
 
+    def _maybe_update_frame_rate_and_range(self, at_feature):
+        """When setting a property, the frame rate range may change. If so,
+        update the range and set the frame rate to the max possible."""
+        if at_feature in self._PROPERTIES_THAT_CAN_CHANGE_FRAME_RATE_RANGE:
+            min, max = self.get_frame_rate_range()
+            self._update_property('frame_rate_range',  '[{:.5f}, {:.5f}]'.format(min, max))
+            if lowlevel.IsWritable('FrameRate'):
+                lowlevel.SetFloat('FrameRate', max)
+                self._update_property('frame_rate', max)
+
     # STATE-STACK HANDLING
     # there are complex dependencies here. When pushing, better to set frame_count AFTER cycle_mode,
     # and trigger_mode AFTER exposure_time, and overlap_mode after all the things it depends on.
-    # when popping, better to go in reverse order from setting the dependent parameters like overlap and frame_count
+    # when popping, better to go in reverse order from setting the dependent parameters like overlap and frame_count.
+    # Also, always better to set frame_rate last, because many things can change the available range.
     # In all cases, want to turn off live mode ASAP or turn it on only at the end.
     # NB: low-value weights cause the property to be set sooner. All non-named properties get zero weight
     def _get_push_weights(self, state):
-        weights = dict(frame_count=1, trigger_mode=2, overlap_enabled=3) # high weight = done later
+        weights = dict(frame_count=1, trigger_mode=2, overlap_enabled=3, frame_rate=4) # high weight = done later
         if state.get('live_mode', False): # turning on live mode
-            live_weight = 4 # turn on last
+            live_weight = 5 # turn on last
         else:
             live_weight = -1 # turn off first
         weights['live_mode'] = live_weight
         return weights
 
     def _get_pop_weights(self, state):
-        weights = dict(frame_count=-1, trigger_mode=-2, overlap_enabled=-3) # low weight = done earlier
+        weights = dict(frame_count=-1, trigger_mode=-2, overlap_enabled=-3, frame_rate=1) # low weight = done earlier
         if state.get('live_mode', False): # turning on live mode
-            live_weight = 1 # turn on last
+            live_weight = 2 # turn on last
         else:
             live_weight = -4 # turn off first
         weights['live_mode'] = live_weight
@@ -308,7 +328,7 @@ class Camera(property_device.PropertyDevice):
     def _update_push_states(self, state, old_state):
         super()._update_push_states(state, old_state)
         if state.get('overlap_enabled', False):
-            # Setting overlap_enabled can clobber the exposure time, 
+            # Setting overlap_enabled can clobber the exposure time,
             # so we need to make sure to save the existing exposure time.
             old_state['exposure_time'] = self.get_exposure_time()
 
@@ -322,45 +342,20 @@ class Camera(property_device.PropertyDevice):
 
     def set_exposure_time(self, ms):
         """Set the exposure time in ms. If necessary, live imaging will be paused."""
-        live = self._live_mode
-        if live: # pause live if we can't do fast exposure switching
-            current_exposure_ms = self.get_exposure_time()
-            read_time_ms = self.get_readout_time()
-            current_short = current_exposure_ms < read_time_ms
-            new_short = ms < read_time_ms
-            must_pause_live = current_short != new_short
-            # TODO: After new SDK release, check if this is fixed.
-            # in Andor SDK as of 2015-03-11, fast exposure switching with short exposures
-            # and rolling shutter fails. Fix this up:
-            if self.get_shutter_mode() == 'Rolling' and current_short and new_short:
-                must_pause_live = True
-            if must_pause_live:
-                self.set_live_mode(False)
         lowlevel.SetFloat('ExposureTime', ms / 1000)
-        if live:
-            if must_pause_live:
-                self.set_live_mode(True)
-            else:
-                # changed exposure time without pausing live... update sleep time
-                trigger_interval = self._calculate_live_trigger_interval()
-                self._live_trigger.trigger_interval = trigger_interval
-                self._live_reader.set_timeout(trigger_interval)
-                # ... and clear recent FPS data
-                self._live_reader.latest_intervals.clear()
+        self._maybe_update_frame_rate_and_range('ExposureTime')
+        if self._live_mode:
+            trigger_interval = self._calculate_live_trigger_interval()
+            self._live_trigger.trigger_interval = trigger_interval
+            self._live_reader.set_timeout(trigger_interval)
+            # ... and clear recent FPS data
+            self._live_reader.latest_intervals.clear()
 
     def get_exposure_time_range(self):
         """Return current exposure time minimum and maximum values in ms"""
         return (1000 * lowlevel.GetFloatMin('ExposureTime'),
                 1000 * lowlevel.GetFloatMax('ExposureTime'))
 
-    def get_frame_rate(self):
-        """Return the frame rate in Hz for the current camera configuration."""
-        frame_rate = lowlevel.GetFloat('FrameRate')
-        # TODO: After new SDK release, check if this is fixed.
-        # in Andor SDK as of 2015-03-11, some frame rates are mis-calculated. Fix this up:
-        if self.get_trigger_mode() == 'Software' and self.get_exposure_time() < self.get_readout_time():
-            frame_rate /= 2 # calculated frame rate is off by a factor of two in this mode
-        return frame_rate
 
     def set_sensor_gain(self, value):
         with self.in_state(live_mode=False):
@@ -414,13 +409,36 @@ class Camera(property_device.PropertyDevice):
         self.set_aoi_width(self.get_aoi_width_range()[1])
         self.set_aoi_height(self.get_aoi_height_range()[1])
 
+    def vertically_center_aoi(self):
+        l, h = self.get_aoi_top_range()
+        self.set_aoi_top(int((l+h)/2))
+
     def get_safe_image_count_to_queue(self):
         """Return the maximum number of images that can be safely left on the camera head
         before overflowing its limited memory.
 
-        Uses the current aoi and pixel-depth settings."""
-        image_size_mb = self.get_image_byte_count() / 1024**2
-        return 1400 / image_size_mb # we estimate the camera has ~1500 mb of memory
+        This depends ONLY on the AOI, and specifically only on the maximum amount that the
+        AOI is above or below the midline. (Ergo, each half-sensor readout chip must have its
+        own RAM.) It depends not at all on the binning or bit depth.
+
+        The dependence is a bit weird, but the formula was derived empirically and
+        fits the actual data very closely:
+            safe_images_to_queue = 126464 / max_lines + 29
+        where max_lines is the maximum number of sensor lines to be read above or below
+        the midline. Note that to give a safety factor here, we actually use 20 in the
+        formula above...
+        """
+        binning = int(self.get_binning()[0])
+        height = self.get_aoi_height() * binning # binning doesn't change this
+        top = self.get_aoi_top() * binning - 1 # convert to zero-based indexing
+        bottom = top + height
+        if bottom < 1080 or top > 1080: # all above or all below
+            lines = height
+        else: # spans midline
+            above = 1080 - top
+            below = bottom - 1080
+            lines = max(above, below)
+        return int(126464 / lines + 20) # use 20 here instead of 29 to give a safety factor...
 
     def reset_timestamp(self):
         """Reset timestamp clock to zero."""
@@ -602,15 +620,67 @@ class Camera(property_device.PropertyDevice):
         self.pop_state()
         del self._buffer_maker
 
+
+    def calculate_streaming_mode(self, frame_count, desired_frame_rate, **camera_params):
+        """Determine the best-possible frame rate for a streaming acquisition of
+        the given number of frames.
+
+        Parameters:
+            frame_count: number of frames to acquire
+            desired_frame_rate: desired frames per second to acquire at
+            All other keyword arguments will be used to set the camera state (e.g.
+            exposure_time, readout_rate, etc.)
+
+        Returns: frame_rate, overlap
+           frame_rate is the closest frame rate to the one desired
+           overlap is whether overlap mode must be enabled ir disabled to allow the requested frame rate
+
+        """
+        # possible options for Rolling Shutter: internal with or without overlap
+        # possible options for Global Shutter: internal with or without overlap (long exposures) or internal without overlap (short exposures)
+        with self.in_state(live_mode=False, **camera_params):
+            if frame_count > self.get_safe_image_count_to_queue():
+                live_fps = self.get_max_interface_fps()
+                frame_rate = min(live_fps, desired_frame_rate)
+            else:
+                frame_rate = desired_frame_rate
+            # NB: setting overlap mode in global shutter mode with a short exposure has the effect of setting the exposure time to
+            # the readout time. So don't do this! Also can't use overlap mode with Rolling Shutter software triggering.
+            try_overlap = True
+            if self.get_shutter_mode() == 'Global' and desired_trigger_interval > self.readout_time():
+                try_overlap = False
+            if self.get_shutter_mode() == 'Rolling' and self.get_trigger_mode() == 'Software':
+                try_overlap = False
+
+            with self.in_state(overlap_enabled=False):
+                non_overlap_min, non_overlap_max = self.get_frame_rate_range()
+            if frame_rate < non_overlap_min: # non_overlap_min is always the lowest possible frame rate
+                frame_rate = non_overlap_min
+            if try_overlap:
+                with self.in_state(overlap_enabled=True):
+                    overlap_min, overlap_max = self.get_frame_rate_range()
+                if frame_rate > overlap_max: # overlap_max is always the highest possible frame rate
+                    frame_rate = overlap_max
+                if overlap_min <= frame_rate <= overlap_max:
+                    overlap = True
+                else:
+                    overlap = False
+            else:
+                if frame_rate > non_overlap_max:
+                    frame_rate = non_overlap_max
+                overlap = False
+        return frame_rate, overlap
+
+
     def stream_acquire(self, frame_count, frame_rate, **camera_params):
         """Acquire a given number of images at the specified frame rate, or
         as fast as possible if the frame rate is unattainable given the current
-        camera configuration.
+        camera configuration. Overlap mode should not be specified as a camera
+        param, because this function will automatically determine whether it
+        should be used.
 
-        This function automatically determines whether internal triggering
-        and/or overlap mode can be used, for maximum frame rates. If possible
-        rolling shutter mode and the maximum possible readout rate should be
-        used to further optimize frame rates.
+        If possible rolling shutter mode and the maximum possible readout rate
+        should be used to optimize frame rates.
 
         Parameters:
             frame_count: number of frames to acquire
@@ -621,45 +691,18 @@ class Camera(property_device.PropertyDevice):
         Returns: images, timestamps, attempted_frame_rate
 
         """
-        desired_trigger_interval = 1/frame_rate
-        # set to internal trigger mode so that we can enable overlap as needed
-        with self.in_state(live_mode=False, trigger_mode='Internal', **camera_params):
-            # NB: setting overlap mode with a short exposure has the effect of setting the exposure time to 
-            # the readout time. So don't do this!
-            overlap_available = lowlevel.IsWritable('Overlap') and desired_trigger_interval > self.readout_time()
-            with self.in_state(overlap_enabled=overlap_available):
-                internal_interval = 1/self.get_frame_rate()
-            with self.in_state(trigger_mode='Software'):
-                on_camera_software_interval = 1/self.get_frame_rate()
-                transfer_to_computer_interval = self._calculate_live_trigger_interval()
-            trigger_mode = 'Software'
-            overlap_enabled = False
-            if frame_count <= self.get_safe_image_count_to_queue():
-                if desired_trigger_interval < internal_interval:
-                    trigger_mode = 'Internal'
-                    overlap_enabled = overlap_available
-                    min_interval = internal_interval
-                else:
-                    min_interval = on_camera_software_interval
-            else:
-                min_interval = transfer_to_computer_interval
-            trigger_interval = max(min_interval, desired_trigger_interval)
-
-            self.start_image_sequence_acquisition(frame_count, trigger_mode, overlap_enabled=overlap_enabled)
-            if trigger_mode == 'Software':
-                def trigger():
-                    for _ in range(frame_count):
-                        self.send_software_trigger()
-                        time.sleep(trigger_interval)
-                threading.Thread(target=trigger).start()
-            image_names = []
-            timestamps = []
-            read_time = 1/self.get_max_interface_fps()
-            for _ in range(frame_count):
-                image_names.append(self.next_image(3 * read_time * 1000))
-                timestamps.append(self._latest_timestamp)
-            self.end_image_sequence_acquisition()
-        return image_names, timestamps, 1/trigger_interval
+        frame_rate, overlap = self.calculate_streaming_mode(frame_count, frame_rate,
+            trigger_mode='Internal', **camera_params)
+        self.start_image_sequence_acquisition(frame_count, frame_rate=frame_rate,
+            trigger_mode='Internal', overlap_enabled=overlap, **camera_params)
+        image_names = []
+        timestamps = []
+        read_time = 1/self.get_max_interface_fps()
+        for _ in range(frame_count):
+            image_names.append(self.next_image(3 * read_time * 1000))
+            timestamps.append(self._latest_timestamp)
+        self.end_image_sequence_acquisition()
+        return image_names, timestamps, frame_rate
 
 
 UINT8_P = ctypes.POINTER(ctypes.c_uint8)

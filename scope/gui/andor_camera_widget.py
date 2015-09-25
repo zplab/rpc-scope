@@ -49,6 +49,7 @@ class AndorCameraWidget(device_widget.DeviceWidget):
         'cycle_mode',
         'frame_count',
         'frame_rate',
+        'frame_rate_range',
         'max_interface_fps',
         'readout_time',
         'trigger_mode'
@@ -79,14 +80,14 @@ class AndorCameraWidget(device_widget.DeviceWidget):
         self._row = 0
         self.make_widgets_for_property('live_mode', 'Bool', readonly=False)
         for property in self.basic_properties:
-            type, readonly = property_types[property]
+            type, readonly = property_types.get(property, ('String', True)) # if the property type isn't in the dict, assume its a readonly string
             self.make_widgets_for_property(property, type, readonly)
         if advanced_properties:
             self.advanced_visibility_button = Qt.QPushButton()
             self.layout().addWidget(self.advanced_visibility_button, self._row, 0, 1, -1, Qt.Qt.AlignHCenter | Qt.Qt.AlignVCenter)
             self._row += 1
             for property in advanced_properties:
-                type, readonly = property_types[property]
+                type, readonly = property_types.get(property, ('String', True)) # if the property type isn't in the dict, assume its a readonly string
                 self.advanced_widgets.extend(self.make_widgets_for_property(property, type, readonly))
             self._show_advanced = None
             self.show_advanced = show_advanced
@@ -188,7 +189,9 @@ class AndorCameraWidget(device_widget.DeviceWidget):
             try:
                 update(value)
             except rpc_client.RPCError as e:
-                if e.args[0].find('NOTAVAILABLE') != -1:
+                if e.args[0].find('NOTWRITABLE') != -1:
+                    error = "Given the camera state, {} can't be changed.".format(property)
+                elif e.args[0].find('NOTAVAILABLE') != -1:
                     accepted_values = sorted(k for k, v in getattr(self.camera, property+'_values').items() if v)
                     error = 'Given the camera state, {} can only be one of [{}].'.format(property, ', '.join(accepted_values))
                 else:
@@ -223,7 +226,7 @@ class AndorCameraWidget(device_widget.DeviceWidget):
     def show_advanced(self, show_advanced):
         if self.advanced_widgets:
             if show_advanced != self._show_advanced:
-                self.advanced_visibility_button.setText('Hide Advanced ▼' if show_advanced else 'Show Advanced ▷')
+                self.advanced_visibility_button.setText('Hide Advanced' if show_advanced else 'Show Advanced')
                 for widget in self.advanced_widgets:
                     widget.setVisible(show_advanced)
                 self._show_advanced = show_advanced

@@ -65,13 +65,23 @@ class Stage(stand.DM6000Device):
         self._update_property('y', y)
         self._update_property('z', z)
 
-    def set_position(self, xyz):
-        """Set x, y, and z position to respective elements of xyz tuple/iterable.
-        Any may be None to indicate no motion is requested. Units are in mm."""
-        x, y, z = xyz
-        self.set_x(x)
-        self.set_y(y)
-        self.set_z(z)
+    def set_position(self, position):
+        """Set (x, y) or (x, y, z) position.
+        Any value may be None to indicate no motion is requested along that
+        axis. Units are in mm.
+
+        Each axis will move simultaneously to minimize transit time.
+        """
+        if len(position) == 2:
+            x, y = position
+            z = None
+        else:
+            x, y, z = position
+        with self.in_state(async=True):
+            self.set_x(x)
+            self.set_y(y)
+            self.set_z(z)
+            # no need to do self.wait() at end of block: it gets called implicitly!
 
     def _set_pos(self, value, conversion_factor, command):
         if value is None: return
@@ -243,9 +253,9 @@ class Stage(stand.DM6000Device):
             return max_speed
 
 
-    def calculate_movement_position(self, distance, t):
+    def calculate_z_movement_position(self, distance, t):
         """Calculate where the stage will be (relative to the starting position)
-        for a move of a given distance (in mm) after t seconds have elapsed.
+        for a z-move of a given distance (in mm) after t seconds have elapsed.
         Distance must be positive."""
         final_speed = self.get_z_speed()
         speed_ramp = self.get_z_ramp()
