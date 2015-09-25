@@ -1,6 +1,7 @@
 from PyQt5 import Qt
 
 from ris_widget import om, ris_widget
+from ris_widget import image as ris_widget_image
 from .. import scope_client
 
 class LiveViewerWidget(ris_widget.RisWidget):
@@ -45,7 +46,7 @@ class LiveViewerWidget(ris_widget.RisWidget):
         # This is called by the main QT event loop to service the event posted in post_live_update().
         if e.type() == self.RW_LIVE_STREAM_BINDING_LIVE_UPDATE_EVENT:
             image_data, frame_no = self.live_streamer.get_image()
-            self.image = self.ImageClass(image_data, is_twelve_bit=self.live_streamer.bit_depth=='12 Bit')
+            self.image = ris_widget_image.Image(image_data, is_twelve_bit=self.live_streamer.bit_depth=='12 Bit')
             return True
         return super().event(e)
 
