@@ -145,7 +145,7 @@ class IL(_ShutterDevice):
     _shutter_idx = 1
     # TODO(?): if needed, add DIC fine shearing
     def _setup_device(self):
-        super._setup_device()
+        super()._setup_device()
         self._filter_cube = FilterCube(self)
         self.get_filter_cube = self._filter_cube.get_value
         self.get_filter_cube_values = self._filter_cube.get_recognized_values
