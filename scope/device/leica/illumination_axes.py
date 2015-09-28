@@ -151,12 +151,12 @@ class IL(_ShutterDevice):
         self.get_field_wheel_positions = self._field_wheel.get_recognized_values
         self.set_field_wheel = self._field_wheel.set_value
         self.send_message(SET_IL_TURRET_EVENT_SUBSCRIPTIONS, 1, async=False, intent="subscribe to filter cube turret position change events")
-        self.register_event_callback(GET_POS_IL_TURRET, self._on_event)
+        self.register_event_callback(GET_POS_IL_TURRET, self._on_turret_pos_event)
 
     def set_filter_cube(self, cube):
         self._filter_cube.set_value(cube)
 
-    def _on_event(self, response):
+    def _on_turret_pos_event(self, response):
         self._update_property('filter_cube', response.response[1:].strip())
 
 class TL(_ShutterDevice):
