@@ -48,6 +48,7 @@ GET_POS_IL_TURRET = 78023
 GET_CUBENAME = 78027
 GET_MIN_POS_IL_TURRET = 78031
 GET_MAX_POS_IL_TURRET = 78032
+SET_IL_TURRET_EVENT_SUBSCRIPTIONS = 78003
 
 #swing-out condenser head
 POS_ABS_KOND = 81022
@@ -149,11 +150,14 @@ class IL(_ShutterDevice):
         self.get_field_wheel = self._field_wheel.get_value
         self.get_field_wheel_positions = self._field_wheel.get_recognized_values
         self.set_field_wheel = self._field_wheel.set_value
+        self.send_message(SET_IL_TURRET_EVENT_SUBSCRIPTIONS, 1, async=False, intent="subscribe to filter cube turret position change events")
+        self.register_event_callback(GET_POS_IL_TURRET, self._on_event)
 
     def set_filter_cube(self, cube):
-        self._update_property('filter_cube', cube)
         self._filter_cube.set_value(cube)
 
+    def _on_event(self, response):
+        self._update_property('filter_cube', response.response[1:].strip())
 
 class TL(_ShutterDevice):
     '''IL represents an interface into elements used in Transmitted Light (Brighftield and DIC) mode.'''

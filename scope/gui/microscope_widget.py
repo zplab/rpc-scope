@@ -81,7 +81,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
             self.make_widgets_for_property(ptuple)
 
     def make_widgets_for_property(self, ptuple):
-        if ptuple[1] is not PT.Bool:
+        if ptuple[1] not in (PT.Bool, PT.Enum):
             return
         layout = self.layout()
         row = layout.rowCount()
@@ -93,23 +93,44 @@ class MicroscopeWidget(device_widget.DeviceWidget):
 
     def make_bool_widget(self, ptuple):
         widget = Qt.QCheckBox()
-        update = self.subscribe(self.PROPERTY_ROOT + ptuple[0], callback=widget.setChecked)
+        ppath = self.PROPERTY_ROOT + ptuple[0]
+        update = self.subscribe(ppath, callback=widget.setChecked)
         if update is None:
-            raise TypeError('{} is not a writable property!'.format(property))
-        def changed(value):
+            raise TypeError('{} is not a writable property!'.format(ppath))
+        def gui_changed(value):
             try:
                 update(value)
             except rpc_client.RPCError as e:
-                error = 'Could not set {} ({}).'.format(property, e.args[0])
+                error = 'Could not set {} ({}).'.format(ppath, e.args[0])
                 Qt.QMessageBox.warning(self, 'Invalid Value', error)
-        widget.toggled.connect(changed)
+        widget.toggled.connect(gui_changed)
         return widget
 
     def make_numeric_widget(self, ptuple):
         pass
 
     def make_enum_widget(self, ptuple):
-        pass
+        widget = Qt.QComboBox()
+        widget.setEditable(False)
+        ppath = self.PROPERTY_ROOT + ptuple[0]
+        attr = self.scope
+        for attr_name in ptuple[2].split('.'):
+            attr = getattr(attr, attr_name)
+        values = sorted(attr)
+        widget.addItems(values)
+        def prop_changed(value):
+            widget.setCurrentText(value)
+        update = self.subscribe(ppath, callback=prop_changed)
+        if update is None:
+            raise TypeError('{} is not a writable property!'.format(ppath))
+        def gui_changed(value):
+            try:
+                update(value)
+            except rpc_client.RPCError as e:
+                error = 'Could not set {} ({}).'.format(ppath, e.args[0])
+                Qt.QMessageBox.warning(self, 'Invalid Value', error)
+        widget.currentTextChanged.connect(gui_changed)
+        return widget
 
     def make_idx_enum_widget(self, ptuple):
         pass
