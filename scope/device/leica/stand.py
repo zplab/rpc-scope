@@ -40,7 +40,6 @@ class DM6000Device(message_device.LeicaAsyncDevice, property_device.PropertyDevi
         property_device.PropertyDevice.__init__(self, property_server, property_prefix)
         message_device.LeicaAsyncDevice.__init__(self, message_manager)
 
-
     # set async first when pushing, revert async last when popping
     def _get_push_weights(self, state):
         return {'async':-1}

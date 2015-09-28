@@ -36,10 +36,10 @@ class PT(enum.Enum):
 class MicroscopeWidget(device_widget.DeviceWidget):
     PROPERTY_ROOT = 'scope.'
     PROPERTIES = [
-        ('stand.active_microscopy_method', PT.Enum, 'stand.available_microscopy_methods'),
+#       ('stand.active_microscopy_method', PT.Enum, 'stand.available_microscopy_methods'),
         ('nosepiece.position', PT.IdxEnum, 'nosepiece.all_objectives'),
-        ('nosepiece.safe_mode', PT.Bool),
-        ('nosepiece.immersion_mode', PT.Bool),
+#       ('nosepiece.safe_mode', PT.Bool),
+#       ('nosepiece.immersion_mode', PT.Bool),
         ('il.shutter_open', PT.Bool),
         ('tl.shutter_open', PT.Bool),
         ('il.field_wheel', PT.Enum, 'il.field_wheel_positions'),

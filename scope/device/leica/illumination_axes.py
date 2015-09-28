@@ -53,6 +53,7 @@ SET_IL_TURRET_EVENT_SUBSCRIPTIONS = 78003
 #swing-out condenser head
 POS_ABS_KOND = 81022
 GET_POS_KOND = 81023
+SET_KOND_EVENT_SUBSCRIPTIONS = 81003
 
 # TL field (LFBL) and aperture (APBL) diaphragm
 POS_ABS_LFBL_TL = 83022
@@ -71,6 +72,7 @@ GET_POS_LFWHEEL = 94023
 GET_MAX_POS_LFWHEEL = 94027
 GET_MIN_POS_LFWHEEL = 94028
 GET_LFWHEEL_PROPERTIES = 94032
+SET_LFWHEEL_EVENT_SUBSCRIPTIONS = 94003
 
 class FilterCube(enumerated_properties.DictProperty):
     def __init__(self, il):
@@ -152,6 +154,10 @@ class IL(_ShutterDevice):
         self.set_field_wheel = self._field_wheel.set_value
         self.send_message(SET_IL_TURRET_EVENT_SUBSCRIPTIONS, 1, async=False, intent="subscribe to filter cube turret position change events")
         self.register_event_callback(GET_POS_IL_TURRET, self._on_turret_pos_event)
+        self._update_property('filter_cube', self.get_filter_cube())
+        self.send_message(SET_LFWHEEL_EVENT_SUBSCRIPTIONS, 0, 1, async=False, intent="subscribe to field diaphragm disk position change events")
+        self.register_event_callback(GET_POS_LFWHEEL, self._on_lfwheel_position_change_event)
+        self._update_property('field_wheel', self.get_field_wheel())
 
     def set_filter_cube(self, cube):
         self._filter_cube.set_value(cube)
@@ -159,9 +165,17 @@ class IL(_ShutterDevice):
     def _on_turret_pos_event(self, response):
         self._update_property('filter_cube', response.response[1:].strip())
 
+    def _on_lfwheel_position_change_event(self, response):
+        self._update_property('field_wheel', self._field_wheel._hw_to_usr[int(response.response)])
+
 class TL(_ShutterDevice):
     '''IL represents an interface into elements used in Transmitted Light (Brighftield and DIC) mode.'''
     _shutter_idx = 0
+    def _setup_device(self):
+        self.send_message(SET_KOND_EVENT_SUBSCRIPTIONS, 1, async=False, intent="subscribe to flapping condenser flap events")
+        self.register_event_callback(GET_POS_KOND, self._on_condenser_flap_event)
+        self._update_property('condenser_retracted', self.get_condenser_retracted())
+
     def get_condenser_retracted(self):
         '''True: condenser head is deployed, False: condenser head is retracted.'''
         deployed = int(self.send_message(GET_POS_KOND, async=False, intent="get condenser position").response)
@@ -171,6 +185,12 @@ class TL(_ShutterDevice):
 
     def set_condenser_retracted(self, retracted):
         self.send_message(POS_ABS_KOND, int(not retracted), intent="set condenser position")
+
+    def _on_condenser_flap_event(self, response):
+        deployed = int(response.response)
+        if deployed == 2:
+            raise RuntimeError('The condenser head is in an invalid state.')
+        self._update_property('condenser_retracted', not bool(deployed))
 
     def get_field_diaphragm(self):
         return int(self.send_message(GET_POS_LFBL_TL, async=False, intent="get field diaphragm position").response)
