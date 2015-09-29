@@ -37,6 +37,7 @@ SET_OBJPAR = 76032
 GET_OBJPAR = 76033
 GET_MIN_POS_OBJ = 76038
 GET_MAX_POS_OBJ = 76039
+SET_OBJECTIVE_TURRET_EVENT_SUBSCRIPTIONS = 76003
 
 class ObjectiveTurret(stand.DM6000Device):
     '''Note that objective position is reported as 0 when the objective turret is between positions. The objective
@@ -59,7 +60,13 @@ class ObjectiveTurret(stand.DM6000Device):
         # Ensure that halogen variable spectra correction filter is always set to maximum (least attenuation)
         self._set_objectives_intensities(255)
 
+        self.send_message(SET_OBJECTIVE_TURRET_EVENT_SUBSCRIPTIONS, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, async=False, intent="subscribe to objective turret position change events")
+        self.register_event_callback(GET_OBJPAR, self._on_turret_moved_event)
+        self._update_property('position', self.get_position())
+
     def set_position(self, position):
+        if position == 0:
+            raise ValueError('Nosepiece position can not be set to 0; zero indicates that the nosepiece is currently between objective positions.')
         if position is not None:
             try:
                 self.send_message(POS_ABS_OBJ, position, intent="change objective turret position")
@@ -103,7 +110,6 @@ class ObjectiveTurret(stand.DM6000Device):
         a dry or immersion lens.'''
         return self.send_message(GET_MODE, async=False, intent="get objective turret mode").response == '1'
 
-
     def set_safe_mode(self, mode):
         '''If set to True, the microscope must be explicitly set to "dry" or "immersion" mode before changing to
         a dry or immersion lens.'''
@@ -131,6 +137,9 @@ class ObjectiveTurret(stand.DM6000Device):
         is no objective at position 0, a 10x objective at position 1, and a 5x objective at objective turret position
         2.'''
         return self._mags
+
+    def _on_turret_moved_event(self, response):
+        self._update_property('position', int(response.response.split()[0]))
 
     def _get_objpar(self, obj_pos, objpar_idx):
         param = self.send_message(GET_OBJPAR, obj_pos, objpar_idx, async=False).response.split(' ')[2:]

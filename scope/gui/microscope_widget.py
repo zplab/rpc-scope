@@ -31,13 +31,13 @@ class PT(enum.Enum):
     Int = 1,
     Float = 2,
     Enum = 3,
-    IdxEnum = 4
+    Objective = 4
 
 class MicroscopeWidget(device_widget.DeviceWidget):
     PROPERTY_ROOT = 'scope.'
     PROPERTIES = [
 #       ('stand.active_microscopy_method', PT.Enum, 'stand.available_microscopy_methods'),
-        ('nosepiece.position', PT.IdxEnum, 'nosepiece.all_objectives'),
+        ('nosepiece.position', PT.Objective, 'nosepiece.all_objectives'),
 #       ('nosepiece.safe_mode', PT.Bool),
 #       ('nosepiece.immersion_mode', PT.Bool),
         ('il.shutter_open', PT.Bool),
@@ -61,7 +61,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
             try:
                 for ppathc in ppathcs:
                     C = getattr(C, ppathc)
-            except AttributeError:
+            except:
                 continue
             return True
         return False
@@ -76,12 +76,19 @@ class MicroscopeWidget(device_widget.DeviceWidget):
             PT.Int : self.make_numeric_widget,
             PT.Float : self.make_numeric_widget,
             PT.Enum : self.make_enum_widget,
-            PT.IdxEnum : self.make_idx_enum_widget}
+            PT.Objective : self.make_objective_widget}
         for ptuple in self.PROPERTIES:
             self.make_widgets_for_property(ptuple)
 
     def make_widgets_for_property(self, ptuple):
-        if ptuple[1] not in (PT.Bool, PT.Enum):
+        if ptuple[1] not in (PT.Bool, PT.Enum, PT.Objective):
+            return
+        attr = self.scope
+        try:
+            for attr_name in ptuple[0].split('.'):
+                attr = getattr(attr, attr_name)
+        except:
+            Qt.qDebug('Failed to read value of "{}{}", so this property will not be presented in the GUI.'.format(self.PROPERTY_ROOT, ptuple[0]))
             return
         layout = self.layout()
         row = layout.rowCount()
@@ -116,8 +123,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         attr = self.scope
         for attr_name in ptuple[2].split('.'):
             attr = getattr(attr, attr_name)
-        values = sorted(attr)
-        widget.addItems(values)
+        widget.addItems(sorted(attr))
         def prop_changed(value):
             widget.setCurrentText(value)
         update = self.subscribe(ppath, callback=prop_changed)
@@ -132,5 +138,58 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         widget.currentTextChanged.connect(gui_changed)
         return widget
 
-    def make_idx_enum_widget(self, ptuple):
-        pass
+    def make_objective_widget(self, ptuple):
+        widget = Qt.QComboBox()
+        widget.setEditable(False)
+        ppath = self.PROPERTY_ROOT + ptuple[0]
+        attr = self.scope
+        for attr_name in ptuple[2].split('.'):
+            attr = getattr(attr, attr_name)
+        mags = attr
+        model = _ObjectivesModel(mags, widget.font(), self)
+        widget.setModel(model)
+        def prop_changed(value):
+            widget.setCurrentIndex(value)
+        update = self.subscribe(ppath, callback=prop_changed)
+        if update is None:
+            raise TypeError('{} is not a writable property!'.format(ppath))
+        def gui_changed(value):
+            try:
+                update(value)
+            except rpc_client.RPCError as e:
+                error = 'Could not set {} ({}).'.format(ppath, e.args[0])
+                Qt.QMessageBox.warning(self, 'Invalid Value', error)
+        widget.currentIndexChanged[int].connect(gui_changed)
+        return widget
+
+class _ObjectivesModel(Qt.QAbstractListModel):
+    def __init__(self, mags, font, parent=None):
+        super().__init__(parent)
+        self.mags = mags
+        self.empty_pos_font = Qt.QFont(font)
+        self.empty_pos_font.setItalic(True)
+
+    def rowCount(self, _=None):
+        return len(self.mags)
+
+    def flags(self, midx):
+        f = Qt.Qt.ItemNeverHasChildren
+        if midx.isValid():
+            row = midx.row()
+            if row > 0:
+                f |= Qt.Qt.ItemIsEnabled | Qt.Qt.ItemIsSelectable
+        return f
+
+    def data(self, midx, role=Qt.Qt.DisplayRole):
+        if midx.isValid():
+            row = midx.row()
+            mag = self.mags[row]
+            if role == Qt.Qt.DisplayRole:
+                r = '{} : {}{}'.format(
+                    row,
+                    'BETWEEN POSITIONS' if row == 0 else mag,
+                    '' if mag is None else 'x')
+                return Qt.QVariant(r)
+            if role == Qt.Qt.FontRole and mag is None:
+                return Qt.QVariant(self.empty_pos_font)
+        return Qt.QVariant()
