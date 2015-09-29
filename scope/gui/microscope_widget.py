@@ -83,7 +83,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
             self.make_widgets_for_property(ptuple)
 
     def make_widgets_for_property(self, ptuple):
-        if ptuple[1] not in (PT.Bool, PT.Enum, PT.Objective):
+        if ptuple[1] not in (PT.Bool, PT.Enum, PT.Int, PT.Objective):
             return
         attr = self.scope
         try:
@@ -121,6 +121,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         layout = Qt.QHBoxLayout()
         widget.setLayout(layout)
         slider = Qt.QSlider(Qt.Qt.Horizontal)
+        slider.setTickInterval(1)
         layout.addWidget(slider)
         spinbox = Qt.QSpinBox()
         layout.addWidget(spinbox)
@@ -131,7 +132,8 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 return
             handling_change = True
             try:
-                pass
+                slider.setValue(value)
+                spinbox.setValue(value)
             finally:
                 handling_change = False
         def range_changed(_):
@@ -140,7 +142,12 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 return
             handling_change = True
             try:
-                pass
+                attr = self.scope
+                for attr_name in ptuple[2].split('.'):
+                    attr = getattr(attr, attr_name)
+                range_ = attr
+                slider.setRange(*range_)
+                spinbox.setRange(*range_)
             finally:
                 handling_change = False
         def gui_changed(value):
@@ -149,10 +156,15 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 return
             handling_change = True
             try:
-                pass
+                update(value)
             finally:
                 handling_change = False
         update = self.subscribe(ppath, callback=prop_changed)
+        if update is None:
+            raise TypeError('{} is not a writable property!'.format(ppath))
+        self.subscribe(self.PROPERTY_ROOT + ptuple[3], callback=range_changed)
+        slider.valueChanged[int].connect(gui_changed)
+        spinbox.valueChanged[int].connect(gui_changed)
         return widget
 
     def make_float_widget(self, ptuple):

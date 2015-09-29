@@ -60,11 +60,13 @@ POS_ABS_LFBL_TL = 83022
 GET_POS_LFBL_TL = 83023
 GET_MAX_POS_LFBL_TL = 83027
 GET_MIN_POS_LFBL_TL = 83028
+SET_LFBL_TL_EVENT_SUBSCRIPTIONS = 83003
 
 POS_ABS_APBL_TL = 84022
 GET_POS_APBL_TL = 84023
 GET_MAX_POS_APBL_TL = 84027
 GET_MIN_POS_APBL_TL = 84028
+SET_APBL_TL_EVENT_SUBSCRIPTIONS = 84003
 
 # IL field wheel
 POS_ABS_LFWHEEL = 94022
@@ -73,6 +75,9 @@ GET_MAX_POS_LFWHEEL = 94027
 GET_MIN_POS_LFWHEEL = 94028
 GET_LFWHEEL_PROPERTIES = 94032
 SET_LFWHEEL_EVENT_SUBSCRIPTIONS = 94003
+
+from ...util import logging
+logger = logging.get_logger(__name__)
 
 class FilterCube(enumerated_properties.DictProperty):
     def __init__(self, il):
@@ -175,12 +180,18 @@ class TL(_ShutterDevice):
         self.send_message(SET_KOND_EVENT_SUBSCRIPTIONS, 1, async=False, intent="subscribe to flapping condenser flap events")
         self.register_event_callback(GET_POS_KOND, self._on_condenser_flap_event)
         self._update_property('condenser_retracted', self.get_condenser_retracted())
+        self.send_message(SET_LFBL_TL_EVENT_SUBSCRIPTIONS, 0, 1, async=False, intent="subscribe to TL field diaphragm position change events")
+        self.register_event_callback(GET_POS_LFBL_TL, self._on_field_diaphragm_position_change_event)
+        self._update_property('field_diaphragm', self.get_field_diaphragm())
+        self.send_message(SET_APBL_TL_EVENT_SUBSCRIPTIONS, 0, 1, async=False, intent="subscribe to TL aperture diaphragm position change events")
+        self.register_event_callback(GET_POS_APBL_TL, self._on_aperture_diaphragm_position_change_event)
+        self._update_property('aperture_diaphragm', self.get_aperture_diaphragm())
 
     def get_condenser_retracted(self):
         '''True: condenser head is deployed, False: condenser head is retracted.'''
         deployed = int(self.send_message(GET_POS_KOND, async=False, intent="get condenser position").response)
         if deployed == 2:
-            raise RuntimeError('The condenser head is in an invalid state.')
+            logger.error('The condenser head is in an invalid state.')
         return not bool(deployed)
 
     def set_condenser_retracted(self, retracted):
@@ -189,7 +200,7 @@ class TL(_ShutterDevice):
     def _on_condenser_flap_event(self, response):
         deployed = int(response.response)
         if deployed == 2:
-            raise RuntimeError('The condenser head is in an invalid state.')
+            logger.error('The condenser head is in an invalid state.')
         self._update_property('condenser_retracted', not bool(deployed))
 
     def get_field_diaphragm(self):
@@ -203,11 +214,18 @@ class TL(_ShutterDevice):
         pos_max = int(self.send_message(GET_MAX_POS_LFBL_TL, async=False, intent="get field diaphragm max position").response)
         return pos_min, pos_max
 
+    def _on_field_diaphragm_position_change_event(self, response):
+        self._update_property('field_diaphragm', int(response.response))
+
     def get_aperture_diaphragm(self):
         return int(self.send_message(GET_POS_APBL_TL, async=False, intent="get aperture diaphragm position").response)
 
     def set_aperture_diaphragm(self, position):
         self.send_message(POS_ABS_APBL_TL, position, intent="set aperture diaphragm position")
+
+    def _on_aperture_diaphragm_position_change_event(self, response):
+        self._update_property('aperture_diaphragm', int(response.response))
+
 
     def get_aperture_diaphragm_range(self):
         pos_min = int(self.send_message(GET_MIN_POS_APBL_TL, async=False, intent="get aperture diaphragm min position").response)
