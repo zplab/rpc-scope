@@ -44,6 +44,30 @@ SET_RAMP_Z = 71030
 GET_RAMP_Z = 71031
 GET_MIN_RAMP_Z = 71048
 GET_MAX_RAMP_Z = 71049
+SET_X_EVENT_SUBSCRIPTIONS = 72003
+SET_Y_EVENT_SUBSCRIPTIONS = 73003
+SET_Z_EVENT_SUBSCRIPTIONS = 71003
+GET_STATUS_X = 72004
+GET_STATUS_Y = 73004
+GET_STATUS_Z = 71004
+SET_XY_STEP_MODE = 72050
+GET_XY_STEP_MODE = 72051
+SET_Z_STEP_MODE = 71050
+GET_Z_STEP_MODE = 71051
+SET_X1_LIMIT = 72026
+SET_Y1_LIMIT = 73026
+SET_LOW_LIMIT = 71026
+GET_X1_LIMIT = 72028
+GET_Y1_LIMIT = 73028
+GET_LOW_LIMIT = 71028
+SET_X2_LIMIT = 72027
+SET_Y2_LIMIT = 73027
+SET_FOCUS = 71027
+GET_X2_LIMIT = 72029
+GET_Y2_LIMIT = 73029
+GET_FOCUS = 71029
+SET_FOCUS_LIMIT_ACTIVE = 71053
+GET_FOCUS_LIMIT_ACTIVE = 71054
 
 
 Z_SPEED_MM_PER_SECOND_PER_UNIT = 0.1488
@@ -59,6 +83,58 @@ class Stage(stand.DM6000Device):
         self._z_speed_max = int(self.send_message(GET_MAX_SPEED_Z, async=False).response) * self._z_mm_per_count * Z_SPEED_MM_PER_SECOND_PER_UNIT
         self._z_ramp_min = int(self.send_message(GET_MIN_RAMP_Z, async=False).response) * self._z_mm_per_count * Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT
         self._z_ramp_max = int(self.send_message(GET_MAX_RAMP_Z, async=False).response) * self._z_mm_per_count * Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT
+        # Make scope serial API use "focus position" as upper software Z limit, rather than using "upper limit".  This 
+        # is convenient because no change event is issued when the "upper limit" value changes, whereas change events
+        # are issued for "focus position", even when "focus position" has been repurposed into what is, by default,
+        # the role of "upper limit".
+#       self.send_message(SET_FOCUS_LIMIT_ACTIVE, 1, async=False)
+
+        self.send_message(
+            SET_X_EVENT_SUBSCRIPTIONS,
+            0, # X-axis started or stopped
+            1, # X-INIT-endswitch reached or left
+            1, # X-END-endswitch reached or left
+            1, # Lower software-endswitch (X1) reached or left
+            1, # Upper software-endswitch (X2) reached or left
+            1, # New X-position
+            1, # New XY_STEP_MODE (coarse/fine) set
+            1, # Lower software endswitch (X1) changed
+            1, # Upper software endswitch (X2) changed,
+            async=False
+        )
+#       self.register_event_callback(GET_STATUS_X, self._on_status_x_event)
+#       self.register_event_callback(GET_POS_X, self._on_pos_x_event)
+#       self.register_event_callback(GET_XY_STEP_MODE, self._on_xy_step_mode_event)
+        self.send_message(
+            SET_Y_EVENT_SUBSCRIPTIONS,
+            0, # Y-axis started or stopped
+            1, # Y-INIT-endswitch reached or left
+            1, # Y-END- endswitch reached or left
+            1, # Lower software-endswitch (Y1) reached or left
+            1, # Upper software-endswitch (Y2) reached or left
+            1, # New Y-position
+            1, # Lower software endswitch (Y1) changed
+            1, # Upper software endswitch (Y2) changed
+            async=False
+        )
+#       self.register_event_callback(GET_STATUS_Y, self._on_status_y_event)
+#       self.register_event_callback(GET_POS_Y, self._on_pos_y_event)
+        self.send_message(
+            SET_Z_EVENT_SUBSCRIPTIONS,
+            0, # Z-DRIVE started or stopped
+            1, # Lower hardware endswitch reached or left
+            1, # Upper hardware endswitch reached or left
+            1, # Lower threshold reached or left
+            1, # Focus position reached or left
+            1, # New Z-position reached
+            1, # New lower threshold set
+            1, # New focus position set
+            1, # New Z_STEP_MODE (coarse/fine) set
+            async=False
+        )
+#       self.register_event_callback(GET_STATUS_Z, self._on_status_z_event)
+#       self.register_event_callback(GET_POS_Z, self._on_pos_z_event)
+#       self.register_event_callback(GET_Z_STEP_MODE, self._on_z_step_mode_event)
 
         x, y, z = self.get_position()
         self._update_property('x', x)
@@ -91,17 +167,14 @@ class Stage(stand.DM6000Device):
     def set_x(self, x):
         "Set x-axis position in mm"
         self._set_pos(x, self._x_mm_per_count, POS_ABS_X)
-        self._update_property('x', x)
 
     def set_y(self, y):
         "Set y-axis position in mm"
         self._set_pos(y, self._y_mm_per_count, POS_ABS_Y)
-        self._update_property('y', y)
 
     def set_z(self, z):
         "Set z-axis position in mm"
         self._set_pos(z, self._z_mm_per_count, POS_ABS_Z)
-        self._update_property('z', z)
 
     def get_position(self):
         """Return (x,y,z) positionz in mm."""
@@ -132,17 +205,26 @@ class Stage(stand.DM6000Device):
     def reinit_x(self):
         """Reinitialize x axis to correct for drift or "stuck" stage. Executes synchronously."""
         self.send_message(INIT_X, async=False, intent="init stage x axis")
-        self._update_property('x', self.get_x())
 
     def reinit_y(self):
         """Reinitialize y axis to correct for drift or "stuck" stage. Executes synchronously."""
         self.send_message(INIT_Y, async=False, intent="init stage y axis")
-        self._update_property('y', self.get_y())
 
     def reinit_z(self):
         """Reinitialize z axis to correct for drift or "stuck" stage. Executes synchronously."""
         self.send_message(INIT_RANGE_Z, async=False, intent="init stage z axis")
-        self._update_property('z', self.get_z())
+
+    def set_xy_fine_manual_control(self, fine):
+        self.send_message(SET_XY_STEP_MODE, int(not fine), async=False)
+
+    def set_z_fine_manual_control(self, fine):
+        self.send_message(SET_Z_STEP_MODE, int(not fine), async=False)
+
+    def get_xy_fine_manual_control(self):
+        return not bool(int(self.send_message(GET_XY_STEP_MODE, async=False)))
+
+    def get_z_fine_manual_control(self):
+        return not bool(int(self.send_message(GET_Z_STEP_MODE, async=False)))
 
     def get_z_speed_range(self):
         """Return min, max z speed values in mm/second"""

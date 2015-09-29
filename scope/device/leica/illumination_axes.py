@@ -163,6 +163,7 @@ class IL(_ShutterDevice):
         self.send_message(SET_LFWHEEL_EVENT_SUBSCRIPTIONS, 0, 1, async=False, intent="subscribe to field diaphragm disk position change events")
         self.register_event_callback(GET_POS_LFWHEEL, self._on_lfwheel_position_change_event)
         self._update_property('field_wheel', self.get_field_wheel())
+        self._update_property('shutter_open', self.get_shutter_open())
 
     def set_filter_cube(self, cube):
         self._filter_cube.set_value(cube)
@@ -186,6 +187,7 @@ class TL(_ShutterDevice):
         self.send_message(SET_APBL_TL_EVENT_SUBSCRIPTIONS, 0, 1, async=False, intent="subscribe to TL aperture diaphragm position change events")
         self.register_event_callback(GET_POS_APBL_TL, self._on_aperture_diaphragm_position_change_event)
         self._update_property('aperture_diaphragm', self.get_aperture_diaphragm())
+        self._update_property('shutter_open', self.get_shutter_open())
 
     def get_condenser_retracted(self):
         '''True: condenser head is deployed, False: condenser head is retracted.'''
@@ -226,7 +228,6 @@ class TL(_ShutterDevice):
     def _on_aperture_diaphragm_position_change_event(self, response):
         self._update_property('aperture_diaphragm', int(response.response))
 
-
     def get_aperture_diaphragm_range(self):
         pos_min = int(self.send_message(GET_MIN_POS_APBL_TL, async=False, intent="get aperture diaphragm min position").response)
         pos_max = int(self.send_message(GET_MAX_POS_APBL_TL, async=False, intent="get aperture diaphragm max position").response)
@@ -234,7 +235,17 @@ class TL(_ShutterDevice):
 
 class ShutterOpenednessWatcher(stand.DM6000Device):
     def _setup_device(self):
-        self.send_message(SET_SHUTTER_EVENT_SUBSCRIPTIONS, 0, 0, 0, 0, 1, 1, async=False, intent="subscribe to TL and IL shutter opened/closed events")
+        self.send_message(
+            SET_SHUTTER_EVENT_SUBSCRIPTIONS,
+            0, # lamp switched on/switched off
+            0, # new lamp voltage
+            0, # lamp switched
+            0, # lamp step mode switched on/off
+            1, # TL shutter open/closed
+            1, # IL shutter open/closed
+            async=False,
+            intent="subscribe to TL and IL shutter opened/closed events"
+        )
         self.register_event_callback(GET_SHUTTER_LAMP, self._on_shutter_event)
 
     def _on_shutter_event(self, response):
