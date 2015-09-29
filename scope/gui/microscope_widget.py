@@ -44,8 +44,11 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         ('tl.shutter_open', PT.Bool),
         ('il.field_wheel', PT.Enum, 'il.field_wheel_positions'),
         ('il.filter_cube', PT.Enum, 'il.filter_cube_values'),
-        ('tl.aperture_diaphragm', PT.Int),
-        ('tl.field_diaphragm', PT.Int),
+        # The final element of the 'tl.aperature_diaphragm' tuple, 'scope.nosepiece.position', indicates
+        # that 'tl.aperture_diaphragm_range' may change with 'scope.nosepiece.position'.  So,
+        # 'tl.aperture_diaphragm_range' should be refreshed upon 'scope.nosepiece.position' change.
+        ('tl.aperture_diaphragm', PT.Int, 'tl.aperture_diaphragm_range', 'nosepiece.position'),
+        ('tl.field_diaphragm', PT.Int, 'tl.field_diaphragm_range', 'nosepiece.position'),
         ('tl.condenser_retracted', PT.Bool),
         ('stage.x', PT.Float),
         ('stage.y', PT.Float),
@@ -53,14 +56,13 @@ class MicroscopeWidget(device_widget.DeviceWidget):
 
     @classmethod
     def can_run(cls, scope):
-        # We're good if at least one of our properties can be read.  Properties that can not be read
+        # We're useful if at least one of our properties can be read.  Properties that can not be read
         # when the widget is created are not shown in the GUI.
         for ppath, *_ in cls.PROPERTIES:
-            C = scope
-            ppathcs = ppath.split('.')
+            attr = scope
             try:
-                for ppathc in ppathcs:
-                    C = getattr(C, ppathc)
+                for attr_name in ppath.split('.'):
+                    attr = getattr(attr, attr_name)
             except:
                 continue
             return True
@@ -73,8 +75,8 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         self.scope = scope
         self.widget_makers = {
             PT.Bool : self.make_bool_widget,
-            PT.Int : self.make_numeric_widget,
-            PT.Float : self.make_numeric_widget,
+            PT.Int : self.make_int_widget,
+            PT.Float : self.make_float_widget,
             PT.Enum : self.make_enum_widget,
             PT.Objective : self.make_objective_widget}
         for ptuple in self.PROPERTIES:
@@ -113,7 +115,47 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         widget.toggled.connect(gui_changed)
         return widget
 
-    def make_numeric_widget(self, ptuple):
+    def make_int_widget(self, ptuple):
+        widget = Qt.QWidget()
+        ppath = self.PROPERTY_ROOT + ptuple[0]
+        layout = Qt.QHBoxLayout()
+        widget.setLayout(layout)
+        slider = Qt.QSlider(Qt.Qt.Horizontal)
+        layout.addWidget(slider)
+        spinbox = Qt.QSpinBox()
+        layout.addWidget(spinbox)
+        handling_change = False
+        def prop_changed(value):
+            nonlocal handling_change
+            if handling_change:
+                return
+            handling_change = True
+            try:
+                pass
+            finally:
+                handling_change = False
+        def range_changed(_):
+            nonlocal handling_change
+            if handling_change:
+                return
+            handling_change = True
+            try:
+                pass
+            finally:
+                handling_change = False
+        def gui_changed(value):
+            nonlocal handling_change
+            if handling_change:
+                return
+            handling_change = True
+            try:
+                pass
+            finally:
+                handling_change = False
+        update = self.subscribe(ppath, callback=prop_changed)
+        return widget
+
+    def make_float_widget(self, ptuple):
         pass
 
     def make_enum_widget(self, ptuple):
@@ -124,9 +166,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         for attr_name in ptuple[2].split('.'):
             attr = getattr(attr, attr_name)
         widget.addItems(sorted(attr))
-        def prop_changed(value):
-            widget.setCurrentText(value)
-        update = self.subscribe(ppath, callback=prop_changed)
+        update = self.subscribe(ppath, callback=widget.setCurrentText)
         if update is None:
             raise TypeError('{} is not a writable property!'.format(ppath))
         def gui_changed(value):
