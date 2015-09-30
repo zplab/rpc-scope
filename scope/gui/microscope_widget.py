@@ -25,6 +25,7 @@
 import enum
 from PyQt5 import Qt
 from . import device_widget
+from ..simple_rpc import rpc_client
 
 class PT(enum.Enum):
     Bool = 0,
@@ -50,9 +51,12 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         ('tl.aperture_diaphragm', PT.Int, 'tl.aperture_diaphragm_range', 'nosepiece.position'),
         ('tl.field_diaphragm', PT.Int, 'tl.field_diaphragm_range', 'nosepiece.position'),
         ('tl.condenser_retracted', PT.Bool),
+        ('stage.xy_fine_manual_control', PT.Bool),
+        ('stage.z_fine_manual_control', PT.Bool),
         ('stage.x', PT.Float),
         ('stage.y', PT.Float),
-        ('stage.z', PT.Float)]
+        ('stage.z', PT.Float),
+    ]
 
     @classmethod
     def can_run(cls, scope):

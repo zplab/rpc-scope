@@ -104,7 +104,8 @@ class Stage(stand.DM6000Device):
         )
 #       self.register_event_callback(GET_STATUS_X, self._on_status_x_event)
 #       self.register_event_callback(GET_POS_X, self._on_pos_x_event)
-#       self.register_event_callback(GET_XY_STEP_MODE, self._on_xy_step_mode_event)
+        self.register_event_callback(GET_XY_STEP_MODE, self._on_xy_step_mode_event)
+        self._update_property('xy_fine_manual_control', self.get_xy_fine_manual_control())
         self.send_message(
             SET_Y_EVENT_SUBSCRIPTIONS,
             0, # Y-axis started or stopped
@@ -134,7 +135,8 @@ class Stage(stand.DM6000Device):
         )
 #       self.register_event_callback(GET_STATUS_Z, self._on_status_z_event)
 #       self.register_event_callback(GET_POS_Z, self._on_pos_z_event)
-#       self.register_event_callback(GET_Z_STEP_MODE, self._on_z_step_mode_event)
+        self.register_event_callback(GET_Z_STEP_MODE, self._on_z_step_mode_event)
+        self._update_property('z_fine_manual_control', self.get_z_fine_manual_control())
 
         x, y, z = self.get_position()
         self._update_property('x', x)
@@ -225,6 +227,12 @@ class Stage(stand.DM6000Device):
 
     def get_z_fine_manual_control(self):
         return not bool(int(self.send_message(GET_Z_STEP_MODE, async=False)))
+
+    def _on_xy_step_mode_event(self, value):
+        self._update_property('xy_fine_manual_control', not bool(int(value)))
+
+    def _on_z_step_mode_event(self, value):
+        self._update_property('z_fine_manual_control', not bool(int(value)))
 
     def get_z_speed_range(self):
         """Return min, max z speed values in mm/second"""
