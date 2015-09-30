@@ -223,16 +223,16 @@ class Stage(stand.DM6000Device):
         self.send_message(SET_Z_STEP_MODE, int(not fine), async=False)
 
     def get_xy_fine_manual_control(self):
-        return not bool(int(self.send_message(GET_XY_STEP_MODE, async=False)))
+        return not bool(int(self.send_message(GET_XY_STEP_MODE, async=False).response))
 
     def get_z_fine_manual_control(self):
-        return not bool(int(self.send_message(GET_Z_STEP_MODE, async=False)))
+        return not bool(int(self.send_message(GET_Z_STEP_MODE, async=False).response))
 
-    def _on_xy_step_mode_event(self, value):
-        self._update_property('xy_fine_manual_control', not bool(int(value)))
+    def _on_xy_step_mode_event(self, response):
+        self._update_property('xy_fine_manual_control', not bool(int(response.response)))
 
-    def _on_z_step_mode_event(self, value):
-        self._update_property('z_fine_manual_control', not bool(int(value)))
+    def _on_z_step_mode_event(self, response):
+        self._update_property('z_fine_manual_control', not bool(int(response.response)))
 
     def get_z_speed_range(self):
         """Return min, max z speed values in mm/second"""
