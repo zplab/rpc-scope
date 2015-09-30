@@ -72,12 +72,12 @@ class MessageManager(threading.Thread):
             if response_key in self.pending_grouped_responses:
                 callbacks = self.pending_grouped_responses.pop(response_key)
                 for callback in callbacks:
-                    callback(response)
+                    self._run_callback_safely(callback, response)
                 handled = True
 
             if response_key in self.pending_standalone_responses:
                 callback, *remaining_callbacks = self.pending_standalone_responses.pop(response_key)
-                callback(response)
+                self._run_callback_safely(callback, response)
                 if remaining_callbacks:
                     self.pending_standalone_responses[response] = remaining_callbacks
                 handled = True
@@ -85,11 +85,19 @@ class MessageManager(threading.Thread):
             if response_key in self.pending_persistent_responses:
                 callbacks = self.pending_persistent_responses[response_key]
                 for callback in callbacks:
-                    callback(response)
+                    self._run_callback_safely(callback, response)
                 handled = True
 
             if not handled:
                 self._handle_unexpected_response(response, response_key)
+
+    def _run_callback_safely(self, callback, response):
+        """Catch errors from callbacks and log them. Not much else to do
+        since this is running in the background..."""
+        try:
+            callback(response)
+        except:
+            logger.error('Exception in message-handler callback for message response: {}', response, exc_info=True)
 
     def register_persistent_callback(self, response_key, response_callback):
         """Add a callback to always be called for a given response_key."""
