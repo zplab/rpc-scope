@@ -103,7 +103,7 @@ class Stage(stand.DM6000Device):
             async=False
         )
 #       self.register_event_callback(GET_STATUS_X, self._on_status_x_event)
-#       self.register_event_callback(GET_POS_X, self._on_pos_x_event)
+        self.register_event_callback(GET_POS_X, self._on_pos_x_event)
         self.register_event_callback(GET_XY_STEP_MODE, self._on_xy_step_mode_event)
         self._update_property('xy_fine_manual_control', self.get_xy_fine_manual_control())
         self.send_message(
@@ -119,7 +119,7 @@ class Stage(stand.DM6000Device):
             async=False
         )
 #       self.register_event_callback(GET_STATUS_Y, self._on_status_y_event)
-#       self.register_event_callback(GET_POS_Y, self._on_pos_y_event)
+        self.register_event_callback(GET_POS_Y, self._on_pos_y_event)
         self.send_message(
             SET_Z_EVENT_SUBSCRIPTIONS,
             0, # Z-DRIVE started or stopped
@@ -134,7 +134,7 @@ class Stage(stand.DM6000Device):
             async=False
         )
 #       self.register_event_callback(GET_STATUS_Z, self._on_status_z_event)
-#       self.register_event_callback(GET_POS_Z, self._on_pos_z_event)
+        self.register_event_callback(GET_POS_Z, self._on_pos_z_event)
         self.register_event_callback(GET_Z_STEP_MODE, self._on_z_step_mode_event)
         self._update_property('z_fine_manual_control', self.get_z_fine_manual_control())
 
@@ -198,6 +198,21 @@ class Stage(stand.DM6000Device):
     def get_z(self):
         """Get z-axis position in mm."""
         return self._get_pos(self._z_mm_per_count, GET_POS_Z)
+
+    def _on_pos_x_event(self, event):
+        counts = int(event.response)
+        mm = counts * self._x_mm_per_count
+        self._update_property('x', mm)
+
+    def _on_pos_y_event(self, event):
+        counts = int(event.response)
+        mm = counts * self._y_mm_per_count
+        self._update_property('y', mm)
+
+    def _on_pos_z_event(self, event):
+        counts = int(event.response)
+        mm = counts * self._z_mm_per_count
+        self._update_property('z', mm)
 
     def reinit(self):
         self.reinit_x()
