@@ -226,6 +226,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         handling_pos_change = False
         props = self.scope_properties.properties
         low_limit_ppath = '{}{}.{}_low_soft_limit'.format(self.PROPERTY_ROOT, ptuple[2], ptuple[3])
+        print(low_limit_ppath)
         pos_ppath = self.PROPERTY_ROOT + ptuple[0]
         high_limit_ppath = '{}{}.{}_high_soft_limit'.format(self.PROPERTY_ROOT, ptuple[2], ptuple[3])
 
@@ -310,6 +311,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         hlayout.addWidget(high_limit_text_widget)
         vlayout.addLayout(hlayout)
         def low_limit_prop_changed(value):
+            print('low_limit_prop_changed')
             nonlocal handling_low_soft_limit_change
             if handling_low_soft_limit_change:
                 return

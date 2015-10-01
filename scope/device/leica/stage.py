@@ -293,19 +293,19 @@ class Stage(stand.DM6000Device):
         return self._get_soft_limit(self._z_mm_per_count, GET_UPPER_LIMIT)
 
     def _on_x_low_soft_limit_event(self, event):
-        self._update_property('x_low_software_limit', int(event.response) * self._x_mm_per_count)
+        self._update_property('x_low_soft_limit', int(event.response) * self._x_mm_per_count)
 
     def _on_x_high_soft_limit_event(self, event):
-        self._update_property('x_high_software_limit', int(event.response) * self._x_mm_per_count)
+        self._update_property('x_high_soft_limit', int(event.response) * self._x_mm_per_count)
 
     def _on_y_low_soft_limit_event(self, event):
-        self._update_property('y_low_software_limit', int(event.response) * self._y_mm_per_count)
+        self._update_property('y_low_soft_limit', int(event.response) * self._y_mm_per_count)
 
     def _on_y_high_soft_limit_event(self, event):
-        self._update_property('y_high_software_limit', int(event.response) * self._y_mm_per_count)
+        self._update_property('y_high_soft_limit', int(event.response) * self._y_mm_per_count)
 
     def _on_z_low_soft_limit_event(self, event):
-        self._update_property('z_low_software_limit', int(event.response) * self._z_mm_per_count)
+        self._update_property('z_low_soft_limit', int(event.response) * self._z_mm_per_count)
 
     def reinit(self):
         self.reinit_x()
