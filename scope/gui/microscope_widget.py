@@ -36,15 +36,6 @@ class PT(enum.Enum):
     Objective = 3,
     StageAxisPos = 4
 
-class LimitPixmaps:
-    def __init__(self, height):
-        dpath = Path(__file__).parent() / 'limit_icons'
-        for fname in ('no_limit.svg', 'soft_limit.svg', 'hard_limit.svg', 'hard_and_soft_limit.svg'):
-            self._load_pm(dpath / fname)
-
-    def _load_pm(self, fpath):
-        
-
 class MicroscopeWidget(device_widget.DeviceWidget):
     PROPERTY_ROOT = 'scope.'
     PROPERTIES = [
@@ -64,9 +55,9 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         ('tl.condenser_retracted', PT.Bool),
         ('stage.xy_fine_manual_control', PT.Bool),
         ('stage.z_fine_manual_control', PT.Bool),
-        ('stage.x', PT.StageAxisPos, 'x'),
-        ('stage.y', PT.StageAxisPos, 'y'),
-        ('stage.z', PT.StageAxisPos, 'z')
+        ('stage.x', PT.StageAxisPos, 'stage', 'x'),
+        ('stage.y', PT.StageAxisPos, 'stage', 'y'),
+        ('stage.z', PT.StageAxisPos, 'stage', 'z')
     ]
 
     @classmethod
@@ -85,7 +76,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
 
     def __init__(self, scope, scope_properties, parent=None):
         super().__init__(scope, scope_properties, parent)
-        self.load_limit_pixmaps()
+        self.limit_pixmaps_and_tooltips = LimitPixmapsAndToolTips()
         self.setWindowTitle('Microscope')
         self.setLayout(Qt.QGridLayout())
         self.scope = scope
@@ -97,11 +88,11 @@ class MicroscopeWidget(device_widget.DeviceWidget):
             PT.Objective : self.make_objective_widget}
         for ptuple in self.PROPERTIES:
             self.make_widgets_for_property(ptuple)
-
-    def load_limit_pixmaps(self):
-        dpath = Path(__file__).parent() / 'limit_icons'
-        height = 25
-        low_soft_limit_pixmap
+        self.layout().addItem(Qt.QSpacerItem(
+            0, 0, Qt.QSizePolicy.MinimumExpanding, Qt.QSizePolicy.MinimumExpanding), self.layout().rowCount(), 0,
+            1,  # Spacer is just one logical row tall (that row stretches vertically to occupy all available space)...
+            -1) # ... and, it spans all the columns in its row
+        del self.limit_pixmaps_and_tooltips
 
     def pattr(self, ppath):
         attr = self.scope
@@ -167,10 +158,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 return
             handling_change = True
             try:
-                attr = self.scope
-                for attr_name in ptuple[2].split('.'):
-                    attr = getattr(attr, attr_name)
-                range_ = attr
+                range_ = self.pattr(ptuple[2])
                 slider.setRange(*range_)
                 spinbox.setRange(*range_)
             finally:
@@ -191,12 +179,6 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         slider.valueChanged[int].connect(gui_changed)
         spinbox.valueChanged[int].connect(gui_changed)
         return widget
-
-    def make_stage_axis_pos_widget(self, ptuple):
-        widget = Qt.QWidget()
-        layout = Qt.QHBoxLayout()
-        widget.setLayout(layout)
-        l_lh, l_ls, e_ls = Qt.QLabel()
 
     def make_enum_widget(self, ptuple):
         widget = Qt.QComboBox()
@@ -236,6 +218,166 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         widget.currentIndexChanged[int].connect(gui_changed)
         return widget
 
+    def make_stage_axis_pos_widget(self, ptuple):
+        widget = Qt.QWidget()
+        vlayout = Qt.QVBoxLayout()
+        widget.setLayout(vlayout)
+        handling_low_soft_limit_change = False
+        handling_high_soft_limit_change = False
+        handling_pos_change = False
+        props = self.scope_properties.properties
+        low_limit_ppath = '{}{}.{}_low_soft_limit'.format(self.PROPERTY_ROOT, ptuple[2], ptuple[3])
+        pos_ppath = self.PROPERTY_ROOT + ptuple[0]
+        high_limit_ppath = '{}{}.{}_high_soft_limit'.format(self.PROPERTY_ROOT, ptuple[2], ptuple[3])
+
+        # [low limits status indicator] [-------<slider>-------] [high limits status indicator]
+        hlayout = Qt.QHBoxLayout()
+        low_limit_status_label = Qt.QLabel()
+        # NB: *_limit_status_label pixmaps are set here so that layout does not jump when limit status RPC property updates
+        # are first received
+        low_limit_status_label.setPixmap(self.limit_pixmaps.low_no_limit)
+        hlayout.addWidget(low_limit_status_label)
+        pos_slider_factor = 1e5
+        pos_slider = Qt.QSlider(Qt.Qt.Horizontal)
+        pos_slider.setEnabled(False)
+        pos_slider.setRange(0, 2e9) #TODO: use real range queried from scope
+        hlayout.addWidget(pos_slider)
+        high_limit_status_label = Qt.QLabel()
+        high_limit_status_label.setPixmap(self.limit_pixmaps.high_no_limit)
+        hlayout.addWidget(high_limit_status_label)
+        vlayout.addLayout(hlayout)
+        at_ls_pname = '{}{}.at_{}_low_soft_limit'.format(self.PROPERTY_ROOT, ptuple[2], ptuple[3])
+        at_lh_pname = '{}{}.at_{}_low_hard_limit'.format(self.PROPERTY_ROOT, ptuple[2], ptuple[3])
+        def at_low_limit_prop_changed(_):
+            try:
+                at_s = props[at_ls_pname]
+                at_h = props[at_lh_pname]
+            except KeyError:
+                return
+            if at_s and at_h:
+                pm = self.limit_pixmaps_and_tooltips.low_hard_and_soft_limits_pm
+                tt = self.limit_pixmaps_and_tooltips.low_hard_and_soft_limits_tt
+            elif at_s:
+                pm = self.limit_pixmaps_and_tooltips.low_soft_limit_pm
+                tt = self.limit_pixmaps_and_tooltips.low_soft_limit_tt
+            elif at_h:
+                pm = self.limit_pixmaps_and_tooltips.low_hard_limit_pm
+                tt = self.limit_pixmaps_and_tooltips.low_hard_limit_tt
+            else:
+                pm = self.limit_pixmaps_and_tooltips.low_no_limit_pm
+                tt = self.limit_pixmaps_and_tooltips.low_no_limit_tt
+            low_limit_status_label.setPixmap(pm)
+            low_limit_status_label.setToolTip(tt)
+        self.subscribe(at_ls_pname, at_low_limit_prop_changed)
+        self.subscribe(at_lh_pname, at_low_limit_prop_changed)
+        at_hs_pname = '{}{}.at_{}_high_soft_limit'.format(self.PROPERTY_ROOT, ptuple[2], ptuple[3])
+        at_hh_pname = '{}{}.at_{}_high_hard_limit'.format(self.PROPERTY_ROOT, ptuple[2], ptuple[3])
+        def at_high_limit_prop_changed(_):
+            try:
+                at_s = props[at_hs_pname]
+                at_h = props[at_hh_pname]
+            except KeyError:
+                return
+            if at_s and at_h:
+                pm = self.limit_pixmaps_and_tooltips.high_hard_and_soft_limits_pm
+                tt = self.limit_pixmaps_and_tooltips.high_hard_and_soft_limits_tt
+            elif at_s:
+                pm = self.limit_pixmaps_and_tooltips.high_soft_limit_pm
+                tt = self.limit_pixmaps_and_tooltips.high_soft_limit_tt
+            elif at_h:
+                pm = self.limit_pixmaps_and_tooltips.high_hard_limit_pm
+                tt = self.limit_pixmaps_and_tooltips.high_hard_limit_tt
+            else:
+                pm = self.limit_pixmaps_and_tooltips.high_no_limit_pm
+                tt = self.limit_pixmaps_and_tooltips.high_no_limit_tt
+            high_limit_status_label.setPixmap(pm)
+            high_limit_status_label.setToolTip(tt)
+        self.subscribe(at_hs_pname, at_high_limit_prop_changed)
+        self.subscribe(at_hh_pname, at_high_limit_prop_changed)
+
+        # [low soft limit text edit] [position text edit] [high soft limit text edit]
+        hlayout = Qt.QHBoxLayout()
+        low_limit_text_widget = Qt.QLineEdit()
+        low_limit_text_validator = Qt.QDoubleValidator()
+        low_limit_text_widget.setValidator(low_limit_text_validator)
+        hlayout.addWidget(low_limit_text_widget)
+        pos_text_widget = Qt.QLineEdit()
+        pos_text_validator = Qt.QDoubleValidator()
+        pos_text_widget.setValidator(pos_text_validator)
+        hlayout.addWidget(pos_text_widget)
+        high_limit_text_widget = Qt.QLineEdit()
+        high_limit_text_validator = Qt.QDoubleValidator()
+        high_limit_text_widget.setValidator(high_limit_text_validator)
+        hlayout.addWidget(high_limit_text_widget)
+        vlayout.addLayout(hlayout)
+        def low_limit_prop_changed(value):
+            nonlocal handling_low_soft_limit_change
+            if handling_low_soft_limit_change:
+                return
+            handling_low_soft_limit_change = True
+            try:
+                low_limit_text_widget.setText(str(value))
+            finally:
+                handling_low_soft_limit_change = False
+        def low_limit_text_edited():
+            nonlocal handling_low_soft_limit_change
+            if handling_low_soft_limit_change:
+                return
+            handling_low_soft_limit_change = True
+            try:
+                update_low_limit(float(low_limit_text_widget.text()))
+            except ValueError:
+                pass
+            finally:
+                handling_low_soft_limit_change = False
+        def pos_prop_changed(value):
+            nonlocal handling_pos_change
+            if handling_pos_change:
+                return
+            handling_pos_change = True
+            try:
+                pos_text_widget.setText(str(value))
+                pos_slider.setValue(value * pos_slider_factor)
+            finally:
+                handling_pos_change = False
+        def pos_text_edited():
+            nonlocal handling_pos_change
+            if handling_pos_change:
+                return
+            handling_pos_change = True
+            try:
+                update_pos(float(pos_text_widget.text()))
+            except ValueError:
+                pass
+            finally:
+                handling_pos_change = False
+        def high_limit_prop_changed(value):
+            nonlocal handling_high_soft_limit_change
+            if handling_high_soft_limit_change:
+                return
+            handling_high_soft_limit_change = True
+            try:
+                high_limit_text_widget.setText(str(value))
+            finally:
+                handling_high_soft_limit_change = False
+        def high_limit_text_edited():
+            nonlocal handling_high_soft_limit_change
+            if handling_high_soft_limit_change:
+                return
+            handling_high_soft_limit_change = True
+            try:
+                update_high_limit(float(high_limit_text_widget.text()))
+            except ValueError:
+                pass
+            finally:
+                handling_high_soft_limit_change = False
+        update_low_limit = self.subscribe(low_limit_ppath, low_limit_prop_changed)
+        low_limit_text_widget.editingFinished.connect(low_limit_text_edited)
+        update_pos = self.subscribe(pos_ppath, pos_prop_changed)
+        pos_text_widget.editingFinished.connect(pos_text_edited)
+        update_high_limit = self.subscribe(high_limit_ppath, high_limit_prop_changed)
+        high_limit_text_widget.editingFinished.connect(high_limit_text_edited)
+
 class _ObjectivesModel(Qt.QAbstractListModel):
     def __init__(self, mags, font, parent=None):
         super().__init__(parent)
@@ -267,3 +409,17 @@ class _ObjectivesModel(Qt.QAbstractListModel):
             if role == Qt.Qt.FontRole and mag is None:
                 return Qt.QVariant(self.empty_pos_font)
         return Qt.QVariant()
+
+class LimitPixmapsAndToolTips:
+    def __init__(self, height=25):
+        def load(fpath):
+            im = Qt.QImage(str(fpath)).scaledToHeight(height)
+            setattr(self, 'low_'+fpath.stem+'_pm', Qt.QPixmap.fromImage(im))
+            setattr(self, 'high_'+fpath.stem+'_pm', Qt.QPixmap.fromImage(im.transformed(flip)))
+            setattr(self, 'low_'+fpath.stem+'_tt', fpath.stem[0].capitalize() + fpath.stem[1:].replace('_', ' ') + ' reached.')
+            setattr(self, 'high_'+fpath.stem+'_tt', fpath.stem[0].capitalize() + fpath.stem[1:].replace('_', ' ') + ' reached.')
+        dpath = Path(__file__).parent() / 'limit_icons'
+        flip = Qt.QTransform()
+        flip.rotate(180)
+        for fname in ('no_limit.svg', 'soft_limit.svg', 'hard_limit.svg', 'hard_and_soft_limits.svg'):
+            load(dpath / fname)
