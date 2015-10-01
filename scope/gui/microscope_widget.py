@@ -92,7 +92,6 @@ class MicroscopeWidget(device_widget.DeviceWidget):
             0, 0, Qt.QSizePolicy.MinimumExpanding, Qt.QSizePolicy.MinimumExpanding), self.layout().rowCount(), 0,
             1,  # Spacer is just one logical row tall (that row stretches vertically to occupy all available space)...
             -1) # ... and, it spans all the columns in its row
-        del self.limit_pixmaps_and_tooltips
 
     def pattr(self, ppath):
         attr = self.scope
@@ -235,7 +234,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         low_limit_status_label = Qt.QLabel()
         # NB: *_limit_status_label pixmaps are set here so that layout does not jump when limit status RPC property updates
         # are first received
-        low_limit_status_label.setPixmap(self.limit_pixmaps.low_no_limit)
+        low_limit_status_label.setPixmap(self.limit_pixmaps_and_tooltips.low_no_limit_pm)
         hlayout.addWidget(low_limit_status_label)
         pos_slider_factor = 1e5
         pos_slider = Qt.QSlider(Qt.Qt.Horizontal)
@@ -243,7 +242,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         pos_slider.setRange(0, 2e9) #TODO: use real range queried from scope
         hlayout.addWidget(pos_slider)
         high_limit_status_label = Qt.QLabel()
-        high_limit_status_label.setPixmap(self.limit_pixmaps.high_no_limit)
+        high_limit_status_label.setPixmap(self.limit_pixmaps_and_tooltips.high_no_limit_pm)
         hlayout.addWidget(high_limit_status_label)
         vlayout.addLayout(hlayout)
         at_ls_pname = '{}{}.at_{}_low_soft_limit'.format(self.PROPERTY_ROOT, ptuple[2], ptuple[3])
@@ -377,6 +376,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         pos_text_widget.editingFinished.connect(pos_text_edited)
         update_high_limit = self.subscribe(high_limit_ppath, high_limit_prop_changed)
         high_limit_text_widget.editingFinished.connect(high_limit_text_edited)
+        return widget
 
 class _ObjectivesModel(Qt.QAbstractListModel):
     def __init__(self, mags, font, parent=None):
@@ -418,7 +418,7 @@ class LimitPixmapsAndToolTips:
             setattr(self, 'high_'+fpath.stem+'_pm', Qt.QPixmap.fromImage(im.transformed(flip)))
             setattr(self, 'low_'+fpath.stem+'_tt', fpath.stem[0].capitalize() + fpath.stem[1:].replace('_', ' ') + ' reached.')
             setattr(self, 'high_'+fpath.stem+'_tt', fpath.stem[0].capitalize() + fpath.stem[1:].replace('_', ' ') + ' reached.')
-        dpath = Path(__file__).parent() / 'limit_icons'
+        dpath = Path(__file__).parent / 'limit_icons'
         flip = Qt.QTransform()
         flip.rotate(180)
         for fname in ('no_limit.svg', 'soft_limit.svg', 'hard_limit.svg', 'hard_and_soft_limits.svg'):
