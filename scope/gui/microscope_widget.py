@@ -23,6 +23,7 @@
 # Authors: Erik Hvatum <ice.rikh@gmail.com>
 
 import enum
+from pathlib import Path
 from PyQt5 import Qt
 from . import device_widget
 from ..simple_rpc import rpc_client
@@ -34,6 +35,15 @@ class PT(enum.Enum):
     Enum = 2,
     Objective = 3,
     StageAxisPos = 4
+
+class LimitPixmaps:
+    def __init__(self, height):
+        dpath = Path(__file__).parent() / 'limit_icons'
+        for fname in ('no_limit.svg', 'soft_limit.svg', 'hard_limit.svg', 'hard_and_soft_limit.svg'):
+            self._load_pm(dpath / fname)
+
+    def _load_pm(self, fpath):
+        
 
 class MicroscopeWidget(device_widget.DeviceWidget):
     PROPERTY_ROOT = 'scope.'
@@ -54,9 +64,9 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         ('tl.condenser_retracted', PT.Bool),
         ('stage.xy_fine_manual_control', PT.Bool),
         ('stage.z_fine_manual_control', PT.Bool),
-        ('stage.x', PT.StageAxisPos, 'stage'),
-        ('stage.y', PT.StageAxisPos, 'stage'),
-        ('stage.z', PT.StageAxisPos, 'stage')
+        ('stage.x', PT.StageAxisPos, 'x'),
+        ('stage.y', PT.StageAxisPos, 'y'),
+        ('stage.z', PT.StageAxisPos, 'z')
     ]
 
     @classmethod
@@ -75,6 +85,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
 
     def __init__(self, scope, scope_properties, parent=None):
         super().__init__(scope, scope_properties, parent)
+        self.load_limit_pixmaps()
         self.setWindowTitle('Microscope')
         self.setLayout(Qt.QGridLayout())
         self.scope = scope
@@ -87,6 +98,11 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         for ptuple in self.PROPERTIES:
             self.make_widgets_for_property(ptuple)
 
+    def load_limit_pixmaps(self):
+        dpath = Path(__file__).parent() / 'limit_icons'
+        height = 25
+        low_soft_limit_pixmap
+
     def pattr(self, ppath):
         attr = self.scope
         for attr_name in ppath.split('.'):
@@ -94,8 +110,8 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         return attr
 
     def make_widgets_for_property(self, ptuple):
-        if ptuple[1] not in (PT.Bool, PT.Enum, PT.Int, PT.Objective):
-            return
+#       if ptuple[1] not in (PT.Bool, PT.Enum, PT.Int, PT.Objective):
+#           return
         try:
             self.pattr(ptuple[0])
         except:
@@ -177,9 +193,10 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         return widget
 
     def make_stage_axis_pos_widget(self, ptuple):
-        device = self.pattr(ptuple[0])
-#       command = device.set_pos(123, async=True)
-        # TODO: attach on-complete callback to command future...
+        widget = Qt.QWidget()
+        layout = Qt.QHBoxLayout()
+        widget.setLayout(layout)
+        l_lh, l_ls, e_ls = Qt.QLabel()
 
     def make_enum_widget(self, ptuple):
         widget = Qt.QComboBox()

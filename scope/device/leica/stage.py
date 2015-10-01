@@ -63,9 +63,11 @@ GET_LOW_LIMIT = 71028
 SET_X2_LIMIT = 72027
 SET_Y2_LIMIT = 73027
 SET_FOCUS = 71027
+SET_UPPER_LIMIT = 71055
 GET_X2_LIMIT = 72029
 GET_Y2_LIMIT = 73029
 GET_FOCUS = 71029
+GET_UPPER_LIMIT = 71056
 SET_FOCUS_LIMIT_ACTIVE = 71053
 GET_FOCUS_LIMIT_ACTIVE = 71054
 
@@ -83,12 +85,6 @@ class Stage(stand.DM6000Device):
         self._z_speed_max = int(self.send_message(GET_MAX_SPEED_Z, async=False).response) * self._z_mm_per_count * Z_SPEED_MM_PER_SECOND_PER_UNIT
         self._z_ramp_min = int(self.send_message(GET_MIN_RAMP_Z, async=False).response) * self._z_mm_per_count * Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT
         self._z_ramp_max = int(self.send_message(GET_MAX_RAMP_Z, async=False).response) * self._z_mm_per_count * Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT
-        # Make scope serial API use "focus position" as upper software Z limit, rather than using "upper limit".  This 
-        # is convenient because no change event is issued when the "upper limit" value changes, whereas change events
-        # are issued for "focus position", even when "focus position" has been repurposed into what is, by default,
-        # the role of "upper limit".
-#       self.send_message(SET_FOCUS_LIMIT_ACTIVE, 1, async=False)
-
         self.send_message(
             SET_X_EVENT_SUBSCRIPTIONS,
             0, # X-axis started or stopped
@@ -102,10 +98,15 @@ class Stage(stand.DM6000Device):
             1, # Upper software endswitch (X2) changed,
             async=False
         )
-#       self.register_event_callback(GET_STATUS_X, self._on_status_x_event)
+        self.register_event_callback(GET_STATUS_X, self._on_status_x_event)
         self.register_event_callback(GET_POS_X, self._on_pos_x_event)
         self.register_event_callback(GET_XY_STEP_MODE, self._on_xy_step_mode_event)
+        self.register_event_callback(GET_X1_LIMIT, self._on_x_low_soft_limit_event)
+        self.register_event_callback(GET_X2_LIMIT, self._on_x_high_soft_limit_event)
         self._update_property('xy_fine_manual_control', self.get_xy_fine_manual_control())
+        self._update_property('x_low_soft_limit', self.get_x_low_soft_limit())
+        self._update_property('x_high_soft_limit', self.get_x_high_soft_limit())
+        self._on_status_x_event(self.send_message(GET_STATUS_X))
         self.send_message(
             SET_Y_EVENT_SUBSCRIPTIONS,
             0, # Y-axis started or stopped
@@ -118,8 +119,13 @@ class Stage(stand.DM6000Device):
             1, # Upper software endswitch (Y2) changed
             async=False
         )
-#       self.register_event_callback(GET_STATUS_Y, self._on_status_y_event)
+        self.register_event_callback(GET_STATUS_Y, self._on_status_y_event)
         self.register_event_callback(GET_POS_Y, self._on_pos_y_event)
+        self.register_event_callback(GET_Y1_LIMIT, self._on_y_low_soft_limit_event)
+        self.register_event_callback(GET_Y2_LIMIT, self._on_y_high_soft_limit_event)
+        self._update_property('y_low_soft_limit', self.get_y_low_soft_limit())
+        self._update_property('y_high_soft_limit', self.get_y_high_soft_limit())
+        self._on_status_y_event(self.send_message(GET_STATUS_Y))
         self.send_message(
             SET_Z_EVENT_SUBSCRIPTIONS,
             0, # Z-DRIVE started or stopped
@@ -129,15 +135,18 @@ class Stage(stand.DM6000Device):
             1, # Focus position reached or left
             1, # New Z-position reached
             1, # New lower threshold set
-            1, # New focus position set
+            0, # New focus position set
             1, # New Z_STEP_MODE (coarse/fine) set
             async=False
         )
-#       self.register_event_callback(GET_STATUS_Z, self._on_status_z_event)
+        self.register_event_callback(GET_STATUS_Z, self._on_status_z_event)
         self.register_event_callback(GET_POS_Z, self._on_pos_z_event)
         self.register_event_callback(GET_Z_STEP_MODE, self._on_z_step_mode_event)
+        self.register_event_callback(GET_LOW_LIMIT, self._on_z_low_soft_limit_event)
         self._update_property('z_fine_manual_control', self.get_z_fine_manual_control())
-
+        self._update_property('z_low_soft_limit', self.get_z_low_soft_limit())
+        self._update_property('z_high_soft_limit', self.get_z_high_soft_limit())
+        self._on_status_z_event(self.send_message(GET_STATUS_Z))
         x, y, z = self.get_position()
         self._update_property('x', x)
         self._update_property('y', y)
@@ -213,6 +222,90 @@ class Stage(stand.DM6000Device):
         counts = int(event.response)
         mm = counts * self._z_mm_per_count
         self._update_property('z', mm)
+
+    def _on_status_x_event(self, event):
+        _, lh, hh, ls, hs = (bool(int(v)) for v in event.response.split())
+        self._update_property('at_x_low_hard_limit', lh)
+        self._update_property('at_x_high_hard_limit', hh)
+        self._update_property('at_x_low_soft_limit', ls)
+        self._update_property('at_x_high_soft_limit', hs)
+
+    def _on_status_y_event(self, event):
+        _, lh, hh, ls, hs = (bool(int(v)) for v in event.response.split())
+        self._update_property('at_y_low_hard_limit', lh)
+        self._update_property('at_y_high_hard_limit', hh)
+        self._update_property('at_y_low_soft_limit', ls)
+        self._update_property('at_y_high_soft_limit', hs)
+
+    def _on_status_z_event(self, event):
+        _, lh, hh, ls, hs = (bool(int(v)) for v in event.response.split())
+        self._update_property('at_z_low_hard_limit', lh)
+        self._update_property('at_z_high_hard_limit', hh)
+        self._update_property('at_z_low_soft_limit', ls)
+        self._update_property('at_z_high_soft_limit', hs)
+
+    def _set_soft_limit(self, value, conversion_factor, command):
+        counts = int(round(value / conversion_factor))
+        self.send_message(command, counts, async=False, intent="set stage soft limit")
+
+    def set_x_low_soft_limit(self, x_min):
+        self._set_soft_limit(x_min, self._x_mm_per_count, SET_X1_LIMIT)
+
+    def set_x_high_soft_limit(self, x_max):
+        self._set_soft_limit(x_max, self._x_mm_per_count, SET_X2_LIMIT)
+
+    def set_y_low_soft_limit(self, y_min):
+        self._set_soft_limit(y_min, self._y_mm_per_count, SET_Y1_LIMIT)
+
+    def set_y_high_soft_limit(self, y_max):
+        self._set_soft_limit(y_may, self._y_mm_per_count, SET_Y2_LIMIT)
+
+    def set_z_low_soft_limit(self, z_min):
+        self._set_soft_limit(z_min, self._z_mm_per_count, SET_LOW_LIMIT)
+
+    def set_z_high_soft_limit(self, z_max):
+        self._set_soft_limit(z_max, self._z_mm_per_count, SET_UPPER_LIMIT)
+        # All stage soft limit property_server properties are updated in response to soft limit change events issued
+        # by the scope - except for max z, which we update immediately after we successfully change it
+        self._update_property('z_high_soft_limit', self.get_z_high_soft_limit())
+
+    def _get_soft_limit(self, conversion_factor, command):
+        counts = int(self.send_message(command, async=False, intent="get stage soft limit").response)
+        mm = counts * conversion_factor
+        return mm
+
+    def get_x_low_soft_limit(self):
+        return self._get_soft_limit(self._x_mm_per_count, GET_X1_LIMIT)
+
+    def get_x_high_soft_limit(self):
+        return self._get_soft_limit(self._x_mm_per_count, GET_X2_LIMIT)
+
+    def get_y_low_soft_limit(self):
+        return self._get_soft_limit(self._y_mm_per_count, GET_Y1_LIMIT)
+
+    def get_y_high_soft_limit(self):
+        return self._get_soft_limit(self._y_mm_per_count, GET_Y2_LIMIT)
+
+    def get_z_low_soft_limit(self):
+        return self._get_soft_limit(self._z_mm_per_count, GET_LOW_LIMIT)
+
+    def get_z_high_soft_limit(self):
+        return self._get_soft_limit(self._z_mm_per_count, GET_UPPER_LIMIT)
+
+    def _on_x_low_soft_limit_event(self, event):
+        self._update_property('x_low_software_limit', int(event.response) * self._x_mm_per_count)
+
+    def _on_x_high_soft_limit_event(self, event):
+        self._update_property('x_high_software_limit', int(event.response) * self._x_mm_per_count)
+
+    def _on_y_low_soft_limit_event(self, event):
+        self._update_property('y_low_software_limit', int(event.response) * self._y_mm_per_count)
+
+    def _on_y_high_soft_limit_event(self, event):
+        self._update_property('y_high_software_limit', int(event.response) * self._y_mm_per_count)
+
+    def _on_z_low_soft_limit_event(self, event):
+        self._update_property('z_low_software_limit', int(event.response) * self._z_mm_per_count)
 
     def reinit(self):
         self.reinit_x()
