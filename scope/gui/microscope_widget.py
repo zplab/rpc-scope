@@ -294,7 +294,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         self.subscribe(at_hs_pname, at_high_limit_prop_changed)
         self.subscribe(at_hh_pname, at_high_limit_prop_changed)
 
-        # [low soft limit text edit] [position text edit] [high soft limit text edit]
+        # [low soft limit text edit] [position text edit] [high soft limit text edit] [reset high soft limit button]
         hlayout = Qt.QHBoxLayout()
         low_limit_text_widget = Qt.QLineEdit()
         low_limit_text_widget.setMaxLength(8)
