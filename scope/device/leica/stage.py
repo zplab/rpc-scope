@@ -258,7 +258,7 @@ class Stage(stand.DM6000Device):
         self._set_soft_limit(y_min, self._y_mm_per_count, SET_Y1_LIMIT)
 
     def set_y_high_soft_limit(self, y_max):
-        self._set_soft_limit(y_may, self._y_mm_per_count, SET_Y2_LIMIT)
+        self._set_soft_limit(y_max, self._y_mm_per_count, SET_Y2_LIMIT)
 
     def set_z_low_soft_limit(self, z_min):
         self._set_soft_limit(z_min, self._z_mm_per_count, SET_LOW_LIMIT)
@@ -306,6 +306,29 @@ class Stage(stand.DM6000Device):
 
     def _on_z_low_soft_limit_event(self, event):
         self._update_property('z_low_soft_limit', int(event.response) * self._z_mm_per_count)
+
+    def reset_x_high_soft_limit(self):
+        self.send_message(
+            SET_X2_LIMIT, -1, async=False, 
+            intent="reset x soft max to maximum allowed value by sending SET_X2_LIMIT with the special argument value -1.")
+
+    def reset_y_high_soft_limit(self):
+        self.send_message(
+            SET_Y2_LIMIT, -1, async=False, 
+            intent="reset y soft max to maximum allowed value by sending SET_Y2_LIMIT with the special argument value -1.")
+
+    def reset_z_high_soft_limit(self):
+        # The Leica serial protocol docs indicate that the following should work, as it does for x and y.  However,
+        # it does not work.
+#       self.send_message(
+#           SET_UPPER_LIMIT, -1, async=False,
+#           intent="reset z soft max to maximum allowed value by sending SET_UPPER_LIMIT with the special argument value -1.")
+        # So, we just use a value slightly larger than the location of the hard limit.  Unlike the x and y high soft limits,
+        # the z high soft limit can be set to ridiculously large values far beyond the hard limit.  Resetting to a sane value
+        # not much beyond the hard limit at least offers the user some idea of the largest meaningful value.
+        counts = int(round(26 / self._z_mm_per_count))
+        self.send_message(SET_UPPER_LIMIT, counts, async=False, intent="reset z soft max to a position just past z hard max")
+        self._update_property('z_high_soft_limit', self.get_z_high_soft_limit())
 
     def reinit(self):
         self.reinit_x()

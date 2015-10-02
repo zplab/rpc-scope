@@ -55,9 +55,10 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         ('tl.condenser_retracted', PT.Bool),
         ('stage.xy_fine_manual_control', PT.Bool),
         ('stage.z_fine_manual_control', PT.Bool),
-        ('stage.x', PT.StageAxisPos, 'stage', 'x'),
-        ('stage.y', PT.StageAxisPos, 'stage', 'y'),
-        ('stage.z', PT.StageAxisPos, 'stage', 'z')
+        # TODO: use hard max values read from scope, if possible
+        ('stage.x', PT.StageAxisPos, 'stage', 'x', 225),
+        ('stage.y', PT.StageAxisPos, 'stage', 'y', 76),
+        ('stage.z', PT.StageAxisPos, 'stage', 'z', 26, 'nosepiece.position')
     ]
 
     @classmethod
@@ -100,12 +101,11 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         return attr
 
     def make_widgets_for_property(self, ptuple):
-#       if ptuple[1] not in (PT.Bool, PT.Enum, PT.Int, PT.Objective):
-#           return
         try:
             self.pattr(ptuple[0])
         except:
-            Qt.qDebug('Failed to read value of "{}{}", so this property will not be presented in the GUI.'.format(self.PROPERTY_ROOT, ptuple[0]))
+            e = 'Failed to read value of "{}{}", so this property will not be presented in the GUI.'
+            Qt.qDebug(e.format(self.PROPERTY_ROOT, ptuple[0]))
             return
         layout = self.layout()
         row = layout.rowCount()
@@ -226,7 +226,6 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         handling_pos_change = False
         props = self.scope_properties.properties
         low_limit_ppath = '{}{}.{}_low_soft_limit'.format(self.PROPERTY_ROOT, ptuple[2], ptuple[3])
-        print(low_limit_ppath)
         pos_ppath = self.PROPERTY_ROOT + ptuple[0]
         high_limit_ppath = '{}{}.{}_high_soft_limit'.format(self.PROPERTY_ROOT, ptuple[2], ptuple[3])
 
@@ -240,7 +239,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         pos_slider_factor = 1e5
         pos_slider = Qt.QSlider(Qt.Qt.Horizontal)
         pos_slider.setEnabled(False)
-        pos_slider.setRange(0, 2e9) #TODO: use real range queried from scope
+        pos_slider.setRange(0, pos_slider_factor * ptuple[4])
         hlayout.addWidget(pos_slider)
         high_limit_status_label = Qt.QLabel()
         high_limit_status_label.setPixmap(self.limit_pixmaps_and_tooltips.high_no_limit_pm)
@@ -298,20 +297,26 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         # [low soft limit text edit] [position text edit] [high soft limit text edit]
         hlayout = Qt.QHBoxLayout()
         low_limit_text_widget = Qt.QLineEdit()
+        low_limit_text_widget.setMaxLength(8)
         low_limit_text_validator = Qt.QDoubleValidator()
         low_limit_text_widget.setValidator(low_limit_text_validator)
         hlayout.addWidget(low_limit_text_widget)
         pos_text_widget = Qt.QLineEdit()
+        pos_text_widget.setMaxLength(8)
         pos_text_validator = Qt.QDoubleValidator()
         pos_text_widget.setValidator(pos_text_validator)
         hlayout.addWidget(pos_text_widget)
         high_limit_text_widget = Qt.QLineEdit()
+        high_limit_text_widget.setMaxLength(8)
         high_limit_text_validator = Qt.QDoubleValidator()
         high_limit_text_widget.setValidator(high_limit_text_validator)
         hlayout.addWidget(high_limit_text_widget)
+        reset_high_limit_button = Qt.QPushButton(self.limit_pixmaps_and_tooltips.high_soft_limit_reset_icon, '')
+        reset_high_limit_button.setIconSize(Qt.QSize(50,25))
+        reset_high_limit_button.setToolTip('Reset {} soft max to the largest acceptable value.'.format(ptuple[3]))
+        hlayout.addWidget(reset_high_limit_button)
         vlayout.addLayout(hlayout)
         def low_limit_prop_changed(value):
-            print('low_limit_prop_changed')
             nonlocal handling_low_soft_limit_change
             if handling_low_soft_limit_change:
                 return
@@ -372,12 +377,34 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 pass
             finally:
                 handling_high_soft_limit_change = False
+        def reset_high_limit_button_clicked(_):
+            self.pattr('{}.reset_{}_high_soft_limit'.format(ptuple[2], ptuple[3]))()
         update_low_limit = self.subscribe(low_limit_ppath, low_limit_prop_changed)
         low_limit_text_widget.editingFinished.connect(low_limit_text_edited)
         update_pos = self.subscribe(pos_ppath, pos_prop_changed)
         pos_text_widget.editingFinished.connect(pos_text_edited)
         update_high_limit = self.subscribe(high_limit_ppath, high_limit_prop_changed)
         high_limit_text_widget.editingFinished.connect(high_limit_text_edited)
+        reset_high_limit_button.clicked[bool].connect(reset_high_limit_button_clicked)
+
+        # We do not receive events for z high soft limit changes initiated by means other than assigning
+        # to scope.stage.z_high_soft_limit or calling scope.stage.reset_z_high_soft_limit().  However,
+        # the scope's physical interface does not offer any way to modify z high soft limit, with one
+        # possible exception: it would make sense for the limit to change with objective in order to prevent
+        # head crashing.  In case that happens, we refresh z high soft limit upon objective change.
+        # TODO: verify that this is never needed and get rid of it if so
+        if len(ptuple) == 6:
+            def objective_changed(_):
+                nonlocal handling_high_soft_limit_change
+                if handling_high_soft_limit_change:
+                    return
+                handling_high_soft_limit_change = True
+                try:
+                    high_limit_text_widget.setText(str(self.pattr('{}.{}_high_soft_limit'.format(ptuple[2], ptuple[3]))))
+                finally:
+                    handling_high_soft_limit_change = False
+            self.subscribe(self.PROPERTY_ROOT + ptuple[5], objective_changed)
+
         return widget
 
 class _ObjectivesModel(Qt.QAbstractListModel):
@@ -425,3 +452,4 @@ class LimitPixmapsAndToolTips:
         flip.rotate(180)
         for fname in ('no_limit.svg', 'soft_limit.svg', 'hard_limit.svg', 'hard_and_soft_limits.svg'):
             load(dpath / fname)
+        self.high_soft_limit_reset_icon = Qt.QIcon(str(dpath / 'reset_high_soft_limit.svg'))
