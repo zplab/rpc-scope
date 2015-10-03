@@ -25,6 +25,9 @@
 import threading
 import collections
 
+from ..util import logging
+logger = logging.get_logger(__name__)
+
 class Response:
     """A container for a value to be provided by a background thread at some
     point in the future.
@@ -95,9 +98,15 @@ class AsyncDevice:
 
     def send_message(self, message, async=None, response=None, coalesce=True):
         """Send the given message through the MessageManager.
+
         If the parameter 'async' is not None, it will override the async mode
-        set with set_async(). If parameter 'response' is provided, that will
-        be used as the response callback object.
+        set with set_async(). If 'async' is the string 'fire_and_forget', then
+        the command will be sent and NOT added to the pending responses. Use
+        with caution.
+
+        If parameter 'response' is provided, that will be used as the response
+        callback object.
+
         If 'coalesce' is False, then mutliple messages that generate the same
         response will be handled separately (good if the messages sent don't
         cancel the previous ones). If 'coalesce' is True, then messages with
@@ -108,6 +117,8 @@ class AsyncDevice:
         if response is None:
             response = Response()
         self._message_manager.send_message(message, response_key, response, coalesce=coalesce)
+        if async == 'fire_and_forget':
+            return
         if async or (async is None and self._async):
             self._pending_responses.add(response)
         else:
@@ -158,20 +169,23 @@ class LeicaResponse(Response):
     If an error code was generated, raise a LeicaError on wait(). If constructed
     with an 'intent' help text, this will help create a better LeicaError.
     """
-    def __init__(self, intent=None):
+    def __init__(self, message, intent=None):
         super().__init__()
+        self.message = message
         self.intent = intent
 
     def __call__(self, full_response):
         super().__call__(parse_leica_response(full_response))
+        if self.response.error_code != '0':
+            logger.warning('Microscope error. (message to scope: "{}", error response: "{}")', self.message, response.full_response)
 
     def wait(self):
         response = super().wait()
         if response.error_code != '0':
             if self.intent is not None:
-                error_text = 'Could not {} (error response "{}")'.format(self.intent, response.full_response)
+                error_text = 'Could not {} (message to scope: "{}", error response: "{}")'.format(self.intent, self.message, response.full_response)
             else:
-                error_text = 'Error from microscope: "{}"'.format(response.full_response)
+                error_text = 'Microscope error (message to scope: "{}", error response: "{}")'.format(self.message, response.full_response)
             raise LeicaError(error_text, response=response)
         return response
 
@@ -204,7 +218,7 @@ class LeicaAsyncDevice(AsyncDevice):
         the intent text when the response's wait() method is called.
         """
         message = ' '.join([str(command)] + [str(param) for param in params]) + '\r'
-        response = LeicaResponse(intent)
+        response = LeicaResponse(message[:-1], intent) # don't include \r from message...
         return super().send_message(message, async, response=response, coalesce=coalesce)
 
     def _generate_response_key(self, message):
