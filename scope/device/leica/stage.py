@@ -33,12 +33,26 @@ POS_ABS_Z = 71022
 GET_POS_X = 72023
 GET_POS_Y = 73023
 GET_POS_Z = 71023
+POS_CONST_X = 71025
 INIT_X = 72020
 INIT_Y = 73020
 INIT_RANGE_Z = 71044
+BREAK_X = 72021
+BREAK_Y = 73021
+BREAK_Z = 71021
+SET_SPEED_X = 72032
+SET_SPEED_Y = 73032
 SET_SPEED_Z = 71032
+GET_SPEED_X = 72033
+GET_SPEED_Y = 73033
 GET_SPEED_Z = 71033
+GET_SPEED_CONVERSION_FACTOR_X = 72037
+GET_SPEED_CONVERSION_FACTOR_Y = 73037
+GET_MIN_SPEED_X = 72035
+GET_MIN_SPEED_Y = 73035
 GET_MIN_SPEED_Z = 71058
+GET_MAX_SPEED_X = 72036
+GET_MAX_SPEED_Y = 73036
 GET_MAX_SPEED_Z = 71059
 SET_RAMP_Z = 71030
 GET_RAMP_Z = 71031
@@ -81,7 +95,13 @@ class Stage(stand.DM6000Device):
         self._x_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_X, async=False).response) / 1000
         self._y_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_Y, async=False).response) / 1000
         self._z_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_Z, async=False).response) / 1000
+        self._x_mm_per_count_second = float(self.send_message(GET_SPEED_CONVERSION_FACTOR_X, async=False).response) * 1000
+        self._y_mm_per_count_second = float(self.send_message(GET_SPEED_CONVERSION_FACTOR_Y, async=False).response) * 1000
+        self._x_speed_min = int(self.send_message(GET_MIN_SPEED_X, async=False).response) * self._x_mm_per_count_second * 1e-7
+        self._y_speed_min = int(self.send_message(GET_MIN_SPEED_Y, async=False).response) * self._y_mm_per_count_second * 1e-7
         self._z_speed_min = int(self.send_message(GET_MIN_SPEED_Z, async=False).response) * self._z_mm_per_count * Z_SPEED_MM_PER_SECOND_PER_UNIT
+        self._x_speed_max = int(self.send_message(GET_MAX_SPEED_X, async=False).response) * self._x_mm_per_count_second * 1e-7
+        self._y_speed_max = int(self.send_message(GET_MAX_SPEED_Y, async=False).response) * self._y_mm_per_count_second * 1e-7
         self._z_speed_max = int(self.send_message(GET_MAX_SPEED_Z, async=False).response) * self._z_mm_per_count * Z_SPEED_MM_PER_SECOND_PER_UNIT
         self._z_ramp_min = int(self.send_message(GET_MIN_RAMP_Z, async=False).response) * self._z_mm_per_count * Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT
         self._z_ramp_max = int(self.send_message(GET_MAX_RAMP_Z, async=False).response) * self._z_mm_per_count * Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT
@@ -330,6 +350,61 @@ class Stage(stand.DM6000Device):
         self.send_message(SET_UPPER_LIMIT, counts, async=False, intent="reset z soft max to a position just past z hard max")
         self._update_property('z_high_soft_limit', self.get_z_high_soft_limit())
 
+    def stop_x(self):
+        """Immediately cease movement of the stage along the x axis"""
+        self.send_message(BREAK_X, async=False, intent="stop stage movement along x axis")
+
+    def stop_y(self):
+        """Immediately cease movement of the stage along the y axis"""
+        self.send_message(BREAK_Y, async=False, intent="stop stage movement along y axis")
+
+    def stop_z(self):
+        """Immediately cease movement of the stage along the z axis"""
+        self.send_message(BREAK_Z, async=False, intent="stop stage movement along z axis")
+
+    def get_x_speed(self):
+        """Get x-axis speed in mm/second"""
+        counts = int(self.send_message(GET_SPEED_Z, async=False, intent="get z speed").response)
+        return counts * self._x_mm_per_count_second
+
+    def get_y_speed(self):
+        """Get x-axis speed in mm/second"""
+        counts = int(self.send_message(GET_SPEED_Z, async=False, intent="get z speed").response)
+        return counts * self._x_mm_per_count_second
+
+    def get_z_speed(self):
+        """Get z-axis speed in mm/second"""
+        counts = int(self.send_message(GET_SPEED_Z, async=False, intent="get z speed").response)
+        return counts * self._z_mm_per_count * Z_SPEED_MM_PER_SECOND_PER_UNIT
+
+    def set_x_speed(self, speed):
+        """Set x-axis speed in mm/second"""
+        counts = int(round(speed / self._x_mm_per_count_second))
+        self.send_message(SET_SPEED_X, counts, intent="set x speed")
+
+    def set_y_speed(self, speed):
+        """Set y-axis speed in mm/second"""
+        counts = int(round(speed / self._x_mm_per_count_second))
+        self.send_message(SET_SPEED_Y, counts, intent="set y speed")
+
+    def set_z_speed(self, speed):
+        """Set z-axis speed in mm/second"""
+        assert self._z_speed_min <= speed <= self._z_speed_max
+        counts = int(round(speed / self._z_mm_per_count / Z_SPEED_MM_PER_SECOND_PER_UNIT))
+        self.send_message(SET_SPEED_Z, counts, intent="set z speed")
+
+    def get_x_speed_range(self):
+        """Return min, max z speed values in mm/second"""
+        return self._x_speed_min, self._x_speed_max
+
+    def get_y_speed_range(self):
+        """Return min, max y speed values in mm/second"""
+        return self._y_speed_min, self._y_speed_max
+
+    def get_z_speed_range(self):
+        """Return min, max z speed values in mm/second"""
+        return self._z_speed_min, self._z_speed_max
+
     def reinit(self):
         self.reinit_x()
         self.reinit_y()
@@ -364,21 +439,6 @@ class Stage(stand.DM6000Device):
 
     def _on_z_step_mode_event(self, response):
         self._update_property('z_fine_manual_control', not bool(int(response.response)))
-
-    def get_z_speed_range(self):
-        """Return min, max z speed values in mm/second"""
-        return self._z_speed_min, self._z_speed_max
-
-    def get_z_speed(self):
-        """Get z-axis speed in mm/second"""
-        counts = int(self.send_message(GET_SPEED_Z, async=False, intent="get z speed").response)
-        return counts * self._z_mm_per_count * Z_SPEED_MM_PER_SECOND_PER_UNIT
-
-    def set_z_speed(self, speed):
-        """Get z-axis speed in mm/second"""
-        assert self._z_speed_min <= speed <= self._z_speed_max
-        counts = int(round(speed / self._z_mm_per_count / Z_SPEED_MM_PER_SECOND_PER_UNIT))
-        self.send_message(SET_SPEED_Z, counts, intent="set z speed")
 
     def get_z_ramp_range(self):
         """Return min, max z ramp values in mm/second^2"""

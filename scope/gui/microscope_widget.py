@@ -218,6 +218,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         return widget
 
     def make_stage_axis_pos_widget(self, ptuple):
+        device = self.pattr(ptuple[2])
         widget = Qt.QWidget()
         vlayout = Qt.QVBoxLayout()
         widget.setLayout(vlayout)
@@ -351,11 +352,13 @@ class MicroscopeWidget(device_widget.DeviceWidget):
             if handling_pos_change:
                 return
             handling_pos_change = True
+            device.async = True
             try:
                 update_pos(float(pos_text_widget.text()))
             except ValueError:
                 pass
             finally:
+                device.exit_async_immediately()
                 handling_pos_change = False
         def high_limit_prop_changed(value):
             nonlocal handling_high_soft_limit_change
