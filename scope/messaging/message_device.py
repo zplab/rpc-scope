@@ -175,9 +175,10 @@ class LeicaResponse(Response):
         self.intent = intent
 
     def __call__(self, full_response):
-        super().__call__(parse_leica_response(full_response))
-        if self.response.error_code != '0':
+        response = parse_leica_response(full_response)
+        if response.error_code != '0':
             logger.warning('Microscope error. (message to scope: "{}", error response: "{}")', self.message, response.full_response)
+        super().__call__(response)
 
     def wait(self):
         response = super().wait()
