@@ -192,7 +192,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 update(value)
             except rpc_client.RPCError as e:
                 error = 'Could not set {} ({}).'.format(ppath, e.args[0])
-                Qt.QMessageBox.warning(self, 'Invalid Value', error)
+                Qt.QMessageBox.warning(self, 'RPC Exception', error)
         widget.currentTextChanged.connect(gui_changed)
         return widget
 
@@ -213,7 +213,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 update(value)
             except rpc_client.RPCError as e:
                 error = 'Could not set {} ({}).'.format(ppath, e.args[0])
-                Qt.QMessageBox.warning(self, 'Invalid Value', error)
+                Qt.QMessageBox.warning(self, 'RPC Exception', error)
         widget.currentIndexChanged[int].connect(gui_changed)
         return widget
 
@@ -300,12 +300,13 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         # [stop] [low soft limit text edit] [position text edit] [high soft limit text edit] [reset high soft limit button]
         hlayout = Qt.QHBoxLayout()
         stop_button = Qt.QPushButton(widget.style().standardIcon(Qt.QStyle.SP_BrowserStop), '')
-        stop_button.setToolTip('Stop {} movement along the {}-axis.'.format(stage_rppath, axis_name))
+        stop_button.setToolTip('Stop movement along {}.'.format(rppath))
         stop_button.setEnabled(False)
         hlayout.addWidget(stop_button)
         low_limit_text_widget = FocusLossSignalingLineEdit()
         low_limit_text_widget.setMaxLength(8)
         low_limit_text_validator = Qt.QDoubleValidator()
+        low_limit_text_validator.setBottom(0)
         low_limit_text_widget.setValidator(low_limit_text_validator)
         hlayout.addWidget(low_limit_text_widget)
         pos_text_widget = FocusLossSignalingLineEdit()
@@ -316,17 +317,23 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         high_limit_text_widget = FocusLossSignalingLineEdit()
         high_limit_text_widget.setMaxLength(8)
         high_limit_text_validator = Qt.QDoubleValidator()
+        high_limit_text_validator.setTop(axis_max_val)
         high_limit_text_widget.setValidator(high_limit_text_validator)
         hlayout.addWidget(high_limit_text_widget)
-        reset_high_limit_button = Qt.QPushButton(self.limit_pixmaps_and_tooltips.high_soft_limit_reset_icon, '')
-        reset_high_limit_button.setIconSize(Qt.QSize(50,25))
-        reset_high_limit_button.setToolTip('Reset {} soft max to the largest acceptable value.'.format(axis_name))
-        hlayout.addWidget(reset_high_limit_button)
+        reset_limits_button = Qt.QPushButton('Reset limits')
+        reset_limits_button.setToolTip(
+            'Reset {} soft min and max to the smallest \n and largest acceptable values, respectively.'.format(axis_name)
+        )
+        hlayout.addWidget(reset_limits_button)
         vlayout.addLayout(hlayout)
         def moving_along_axis_changed(value):
             stop_button.setEnabled(value)
         def stop_moving_along_axis():
-            self.pattr('{}.stop_{}'.format(stage_rppath, axis_name))()
+            try:
+                self.pattr('{}.stop_{}'.format(stage_rppath, axis_name))()
+            except rpc_client.RPCError as e:
+                error = 'Could not stop movement along {} ({}).'.format(rppath, e.args[0])
+                Qt.QMessageBox.warning(self, 'RPC Exception', error)
         def low_limit_prop_changed(value):
             nonlocal handling_low_soft_limit_change
             if handling_low_soft_limit_change:
@@ -335,6 +342,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
             try:
                 low_limit_text_widget.setText(str(value))
                 pos_text_validator.setBottom(value)
+                high_limit_text_validator.setBottom(value)
             finally:
                 handling_low_soft_limit_change = False
         def submit_low_limit_text():
@@ -343,7 +351,13 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 return
             handling_low_soft_limit_change = True
             try:
-                update_low_limit(float(low_limit_text_widget.text()))
+                new_low_limit = float(low_limit_text_widget.text())
+                try:
+                    update_low_limit(new_low_limit)
+                except rpc_client.RPCError as e:
+                    error = 'Could not set {}.{} to {} ({}).'
+                    error = error.format(stage_rppath, axis_name, new_low_limit, e.args[0])
+                    Qt.QMessageBox.warning(self, 'RPC Exception', error)
             except ValueError:
                 pass
             finally:
@@ -368,7 +382,11 @@ class MicroscopeWidget(device_widget.DeviceWidget):
             try:
                 new_pos = float(pos_text_widget.text())
                 if new_pos != get_pos():
-                    set_pos(new_pos, async='fire_and_forget')
+                    try:
+                        set_pos(new_pos, async='fire_and_forget')
+                    except rpc_client.RPCError as e:
+                        error = 'Could not set {} to {} ({}).'.format(rppath, new_pos, e.args[0])
+                        Qt.QMessageBox.warning(self, 'RPC Exception', error)
             except ValueError:
                 pass
             finally:
@@ -381,8 +399,9 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 return
             handling_high_soft_limit_change = True
             try:
-                pos_text_validator.setTop(value)
                 high_limit_text_widget.setText(str(value))
+                pos_text_validator.setTop(value)
+                low_limit_text_validator.setTop(value)
             finally:
                 handling_high_soft_limit_change = False
         def submit_high_limit_text():
@@ -391,15 +410,23 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 return
             handling_high_soft_limit_change = True
             try:
-                update_high_limit(float(high_limit_text_widget.text()))
+                new_high_limit = float(high_limit_text_widget.text())
+                try:
+                    update_high_limit(new_high_limit)
+                except rpc_client.RPCError as e:
+                    error = 'Could not set {}.{} to {} ({}).'
+                    error = error.format(stage_rppath, axis_name, new_high_limit, e.args[0])
+                    Qt.QMessageBox.warning(self, 'RPC Exception', error)
             except ValueError:
                 pass
             finally:
                 handling_high_soft_limit_change = False
         def high_limit_text_focus_lost():
             high_limit_text_widget.setText(str(self.pattr(high_limit_rppath)))
-        def reset_high_limit_button_clicked(_):
+        def reset_limits_button_clicked(_):
+            update_low_limit(0.0)
             self.pattr('{}.reset_{}_high_soft_limit'.format(stage_rppath, axis_name))()
+            
         stop_button.clicked[bool].connect(stop_moving_along_axis)
         self.subscribe('{}{}.moving_along_{}'.format(self.PROPERTY_ROOT, stage_rppath, axis_name), moving_along_axis_changed)
         update_low_limit = self.subscribe(low_limit_ppath, low_limit_prop_changed)
@@ -417,7 +444,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
             raise TypeError('{} is not a writable property!'.format(high_limit_ppath))
         high_limit_text_widget.returnPressed.connect(submit_high_limit_text)
         high_limit_text_widget.focus_lost.connect(high_limit_text_focus_lost)
-        reset_high_limit_button.clicked[bool].connect(reset_high_limit_button_clicked)
+        reset_limits_button.clicked[bool].connect(reset_limits_button_clicked)
 
         # We do not receive events for z high soft limit changes initiated by means other than assigning
         # to scope.stage.z_high_soft_limit or calling scope.stage.reset_z_high_soft_limit().  However,
@@ -484,7 +511,6 @@ class LimitPixmapsAndToolTips:
         flip.rotate(180)
         for fname in ('no_limit.svg', 'soft_limit.svg', 'hard_limit.svg', 'hard_and_soft_limits.svg'):
             load(dpath / fname)
-        self.high_soft_limit_reset_icon = Qt.QIcon(str(dpath / 'reset_high_soft_limit.svg'))
 
 class FocusLossSignalingLineEdit(Qt.QLineEdit):
     focus_lost = Qt.pyqtSignal()
