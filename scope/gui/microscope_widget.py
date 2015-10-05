@@ -324,6 +324,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
             handling_low_soft_limit_change = True
             try:
                 low_limit_text_widget.setText(str(value))
+                pos_text_validator.setBottom(value)
             finally:
                 handling_low_soft_limit_change = False
         def low_limit_text_edited():
@@ -366,6 +367,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 return
             handling_high_soft_limit_change = True
             try:
+                pos_text_validator.setTop(value)
                 high_limit_text_widget.setText(str(value))
             finally:
                 handling_high_soft_limit_change = False
