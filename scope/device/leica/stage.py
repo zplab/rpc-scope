@@ -33,7 +33,9 @@ POS_ABS_Z = 71022
 GET_POS_X = 72023
 GET_POS_Y = 73023
 GET_POS_Z = 71023
-POS_CONST_X = 71025
+POS_CONST_X = 72025
+POS_CONST_Y = 73025
+POS_CONST_Z = 71025
 INIT_X = 72020
 INIT_Y = 73020
 INIT_RANGE_Z = 71044
@@ -95,13 +97,13 @@ class Stage(stand.DM6000Device):
         self._x_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_X, async=False).response) / 1000
         self._y_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_Y, async=False).response) / 1000
         self._z_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_Z, async=False).response) / 1000
-        self._x_mm_per_count_second = float(self.send_message(GET_SPEED_CONVERSION_FACTOR_X, async=False).response) * 1000
-        self._y_mm_per_count_second = float(self.send_message(GET_SPEED_CONVERSION_FACTOR_Y, async=False).response) * 1000
-        self._x_speed_min = int(self.send_message(GET_MIN_SPEED_X, async=False).response) * self._x_mm_per_count_second * 1e-7
-        self._y_speed_min = int(self.send_message(GET_MIN_SPEED_Y, async=False).response) * self._y_mm_per_count_second * 1e-7
+        self._x_mm_per_count_second = float(self.send_message(GET_SPEED_CONVERSION_FACTOR_X, async=False).response) / 1000
+        self._y_mm_per_count_second = float(self.send_message(GET_SPEED_CONVERSION_FACTOR_Y, async=False).response) / 1000
+        self._x_speed_min = int(self.send_message(GET_MIN_SPEED_X, async=False).response) * self._x_mm_per_count_second
+        self._y_speed_min = int(self.send_message(GET_MIN_SPEED_Y, async=False).response) * self._y_mm_per_count_second
         self._z_speed_min = int(self.send_message(GET_MIN_SPEED_Z, async=False).response) * self._z_mm_per_count * Z_SPEED_MM_PER_SECOND_PER_UNIT
-        self._x_speed_max = int(self.send_message(GET_MAX_SPEED_X, async=False).response) * self._x_mm_per_count_second * 1e-7
-        self._y_speed_max = int(self.send_message(GET_MAX_SPEED_Y, async=False).response) * self._y_mm_per_count_second * 1e-7
+        self._x_speed_max = int(self.send_message(GET_MAX_SPEED_X, async=False).response) * self._x_mm_per_count_second
+        self._y_speed_max = int(self.send_message(GET_MAX_SPEED_Y, async=False).response) * self._y_mm_per_count_second
         self._z_speed_max = int(self.send_message(GET_MAX_SPEED_Z, async=False).response) * self._z_mm_per_count * Z_SPEED_MM_PER_SECOND_PER_UNIT
         self._z_ramp_min = int(self.send_message(GET_MIN_RAMP_Z, async=False).response) * self._z_mm_per_count * Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT
         self._z_ramp_max = int(self.send_message(GET_MAX_RAMP_Z, async=False).response) * self._z_mm_per_count * Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT
@@ -355,7 +357,7 @@ class Stage(stand.DM6000Device):
         # So, we just use a value slightly larger than the location of the hard limit.  Unlike the x and y high soft limits,
         # the z high soft limit can be set to ridiculously large values far beyond the hard limit.  Resetting to a sane value
         # not much beyond the hard limit at least offers the user some idea of the largest meaningful value.
-        counts = int(round(26 / self._z_mm_per_count))
+        counts = int(round(26.00001 / self._z_mm_per_count))
         self.send_message(SET_UPPER_LIMIT, counts, async=False, intent="reset z soft max to a position just past z hard max")
         self._update_property('z_high_soft_limit', self.get_z_high_soft_limit())
 
@@ -371,39 +373,101 @@ class Stage(stand.DM6000Device):
         """Immediately cease movement of the stage along the z axis"""
         self.send_message(BREAK_Z, async=False, intent="stop stage movement along z axis")
 
+    def set_x_speed(self, speed):
+        """Set the speed at which, when commanded to move to a specified position, the stage
+        travels along x-axis, in mm/second"""
+        assert self._x_speed_min <= speed <= self._x_speed_max
+        counts = int(round(speed / self._x_mm_per_count_second))
+        self.send_message(SET_SPEED_X, counts, intent="set x auto move speed")
+
+    def set_y_speed(self, speed):
+        """Set the speed at which, when commanded to move to a specified position, the stage
+        travels along y-axis, in mm/second"""
+        assert self._y_speed_min <= speed <= self._y_speed_max
+        counts = int(round(speed / self._x_mm_per_count_second))
+        self.send_message(SET_SPEED_Y, counts, intent="set y auto move speed")
+
+    def set_z_speed(self, speed):
+        """Set the speed at which, when commanded to move to a specified position, the stage
+        travels along z-axis, in mm/second"""
+        assert self._z_speed_min <= speed <= self._z_speed_max
+        counts = int(round(speed / self._z_mm_per_count / Z_SPEED_MM_PER_SECOND_PER_UNIT))
+        self.send_message(SET_SPEED_Z, counts, intent="set z auto move speed")
+
     def get_x_speed(self):
-        """Get x-axis speed in mm/second"""
-        counts = int(self.send_message(GET_SPEED_Z, async=False, intent="get z speed").response)
+        """Get the speed at which, when commanded to move to a specified position, the stage
+        moves along x-axis, in mm/second"""
+        counts = int(self.send_message(GET_SPEED_X, async=False, intent="get x auto move speed").response)
         return counts * self._x_mm_per_count_second
 
     def get_y_speed(self):
-        """Get x-axis speed in mm/second"""
-        counts = int(self.send_message(GET_SPEED_Z, async=False, intent="get z speed").response)
-        return counts * self._x_mm_per_count_second
+        """Get the speed at which, when commanded to move to a specified position, the stage
+        moves along y-axis, in mm/second"""
+        counts = int(self.send_message(GET_SPEED_Y, async=False, intent="get y auto move speed").response)
+        return counts * self._y_mm_per_count_second
 
     def get_z_speed(self):
-        """Get z-axis speed in mm/second"""
-        counts = int(self.send_message(GET_SPEED_Z, async=False, intent="get z speed").response)
+        """Get the speed at which, when commanded to move to a specified position, the stage
+        moves along z-axis, in mm/second"""
+        counts = int(self.send_message(GET_SPEED_Z, async=False, intent="get z auto move speed").response)
         return counts * self._z_mm_per_count * Z_SPEED_MM_PER_SECOND_PER_UNIT
 
-    def set_x_speed(self, speed):
-        """Set x-axis speed in mm/second"""
-        counts = int(round(speed / self._x_mm_per_count_second))
-        self.send_message(SET_SPEED_X, counts, intent="set x speed")
+    def move_along_x(self, speed):
+        """Command stage to move along x-axis at the specified speed, in mm/second"""
+        assert abs(speed) <= self._x_speed_max
+        if abs(speed) < self._x_speed_min:
+            self.stop_x()
+        else:
+            counts = int(round(speed / self._x_mm_per_count_second))
+            self.send_message(POS_CONST_X, counts, intent="set x speed")
 
-    def set_y_speed(self, speed):
-        """Set y-axis speed in mm/second"""
-        counts = int(round(speed / self._x_mm_per_count_second))
-        self.send_message(SET_SPEED_Y, counts, intent="set y speed")
+    def move_along_y(self, speed):
+        """Command stage to move along y-axis at the specified speed, in mm/second"""
+        assert abs(speed) <= self._y_speed_max
+        if abs(speed) < self._y_speed_min:
+            self.stop_y()
+        else:
+            counts = int(round(speed / self._y_mm_per_count_second))
+            self.send_message(POS_CONST_Y, counts, intent="set y speed")
 
-    def set_z_speed(self, speed):
-        """Set z-axis speed in mm/second"""
-        assert self._z_speed_min <= speed <= self._z_speed_max
-        counts = int(round(speed / self._z_mm_per_count / Z_SPEED_MM_PER_SECOND_PER_UNIT))
-        self.send_message(SET_SPEED_Z, counts, intent="set z speed")
+    def move_along_z(self, speed):
+        """Command stage to move along z-axis at the specified speed, in mm/second"""
+        assert abs(speed) <= self._z_speed_max
+        if abs(speed) < self._z_speed_min:
+            self.stop_z()
+        else:
+            counts = int(round(speed / self._z_mm_per_count / Z_SPEED_MM_PER_SECOND_PER_UNIT))
+            self.send_message(POS_CONST_Z, counts, intent="set z speed")
+
+    def get_x_min_speed(self):
+        """The minimum value to which x_speed may be set.  Additionally, calling move_along_x with
+        a value less than x_min_speed is equivalent to calling the stop_x method."""
+        return self._x_speed_min
+
+    def get_y_min_speed(self):
+        """The minimum value to which y_speed may be set.  Additionally, calling move_along_y with
+        a value less than y_min_speed is equivalent to calling the stop_y method."""
+        return self._y_speed_min
+
+    def get_z_min_speed(self):
+        """The minimum value to which z_speed may be set.  Additionally, calling move_along_z with
+        a value less than z_min_speed is equivalent to calling the stop_z method."""
+        return self._z_speed_min
+
+    def get_x_max_speed(self):
+        """The maximum value with which move_along_x may be called and to which x_speed may be set"""
+        return self._x_speed_max
+
+    def get_y_max_speed(self):
+        """The maximum value with which move_along_y may be called and to which y_speed may be set"""
+        return self._y_speed_max
+
+    def get_z_max_speed(self):
+        """The maximum value with which move_along_z may be called and to which z_speed may be set"""
+        return self._z_speed_max
 
     def get_x_speed_range(self):
-        """Return min, max z speed values in mm/second"""
+        """Return min, max x speed values in mm/second"""
         return self._x_speed_min, self._x_speed_max
 
     def get_y_speed_range(self):

@@ -363,7 +363,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
             finally:
                 handling_low_soft_limit_change = False
         def low_limit_text_focus_lost():
-            low_limit_text_widget.setText(str(self.pattr(low_limit_rppath)))
+            low_limit_text_widget.setText(str(props.get(low_limit_ppath, '')))
         def pos_prop_changed(value):
             nonlocal handling_pos_change
             if handling_pos_change:
@@ -392,7 +392,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
             finally:
                 handling_pos_change = False
         def pos_text_focus_lost():
-            pos_text_widget.setText(str(self.pattr(rppath)))
+            pos_text_widget.setText(str(props.get(pos_ppath, '')))
         def high_limit_prop_changed(value):
             nonlocal handling_high_soft_limit_change
             if handling_high_soft_limit_change:
@@ -422,7 +422,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
             finally:
                 handling_high_soft_limit_change = False
         def high_limit_text_focus_lost():
-            high_limit_text_widget.setText(str(self.pattr(high_limit_rppath)))
+            high_limit_text_widget.setText(str(props.get(high_limit_ppath, '')))
         def reset_limits_button_clicked(_):
             update_low_limit(0.0)
             self.pattr('{}.reset_{}_high_soft_limit'.format(stage_rppath, axis_name))()
