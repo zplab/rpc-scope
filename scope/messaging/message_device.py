@@ -89,10 +89,6 @@ class AsyncDevice:
             self.wait() # ... don't let any pending events still be outstanding
         self._async = async
 
-    # TODO: determine if this is unhealthy and do something better if so
-    def exit_async_immediately(self):
-        self._async = False
-
     def get_async(self):
         return self._async
 

@@ -352,13 +352,13 @@ class MicroscopeWidget(device_widget.DeviceWidget):
             if handling_pos_change:
                 return
             handling_pos_change = True
-            device.async = True
             try:
-                update_pos(float(pos_text_widget.text()))
+                new_pos = float(pos_text_widget.text())
+                if new_pos != get_pos():
+                    set_pos(new_pos, async='fire_and_forget')
             except ValueError:
                 pass
             finally:
-                device.exit_async_immediately()
                 handling_pos_change = False
         def high_limit_prop_changed(value):
             nonlocal handling_high_soft_limit_change
@@ -383,10 +383,16 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         def reset_high_limit_button_clicked(_):
             self.pattr('{}.reset_{}_high_soft_limit'.format(ptuple[2], ptuple[3]))()
         update_low_limit = self.subscribe(low_limit_ppath, low_limit_prop_changed)
+        if update_low_limit is None:
+            raise TypeError('{} is not a writable property!'.format(low_limit_ppath))
         low_limit_text_widget.editingFinished.connect(low_limit_text_edited)
-        update_pos = self.subscribe(pos_ppath, pos_prop_changed)
+        self.subscribe(pos_ppath, pos_prop_changed)
+        get_pos = getattr(device, '_get_{}'.format(ptuple[3]))
+        set_pos = getattr(device, '_set_{}'.format(ptuple[3]))
         pos_text_widget.editingFinished.connect(pos_text_edited)
         update_high_limit = self.subscribe(high_limit_ppath, high_limit_prop_changed)
+        if update_high_limit is None:
+            raise TypeError('{} is not a writable property!'.format(high_limit_ppath))
         high_limit_text_widget.editingFinished.connect(high_limit_text_edited)
         reset_high_limit_button.clicked[bool].connect(reset_high_limit_button_clicked)
 

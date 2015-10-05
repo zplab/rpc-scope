@@ -190,22 +190,28 @@ class Stage(stand.DM6000Device):
             self.set_z(z)
             # no need to do self.wait() at end of block: it gets called implicitly!
 
-    def _set_pos(self, value, conversion_factor, command):
+    def _set_pos(self, value, conversion_factor, command, async):
         if value is None: return
         counts = int(round(value / conversion_factor))
-        response = self.send_message(command, counts, intent="move stage to position")
+        self.send_message(command, counts, async=async, intent="move stage to position")
 
-    def set_x(self, x):
-        "Set x-axis position in mm"
-        self._set_pos(x, self._x_mm_per_count, POS_ABS_X)
+    def set_x(self, x, async=None):
+        """Set x-axis position in mm.  If a value other than None is supplied for the async parameter,
+        this value is used in place of the stage's current async state for issuing the stage x-axis
+        move command."""
+        self._set_pos(x, self._x_mm_per_count, POS_ABS_X, async)
 
-    def set_y(self, y):
-        "Set y-axis position in mm"
-        self._set_pos(y, self._y_mm_per_count, POS_ABS_Y)
+    def set_y(self, y, async=None):
+        """Set y-axis position in mm.  If a value other than None is supplied for the async parameter,
+        this value is used in place of the stage's current async state for issuing the stage y-axis
+        move command."""
+        self._set_pos(y, self._y_mm_per_count, POS_ABS_Y, async)
 
-    def set_z(self, z):
-        "Set z-axis position in mm"
-        self._set_pos(z, self._z_mm_per_count, POS_ABS_Z)
+    def set_z(self, z, async=None):
+        """Set z-axis position in mm.  If a value other than None is supplied for the async parameter,
+        this value is used in place of the stage's current async state for issuing the stage z-axis
+        move command."""
+        self._set_pos(z, self._z_mm_per_count, POS_ABS_Z, async)
 
     def get_position(self):
         """Return (x,y,z) positionz in mm."""
