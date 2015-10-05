@@ -107,7 +107,7 @@ class Stage(stand.DM6000Device):
         self._z_ramp_max = int(self.send_message(GET_MAX_RAMP_Z, async=False).response) * self._z_mm_per_count * Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT
         self.send_message(
             SET_X_EVENT_SUBSCRIPTIONS,
-            0, # X-axis started or stopped
+            1, # X-axis started or stopped
             1, # X-INIT-endswitch reached or left
             1, # X-END-endswitch reached or left
             1, # Lower software-endswitch (X1) reached or left
@@ -126,10 +126,10 @@ class Stage(stand.DM6000Device):
         self._update_property('xy_fine_manual_control', self.get_xy_fine_manual_control())
         self._update_property('x_low_soft_limit', self.get_x_low_soft_limit())
         self._update_property('x_high_soft_limit', self.get_x_high_soft_limit())
-        self._on_status_x_event(self.send_message(GET_STATUS_X))
+        self._on_status_x_event(self.send_message(GET_STATUS_X, async=False))
         self.send_message(
             SET_Y_EVENT_SUBSCRIPTIONS,
-            0, # Y-axis started or stopped
+            1, # Y-axis started or stopped
             1, # Y-INIT-endswitch reached or left
             1, # Y-END- endswitch reached or left
             1, # Lower software-endswitch (Y1) reached or left
@@ -145,10 +145,10 @@ class Stage(stand.DM6000Device):
         self.register_event_callback(GET_Y2_LIMIT, self._on_y_high_soft_limit_event)
         self._update_property('y_low_soft_limit', self.get_y_low_soft_limit())
         self._update_property('y_high_soft_limit', self.get_y_high_soft_limit())
-        self._on_status_y_event(self.send_message(GET_STATUS_Y))
+        self._on_status_y_event(self.send_message(GET_STATUS_Y, async=False))
         self.send_message(
             SET_Z_EVENT_SUBSCRIPTIONS,
-            0, # Z-DRIVE started or stopped
+            1, # Z-DRIVE started or stopped
             1, # Lower hardware endswitch reached or left
             1, # Upper hardware endswitch reached or left
             1, # Lower threshold reached or left
@@ -166,7 +166,7 @@ class Stage(stand.DM6000Device):
         self._update_property('z_fine_manual_control', self.get_z_fine_manual_control())
         self._update_property('z_low_soft_limit', self.get_z_low_soft_limit())
         self._update_property('z_high_soft_limit', self.get_z_high_soft_limit())
-        self._on_status_z_event(self.send_message(GET_STATUS_Z))
+        self._on_status_z_event(self.send_message(GET_STATUS_Z, async=False))
         x, y, z = self.get_position()
         self._update_property('x', x)
         self._update_property('y', y)
@@ -250,21 +250,24 @@ class Stage(stand.DM6000Device):
         self._update_property('z', mm)
 
     def _on_status_x_event(self, event):
-        _, lh, hh, ls, hs = (bool(int(v)) for v in event.response.split())
+        moving, lh, hh, ls, hs = (bool(int(v)) for v in event.response.split())
+        self._update_property('moving_along_x', moving)
         self._update_property('at_x_low_hard_limit', lh)
         self._update_property('at_x_high_hard_limit', hh)
         self._update_property('at_x_low_soft_limit', ls)
         self._update_property('at_x_high_soft_limit', hs)
 
     def _on_status_y_event(self, event):
-        _, lh, hh, ls, hs = (bool(int(v)) for v in event.response.split())
+        moving, lh, hh, ls, hs = (bool(int(v)) for v in event.response.split())
+        self._update_property('moving_along_y', moving)
         self._update_property('at_y_low_hard_limit', lh)
         self._update_property('at_y_high_hard_limit', hh)
         self._update_property('at_y_low_soft_limit', ls)
         self._update_property('at_y_high_soft_limit', hs)
 
     def _on_status_z_event(self, event):
-        _, lh, hh, ls, hs = (bool(int(v)) for v in event.response.split())
+        moving, lh, hh, ls, hs = (bool(int(v)) for v in event.response.split())
+        self._update_property('moving_along_z', moving)
         self._update_property('at_z_low_hard_limit', lh)
         self._update_property('at_z_high_hard_limit', hh)
         self._update_property('at_z_low_soft_limit', ls)

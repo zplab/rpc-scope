@@ -111,13 +111,13 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         row = layout.rowCount()
         label = Qt.QLabel(ptuple[0] + ':')
         layout.addWidget(label, row, 0)
-        widget = self.widget_makers[ptuple[1]](ptuple)
+        widget = self.widget_makers[ptuple[1]](*ptuple)
         layout.addWidget(widget, row, 1)
         return label, widget
 
-    def make_bool_widget(self, ptuple):
+    def make_bool_widget(self, rppath, pt):
         widget = Qt.QCheckBox()
-        ppath = self.PROPERTY_ROOT + ptuple[0]
+        ppath = self.PROPERTY_ROOT + rppath
         update = self.subscribe(ppath, callback=widget.setChecked)
         if update is None:
             raise TypeError('{} is not a writable property!'.format(ppath))
@@ -130,9 +130,9 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         widget.toggled.connect(gui_changed)
         return widget
 
-    def make_int_widget(self, ptuple):
+    def make_int_widget(self, rppath, pt, range_rppath, provoke_update_rppath):
         widget = Qt.QWidget()
-        ppath = self.PROPERTY_ROOT + ptuple[0]
+        ppath = self.PROPERTY_ROOT + rppath
         layout = Qt.QHBoxLayout()
         widget.setLayout(layout)
         slider = Qt.QSlider(Qt.Qt.Horizontal)
@@ -157,7 +157,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 return
             handling_change = True
             try:
-                range_ = self.pattr(ptuple[2])
+                range_ = self.pattr(range_rppath)
                 slider.setRange(*range_)
                 spinbox.setRange(*range_)
             finally:
@@ -174,16 +174,16 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         update = self.subscribe(ppath, callback=prop_changed)
         if update is None:
             raise TypeError('{} is not a writable property!'.format(ppath))
-        self.subscribe(self.PROPERTY_ROOT + ptuple[3], callback=range_changed)
+        self.subscribe(self.PROPERTY_ROOT + provoke_update_rppath, callback=range_changed)
         slider.valueChanged[int].connect(gui_changed)
         spinbox.valueChanged[int].connect(gui_changed)
         return widget
 
-    def make_enum_widget(self, ptuple):
+    def make_enum_widget(self, rppath, pt, choices_rppath):
         widget = Qt.QComboBox()
         widget.setEditable(False)
-        ppath = self.PROPERTY_ROOT + ptuple[0]
-        widget.addItems(sorted(self.pattr(ptuple[2])))
+        ppath = self.PROPERTY_ROOT + rppath
+        widget.addItems(sorted(self.pattr(choices_rppath)))
         update = self.subscribe(ppath, callback=widget.setCurrentText)
         if update is None:
             raise TypeError('{} is not a writable property!'.format(ppath))
@@ -196,11 +196,11 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         widget.currentTextChanged.connect(gui_changed)
         return widget
 
-    def make_objective_widget(self, ptuple):
+    def make_objective_widget(self, rppath, pt, objectives_rppath):
         widget = Qt.QComboBox()
         widget.setEditable(False)
-        ppath = self.PROPERTY_ROOT + ptuple[0]
-        mags = self.pattr(ptuple[2])
+        ppath = self.PROPERTY_ROOT + rppath
+        mags = self.pattr(objectives_rppath)
         model = _ObjectivesModel(mags, widget.font(), self)
         widget.setModel(model)
         def prop_changed(value):
@@ -217,8 +217,8 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         widget.currentIndexChanged[int].connect(gui_changed)
         return widget
 
-    def make_stage_axis_pos_widget(self, ptuple):
-        device = self.pattr(ptuple[2])
+    def make_stage_axis_pos_widget(self, rppath, pt, stage_rppath, axis_name, axis_max_val, provoke_update_rppath=None):
+        device = self.pattr(stage_rppath)
         widget = Qt.QWidget()
         vlayout = Qt.QVBoxLayout()
         widget.setLayout(vlayout)
@@ -226,9 +226,11 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         handling_high_soft_limit_change = False
         handling_pos_change = False
         props = self.scope_properties.properties
-        low_limit_ppath = '{}{}.{}_low_soft_limit'.format(self.PROPERTY_ROOT, ptuple[2], ptuple[3])
-        pos_ppath = self.PROPERTY_ROOT + ptuple[0]
-        high_limit_ppath = '{}{}.{}_high_soft_limit'.format(self.PROPERTY_ROOT, ptuple[2], ptuple[3])
+        low_limit_rppath = '{}.{}_low_soft_limit'.format(stage_rppath, axis_name)
+        low_limit_ppath = self.PROPERTY_ROOT + low_limit_rppath
+        pos_ppath = self.PROPERTY_ROOT + rppath
+        high_limit_rppath = '{}.{}_high_soft_limit'.format(stage_rppath, axis_name)
+        high_limit_ppath = self.PROPERTY_ROOT + high_limit_rppath
 
         # [low limits status indicator] [-------<slider>-------] [high limits status indicator]
         hlayout = Qt.QHBoxLayout()
@@ -240,14 +242,14 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         pos_slider_factor = 1e5
         pos_slider = Qt.QSlider(Qt.Qt.Horizontal)
         pos_slider.setEnabled(False)
-        pos_slider.setRange(0, pos_slider_factor * ptuple[4])
+        pos_slider.setRange(0, pos_slider_factor * axis_max_val)
         hlayout.addWidget(pos_slider)
         high_limit_status_label = Qt.QLabel()
         high_limit_status_label.setPixmap(self.limit_pixmaps_and_tooltips.high_no_limit_pm)
         hlayout.addWidget(high_limit_status_label)
         vlayout.addLayout(hlayout)
-        at_ls_pname = '{}{}.at_{}_low_soft_limit'.format(self.PROPERTY_ROOT, ptuple[2], ptuple[3])
-        at_lh_pname = '{}{}.at_{}_low_hard_limit'.format(self.PROPERTY_ROOT, ptuple[2], ptuple[3])
+        at_ls_pname = '{}{}.at_{}_low_soft_limit'.format(self.PROPERTY_ROOT, stage_rppath, axis_name)
+        at_lh_pname = '{}{}.at_{}_low_hard_limit'.format(self.PROPERTY_ROOT, stage_rppath, axis_name)
         def at_low_limit_prop_changed(_):
             try:
                 at_s = props[at_ls_pname]
@@ -270,8 +272,8 @@ class MicroscopeWidget(device_widget.DeviceWidget):
             low_limit_status_label.setToolTip(tt)
         self.subscribe(at_ls_pname, at_low_limit_prop_changed)
         self.subscribe(at_lh_pname, at_low_limit_prop_changed)
-        at_hs_pname = '{}{}.at_{}_high_soft_limit'.format(self.PROPERTY_ROOT, ptuple[2], ptuple[3])
-        at_hh_pname = '{}{}.at_{}_high_hard_limit'.format(self.PROPERTY_ROOT, ptuple[2], ptuple[3])
+        at_hs_pname = '{}{}.at_{}_high_soft_limit'.format(self.PROPERTY_ROOT, stage_rppath, axis_name)
+        at_hh_pname = '{}{}.at_{}_high_hard_limit'.format(self.PROPERTY_ROOT, stage_rppath, axis_name)
         def at_high_limit_prop_changed(_):
             try:
                 at_s = props[at_hs_pname]
@@ -295,28 +297,36 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         self.subscribe(at_hs_pname, at_high_limit_prop_changed)
         self.subscribe(at_hh_pname, at_high_limit_prop_changed)
 
-        # [low soft limit text edit] [position text edit] [high soft limit text edit] [reset high soft limit button]
+        # [stop] [low soft limit text edit] [position text edit] [high soft limit text edit] [reset high soft limit button]
         hlayout = Qt.QHBoxLayout()
-        low_limit_text_widget = Qt.QLineEdit()
+        stop_button = Qt.QPushButton(widget.style().standardIcon(Qt.QStyle.SP_BrowserStop), '')
+        stop_button.setToolTip('Stop {} movement along the {}-axis.'.format(stage_rppath, axis_name))
+        stop_button.setEnabled(False)
+        hlayout.addWidget(stop_button)
+        low_limit_text_widget = FocusLossSignalingLineEdit()
         low_limit_text_widget.setMaxLength(8)
         low_limit_text_validator = Qt.QDoubleValidator()
         low_limit_text_widget.setValidator(low_limit_text_validator)
         hlayout.addWidget(low_limit_text_widget)
-        pos_text_widget = Qt.QLineEdit()
+        pos_text_widget = FocusLossSignalingLineEdit()
         pos_text_widget.setMaxLength(8)
         pos_text_validator = Qt.QDoubleValidator()
         pos_text_widget.setValidator(pos_text_validator)
         hlayout.addWidget(pos_text_widget)
-        high_limit_text_widget = Qt.QLineEdit()
+        high_limit_text_widget = FocusLossSignalingLineEdit()
         high_limit_text_widget.setMaxLength(8)
         high_limit_text_validator = Qt.QDoubleValidator()
         high_limit_text_widget.setValidator(high_limit_text_validator)
         hlayout.addWidget(high_limit_text_widget)
         reset_high_limit_button = Qt.QPushButton(self.limit_pixmaps_and_tooltips.high_soft_limit_reset_icon, '')
         reset_high_limit_button.setIconSize(Qt.QSize(50,25))
-        reset_high_limit_button.setToolTip('Reset {} soft max to the largest acceptable value.'.format(ptuple[3]))
+        reset_high_limit_button.setToolTip('Reset {} soft max to the largest acceptable value.'.format(axis_name))
         hlayout.addWidget(reset_high_limit_button)
         vlayout.addLayout(hlayout)
+        def moving_along_axis_changed(value):
+            stop_button.setEnabled(value)
+        def stop_moving_along_axis():
+            self.pattr('{}.stop_{}'.format(stage_rppath, axis_name))()
         def low_limit_prop_changed(value):
             nonlocal handling_low_soft_limit_change
             if handling_low_soft_limit_change:
@@ -327,7 +337,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 pos_text_validator.setBottom(value)
             finally:
                 handling_low_soft_limit_change = False
-        def low_limit_text_edited():
+        def submit_low_limit_text():
             nonlocal handling_low_soft_limit_change
             if handling_low_soft_limit_change:
                 return
@@ -338,6 +348,8 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 pass
             finally:
                 handling_low_soft_limit_change = False
+        def low_limit_text_focus_lost():
+            low_limit_text_widget.setText(str(self.pattr(low_limit_rppath)))
         def pos_prop_changed(value):
             nonlocal handling_pos_change
             if handling_pos_change:
@@ -348,7 +360,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 pos_slider.setValue(value * pos_slider_factor)
             finally:
                 handling_pos_change = False
-        def pos_text_edited():
+        def submit_pos_text():
             nonlocal handling_pos_change
             if handling_pos_change:
                 return
@@ -361,6 +373,8 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 pass
             finally:
                 handling_pos_change = False
+        def pos_text_focus_lost():
+            pos_text_widget.setText(str(self.pattr(rppath)))
         def high_limit_prop_changed(value):
             nonlocal handling_high_soft_limit_change
             if handling_high_soft_limit_change:
@@ -371,7 +385,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 high_limit_text_widget.setText(str(value))
             finally:
                 handling_high_soft_limit_change = False
-        def high_limit_text_edited():
+        def submit_high_limit_text():
             nonlocal handling_high_soft_limit_change
             if handling_high_soft_limit_change:
                 return
@@ -382,20 +396,27 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 pass
             finally:
                 handling_high_soft_limit_change = False
+        def high_limit_text_focus_lost():
+            high_limit_text_widget.setText(str(self.pattr(high_limit_rppath)))
         def reset_high_limit_button_clicked(_):
-            self.pattr('{}.reset_{}_high_soft_limit'.format(ptuple[2], ptuple[3]))()
+            self.pattr('{}.reset_{}_high_soft_limit'.format(stage_rppath, axis_name))()
+        stop_button.clicked[bool].connect(stop_moving_along_axis)
+        self.subscribe('{}{}.moving_along_{}'.format(self.PROPERTY_ROOT, stage_rppath, axis_name), moving_along_axis_changed)
         update_low_limit = self.subscribe(low_limit_ppath, low_limit_prop_changed)
         if update_low_limit is None:
             raise TypeError('{} is not a writable property!'.format(low_limit_ppath))
-        low_limit_text_widget.editingFinished.connect(low_limit_text_edited)
+        low_limit_text_widget.returnPressed.connect(submit_low_limit_text)
+        low_limit_text_widget.focus_lost.connect(low_limit_text_focus_lost)
         self.subscribe(pos_ppath, pos_prop_changed)
-        get_pos = getattr(device, '_get_{}'.format(ptuple[3]))
-        set_pos = getattr(device, '_set_{}'.format(ptuple[3]))
-        pos_text_widget.editingFinished.connect(pos_text_edited)
+        get_pos = getattr(device, '_get_{}'.format(axis_name))
+        set_pos = getattr(device, '_set_{}'.format(axis_name))
+        pos_text_widget.returnPressed.connect(submit_pos_text)
+        pos_text_widget.focus_lost.connect(pos_text_focus_lost)
         update_high_limit = self.subscribe(high_limit_ppath, high_limit_prop_changed)
         if update_high_limit is None:
             raise TypeError('{} is not a writable property!'.format(high_limit_ppath))
-        high_limit_text_widget.editingFinished.connect(high_limit_text_edited)
+        high_limit_text_widget.returnPressed.connect(submit_high_limit_text)
+        high_limit_text_widget.focus_lost.connect(high_limit_text_focus_lost)
         reset_high_limit_button.clicked[bool].connect(reset_high_limit_button_clicked)
 
         # We do not receive events for z high soft limit changes initiated by means other than assigning
@@ -404,17 +425,17 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         # possible exception: it would make sense for the limit to change with objective in order to prevent
         # head crashing.  In case that happens, we refresh z high soft limit upon objective change.
         # TODO: verify that this is never needed and get rid of it if so
-        if len(ptuple) == 6:
+        if provoke_update_rppath is not None:
             def objective_changed(_):
                 nonlocal handling_high_soft_limit_change
                 if handling_high_soft_limit_change:
                     return
                 handling_high_soft_limit_change = True
                 try:
-                    high_limit_text_widget.setText(str(self.pattr('{}.{}_high_soft_limit'.format(ptuple[2], ptuple[3]))))
+                    high_limit_text_widget.setText(str(self.pattr('{}.{}_high_soft_limit'.format(stage_rppath, axis_name))))
                 finally:
                     handling_high_soft_limit_change = False
-            self.subscribe(self.PROPERTY_ROOT + ptuple[5], objective_changed)
+            self.subscribe(self.PROPERTY_ROOT + provoke_update_rppath, objective_changed)
 
         return widget
 
@@ -464,3 +485,10 @@ class LimitPixmapsAndToolTips:
         for fname in ('no_limit.svg', 'soft_limit.svg', 'hard_limit.svg', 'hard_and_soft_limits.svg'):
             load(dpath / fname)
         self.high_soft_limit_reset_icon = Qt.QIcon(str(dpath / 'reset_high_soft_limit.svg'))
+
+class FocusLossSignalingLineEdit(Qt.QLineEdit):
+    focus_lost = Qt.pyqtSignal()
+
+    def focusOutEvent(self, event):
+        super().focusOutEvent(event)
+        self.focus_lost.emit()
