@@ -38,17 +38,16 @@ class SDLThread(threading.Thread):
         self.widget = widget
 
     def run(self):
-        assert sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO | sdl2.SDL_INIT_JOYSTICK | sdl2.SDL_INIT_EVENTS) >= 0
-        sdl2.SDL_JoystickEventState(sdl2.SDL_ENABLE)
+        assert sdl2.SDL_Init(sdl2.SDL_INIT_JOYSTICK) >= 0
+        sdl2.SDL_SetHint(sdl2.SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, b"1")
         joystick = sdl2.SDL_JoystickOpen(0)
-        sdl2.SDL_JoystickGetAxis(joystick, 0)
         while not self.want_exit:
             sdl_event = sdl2.SDL_Event()
             sdl2.SDL_JoystickUpdate()
-            if sdl2.SDL_PollEvent(ctypes.byref(sdl_event)):#sdl2.SDL_WaitEventTimeout(ctypes.byref(sdl_event), 500):
+            while sdl2.SDL_WaitEventTimeout(ctypes.byref(sdl_event), 500):
                 self.widget.post_fresh_joystick_input_event(sdl_event)
         sdl2.SDL_JoystickClose(joystick)
-        sdl2.SDL_QuitSubSystem(sdl2.SDL_INIT_VIDEO | sdl2.SDL_INIT_JOYSTICK | sdl2.SDL_INIT_EVENTS)
+        sdl2.SDL_QuitSubSystem(sdl2.SDL_INIT_JOYSTICK)
         sdl2.SDL_Quit()
 
 class StageJoystickControlWidget(device_widget.DeviceWidget):
@@ -61,6 +60,7 @@ class StageJoystickControlWidget(device_widget.DeviceWidget):
         self.sdl_thread.start()
         self.fresh_joystick_input_event_lock = threading.Lock()
         self.fresh_joystick_input_event = None
+        self.i = 0
 
     def closeEvent(self, event):
         self.sdl_thread.want_exit = True
@@ -77,7 +77,8 @@ class StageJoystickControlWidget(device_widget.DeviceWidget):
     def event(self, event):
         if event.type() == FRESH_JOYSTICK_INPUT_EVENT:
             import time
-            print('FRESH_JOYSTICK_INPUT_EVENT!')
+            print('FRESH_JOYSTICK_INPUT_EVENT!', self.i)
+            self.i += 1
             with self.fresh_joystick_input_event_lock:
                 self.fresh_joystick_input_event = None
             return True
