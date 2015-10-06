@@ -29,10 +29,10 @@ from . import device_widget
 from ..simple_rpc import rpc_client
 
 class PT(enum.Enum):
-    Bool = 0,
-    Int = 1,
-    Enum = 2,
-    Objective = 3,
+    Bool = 0
+    Int = 1
+    Enum = 2
+    Objective = 3
     StageAxisPos = 4
 
 class MicroscopeWidget(device_widget.DeviceWidget):
