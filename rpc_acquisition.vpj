@@ -131,6 +131,7 @@
                 <F N="scope/gui/lamp_widget.py"/>
                 <F N="scope/gui/live_viewer_widget.py"/>
                 <F N="scope/gui/microscope_widget.py"/>
+                <F N="scope/gui/stage_joystick_control_widget.py"/>
             </Folder>
             <Folder Name="messaging">
                 <F N="scope/messaging/__init__.py"/>

@@ -27,7 +27,6 @@ from pathlib import Path
 from PyQt5 import Qt
 from . import device_widget
 from ..simple_rpc import rpc_client
-from ..util import state_stack
 
 class PT(enum.Enum):
     Bool = 0,
