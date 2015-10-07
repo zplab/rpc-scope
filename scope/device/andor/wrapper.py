@@ -207,6 +207,9 @@ def SetBool(Feature, Bool):
     Parameters:
         Feature: str
         Bool: ctypes.c_int"""
+    if Feature == 'Overlap':
+        print('*******************************************************************ignoring overlap set call')
+        return
     if _at_camera_handle is not None:
         return _at_core_lib.AT_SetBool(_at_camera_handle, Feature, Bool)
     else:
