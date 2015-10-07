@@ -227,6 +227,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         else:
             z_start = self.positions[position_name][2]
         z_max = self.experiment_metadata['z_max']
+        self.scope.camera.exposure_time = self.bf_exposure
         coarse_z, fine_z = autofocus.autofocus(self.scope, z_start, z_max,
             self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
             self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS)
