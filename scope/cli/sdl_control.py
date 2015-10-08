@@ -25,11 +25,13 @@
 import contextlib
 import ctypes
 import sdl2
+import warnings
 from scope.simple_rpc import rpc_client
 from scope import scope_client
 
 SDL_SUBSYSTEMS = sdl2.SDL_INIT_JOYSTICK | sdl2.SDL_INIT_GAMECONTROLLER | sdl2.SDL_INIT_TIMER
 SDL_INITED = False
+SDL_EVENT_LOOP_IS_RUNNING = False
 #SDL_OPEN_INPUT_DEVICE_COMMAND_EVENT = sdl2.SDL_RegisterEvent(1)
 #SDL_CLOSE_INPUT_DEVICE_COMMAND_EVENT = sdl2.SDL_RegisterEvent(1)
 
@@ -46,7 +48,12 @@ class InputStateChanges:
 
 def init_sdl():
     global SDL_INITED
-    if not SDL_INITED:
+    if SDL_INITED:
+        # Prompt SDL to process any input queued by the OS, generating SDL events
+        sdl2.SDL_PumpEvents()
+        # Get rid of those and any other accumulated SDL events
+        sdl2.SDL_FlushEvents(sdl2.SDL_FIRSTEVENT, 2**32 - 1)
+    else:
         if sdl2.SDL_Init(SDL_SUBSYSTEMS) < 0:
             sdl_e = sdl2.SDL_GetError()
             sdl_e = sdl_e.decode('utf-8') if sdl_e else 'UNKNOWN ERROR'
@@ -157,130 +164,61 @@ class SDLControl:
                     break
             else:
                 raise ValueError('No connected joystick or gamepad device recognized by SDL has the name "{}".'.format(input_device_name.decode('utf-8')))
-        self._sdl_device_is_game_controller = bool(sdl2.SDL_IsGameController(input_device_index))
-        self._sdl_device = (sdl2.SDL_GameControllerOpen if self._sdl_device_is_game_controller else sdl2.SDL_JoystickOpen)(input_device_index)
-        if not self._sdl_device:
+        self.sdl_device_is_game_controller = bool(sdl2.SDL_IsGameController(input_device_index))
+        self.sdl_device = (sdl2.SDL_GameControllerOpen if self.sdl_device_is_game_controller else sdl2.SDL_JoystickOpen)(input_device_index)
+        if not self.sdl_device:
             raise RuntimeError('Failed to open {} at device index {} with name "{}".'.format(
-                'game controller' if self._sdl_device_is_game_controller else 'joystick',
+                'game controller' if self.sdl_device_is_game_controller else 'joystick',
                 input_device_index,
                 input_device_name.decode('utf-8')))
-        self._scope, self._scope_properties = scope_client.client_main(scope_server_host, zmq_context)
+        self.scope, self.scope_properties = scope_client.client_main(scope_server_host, zmq_context)
+        self.event_loop_is_running = False
+        self.warn_on_unhandled_events = True
+        self.quit_event_posted = False
 
-    def exec(self):
-        pass
+    def _init_handlers(self):
+        self._event_handlers = {
+            sdl2.SDL_QUIT : self._on_quit
+        }
 
-#class SDLThread(threading.Thread):
-#    def __init__(self, widget):
-#        super().__init__(daemon=True, name='SDLThread')
-#        self.widget = widget
-#        self.quit_event_posted = False
-#        self.log_unhandled_SDL_events = True
-#        self.sdl_device = None
-#        self.input_state_changes = InputStateChanges()
-#        self.input_state_changes_lock = threading.Lock()
-#
-#    def take_input_state_changes(self):
-#        'Intended to be called by StageJoystickControlWidget.'
-#        with self.input_state_changes_lock:
-#            input_state_changes = self.input_state_changes
-#            self.input_state_changes = InputStateChanges()
-#        return input_state_changes
-#
-#    def run(self):
-#        self.update_sdl_handlers()
-#
-#        sdl_event = sdl2.SDL_Event()
-#        while not self.quit_event_posted:
-#            if sdl2.SDL_WaitEvent(ctypes.byref(sdl_event)):
-#                self.sdl_event_handlers.get(sdl_event.type, self.on_unhandled_sdl_event)(sdl_event)
-#            else:
-#                sdl_e = sdl2.SDL_GetError()
-#                sdl_e = sdl_e.decode('ascii') if sdl_e else 'UNKNOWN ERROR'
-#                Qt.qDebug('SDL_WaitEvent error: {}'.format(sdl_e))
-#                sdl2.SDL_ClearError()
-#        sdl2.SDL_QuitSubSystem(SDL_SUBSYSTEMS)
-#        sdl2.SDL_Quit()
-#        Qt.qDebug('SDLThread is exiting gracefully.')
-#
-#    def notify(self):
-#        # NB: In order to avoid occasionally deadlocking, it is essential that self.input_state_changes_lock
-#        # is not held by SDLThread when this method is called.
-#        self.widget.post_input_state_changed_event()
-#
-#    def init_sdl_handlers(self):
-#        self.sdl_event_handlers = {
-#            sdl2.SDL_QUIT : self.on_quit
-#            sdl2.SDL_JOYDEVICEADDED : self.on_device_added,
-#            sdl2.SDL_JOYDEVICEREMOVED : self.on_device_removed,
-#            sdl2.SDL_CONTROLLERDEVICEADDED : self.on_device_added,
-#            sdl2.SDL_CONTROLLERDEVICEREMOVED : self.on_device_removed,
-#            SDL_OPEN_INPUT_DEVICE_COMMAND_EVENT : self.on_open_command,
-#            SDL_CLOSE_INPUT_DEVICE_COMMAND_EVENT : self.on_close_command
-#        }
-#        if self.sdl_device is None:
-#            return
-#        # TODO: add joystick & gamepad sdl event handlers for buttons and axes to self.sdl_event_handlers
-#        # depending on whether the device is a game controller or just a plain joystick
-##       if sdl2.SDL_IsGameController():
-#
-#    def on_unhandled_sdl_event(self, sdl_event):
-#        if self.log_unhandled_SDL_events:
-#            Qt.qDebug('Received unhandled SDL event: ' + SDL_EVENT_NAMES.get(sdl_event.type, "UNKNOWN"))
-#
-#    def on_sdl_quit(self, sdl_event):
-#        self.quit_event_posted = True
-#
-#class StageJoystickControlWidget(device_widget.DeviceWidget):
-#    def __init__(self, scope, scope_properties, parent=None):
-#        super().__init__(scope, scope_properties, parent)
-#        self.setWindowTitle('Stage Joystick Control')
-#        vlayout = Qt.QVBoxLayout()
-#        self.setLayout(vlayout)
-#        self.input_state_change_posted = False
-#        self.input_state_change_posted_lock = threading.Lock()
-#        self.sdl_thread = SDLThread(self)
-#        self.sdl_thread.start()
-#
-#    def closeEvent(self, event):
-#        super().closeEvent(event)
-#        sdl_quit_event = sdl2.SDL_QuitEvent()
-#        sdl2.SDL_zero(sdl_quit_event)
-#        sdl_quit_event.type = sdl2.SDL_QUIT
-#        sdl2.SDL_PushEvent(ctypes.cast(ctypes.pointer(sdl_quit_event), ctypes.POINTER(sdl2.SDL_Event)))
-#        self.sdl_thread.join()
-#
-#    def send_open_command(self, device_index):
-#        sdl_event = sdl2.SDL_Event()
-#        sdl2.SDL_zero(sdl_event)
-#        sdl_event.type = SDL_OPEN_INPUT_DEVICE_COMMAND_EVENT
-#        sdl_event.code = device_index
-#        sdl2.SDL_PushEvent(ctypes.byref(sdl_event))
-#
-#    def send_close_command(self):
-#        sdl_event = sdl2.SDL_Event()
-#        sdl2.SDL_zero(sdl_event)
-#        sdl_event.type = SDL_CLOSE_INPUT_DEVICE_COMMAND_EVENT
-#        sdl2.SDL_PushEvent(ctypes.byref(sdl_event))
-#
-#    def post_input_state_changed_event(self):
-#        'Intended to be called by SDLThread.'
-#        with self.input_state_change_posted_lock:
-#            if not self.input_state_change_posted:
-#                self.input_state_change_posted = True
-#                Qt.QCoreApplication.postEvent(self, Qt.QEvent(INPUT_STATE_CHANGED_EVENT))
-#
-#    def event(self, event):
-#        if event.type() == INPUT_STATE_CHANGED_EVENT:
-#            with self.input_state_change_posted_lock:
-#                if not self.input_state_change_posted:
-#                    return True
-#                self.input_state_change_posted = False
-#            self.handle_input_state_changes(self.sdl_thread.take_input_state_changes())
-#            return True
-#        return super().event(event)
-#
-#    def handle_input_state_changes(self, input_state_changes):
-#        print('handle_input_state_changes')
+    def event_loop(self):
+        global SDL_EVENT_LOOP_IS_RUNNING
+        assert not SDL_EVENT_LOOP_IS_RUNNING
+        SDL_EVENT_LOOP_IS_RUNNING = True
+        print('entering event loop')
+        def on_loop_end():
+            global SDL_EVENT_LOOP_IS_RUNNING
+            SDL_EVENT_LOOP_IS_RUNNING = False
+        with contextlib.ExitStack() as estack:
+            estack.callback(on_loop_end)
+            assert SDL_INITED
+            assert self.sdl_device
+            self._init_handlers()
+            while not self.quit_event_posted:
+                event = sdl2.SDL_Event()
+                if sdl2.SDL_WaitEvent(ctypes.byref(event)):
+                    self._event_handlers.get(event.type, self._on_unhandled_event)(event)
+                else:
+                    sdl_e = sdl2.SDL_GetError()
+                    sdl_e = sdl_e.decode('utf-8') if sdl_e else 'UNKNOWN ERROR'
+                    warnings.warn('SDL_WaitEvent error: {}'.format(sdl_e))
+                    sdl2.SDL_ClearError()
+        print('leaving event loop')
+
+    def exit_event_loop(self):
+        '''The exit_event_loop method is thread safe and is safe to call even if the event loop is not running.
+        Calling exit_event_loop pushes a quit request onto the SDL event queue, causing self.event_loop() to
+        exit gracefully (IE, return) if it is running.'''
+        event = sdl2.SDL_Event()
+        event.type = sdl2.SDL_QUIT
+        sdl2.SDL_PushEvent(ctypes.byref(event))
+
+    def _on_quit(self, event):
+        self.quit_event_posted = True
+
+    def _on_unhandled_event(self, event):
+        if self.warn_on_unhandled_events:
+            print('Received unhandled SDL event: ' + SDL_EVENT_NAMES.get(event.type, "UNKNOWN"))
 
 SDL_EVENT_NAMES = {
     sdl2.SDL_APP_DIDENTERBACKGROUND : 'SDL_APP_DIDENTERBACKGROUND',
