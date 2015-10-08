@@ -147,7 +147,7 @@ class SDLControl:
                 raise ValueError(e.format(isare, input_device_count, ssuffix, input_device_count - 1, input_device_index))
             input_device_name = sdl2.SDL_JoystickNameForIndex(input_device_index)
         else:
-            if isinstance(indput_device_name, str):
+            if isinstance(input_device_name, str):
                 input_device_name = input_device_name.encode('utf-8')
             else:
                 input_device_name = bytes(input_device_name)
