@@ -1,6 +1,7 @@
 import logging
 import gzip
 import pathlib
+import sys
 
 def get_formatter():
     return logging.Formatter('>{asctime}\t{levelname}\t{name}\t{message}', datefmt='%Y-%m-%d %H:%M:%S', style='{')
@@ -30,6 +31,11 @@ class StyleAdapter(logging.LoggerAdapter):
 
     def addHandler(self, handler):
         self.logger.addHandler(handler)
+
+    def log_exception(self, preamble):
+        exc_info = sys.exc_info()
+        self.warn('{} {}', preamble, exc_info[1]) # warn with the basic exception message
+        self.debug('Detailed information', exc_info=exc_info) # log traceback at debug level
 
 def gz_log_namer(name):
     return name + '.gz'

@@ -37,6 +37,10 @@ from ...util import enumerated_properties
 from ...util import property_device
 from ...config import scope_configuration
 
+
+from ...util import logging
+logger = logging.get_logger(__name__)
+
 class ReadOnly_AT_Enum(enumerated_properties.ReadonlyDictProperty):
     def __init__(self, feature):
         self._feature = feature
@@ -74,7 +78,7 @@ class Camera(property_device.PropertyDevice):
         ('AuxiliaryOutSource', lowlevel.SetEnumString, 'FireAll'),
         ('TriggerMode', lowlevel.SetEnumString, 'Internal'), # need to set internal trigger mode to be able to set overlap and exposure time
         ('CycleMode', lowlevel.SetEnumString, 'Fixed'),
-        ('ElectronicShutteringMode', lowlevel.SetEnumString, 'Global'),
+        ('ElectronicShutteringMode', lowlevel.SetEnumString, 'Rolling'),
         ('ExposureTime', lowlevel.SetFloat, 0.01),
         ('FanSpeed', lowlevel.SetEnumString, 'On'),
         ('FrameCount', lowlevel.SetInt, 1),
@@ -90,7 +94,7 @@ class Camera(property_device.PropertyDevice):
         ('IOInvert', lowlevel.SetBool, False),
         ('MetadataEnable', lowlevel.SetBool, True),
         ('MetadataTimestamp', lowlevel.SetBool, True),
-        ('Overlap', lowlevel.SetBool, False),
+        ('Overlap', lowlevel.SetBool, True),
         ('PixelReadoutRate', lowlevel.SetEnumString, '100 MHz'),
         ('SensorCooling', lowlevel.SetBool, True),
         ('SimplePreAmpGainControl', lowlevel.SetEnumString, '16-bit (low noise & high well capacity)'),
@@ -275,8 +279,11 @@ class Camera(property_device.PropertyDevice):
             setattr(self, 'set_'+py_name, setter)
 
     def _andor_callback(self, camera_handle, at_feature, context):
-        getter, update = self._callback_properties[at_feature]
-        update(getter())
+        try:
+            getter, update = self._callback_properties[at_feature]
+            update(getter())
+        except:
+            logger.log_exception('Error in andor callback:')
         return lowlevel.AT_CALLBACK_SUCCESS
 
     def __del__(self):

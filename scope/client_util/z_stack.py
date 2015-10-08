@@ -45,4 +45,5 @@ def z_stack(scope, mm_range, num_steps):
             scope.camera.send_software_trigger()
             time.sleep(exposure_sec)
         images.append(scope.camera.next_image(read_timeout_ms=1000))
+    scope.camera.end_image_sequence_acquisition()
     return images

@@ -47,7 +47,7 @@ def main(timepoint_function):
             The scheduled starting timestamp will be passed to timepoint_function
             as a parameter.
     """
-    if len(sys.argv) > 0:
+    if len(sys.argv) > 1:
         scheduled_start = float(sys.argv[1])
     else:
         scheduled_start = time.time()
