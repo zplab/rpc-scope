@@ -32,8 +32,6 @@ from scope import scope_client
 SDL_SUBSYSTEMS = sdl2.SDL_INIT_JOYSTICK | sdl2.SDL_INIT_GAMECONTROLLER | sdl2.SDL_INIT_TIMER
 SDL_INITED = False
 SDL_EVENT_LOOP_IS_RUNNING = False
-#SDL_OPEN_INPUT_DEVICE_COMMAND_EVENT = sdl2.SDL_RegisterEvent(1)
-#SDL_CLOSE_INPUT_DEVICE_COMMAND_EVENT = sdl2.SDL_RegisterEvent(1)
 
 class InputStateChanges:
     __slots__ = (
@@ -70,14 +68,12 @@ def init_sdl():
             sdl2.SDL_GameControllerEventState(sdl2.SDL_ENABLE)
         SDL_INITED = True
         def deinit_sdl():
-            print('deinit_sdl starting')
             sdl2.SDL_QuitSubSystem(SDL_SUBSYSTEMS)
             sdl2.SDL_Quit()
-            print('deinit_sdl finished')
         import atexit
         atexit.register(deinit_sdl)
 
-def enumerate():
+def enumerate_devices():
     with contextlib.ExitStack() as estack:
         # We may be called from a different thread than the one that will run the SDL event loop.  In case that
         # will happen, if SDL is not already initialized, we do not leave it initialized - bound to our current
@@ -94,10 +90,12 @@ def enumerate():
     return names
 
 def only_for_our_device(handler):
-    LP_JOYEVENT = ctypes.POINTER(sdl2.SDL_JoyDeviceEvent)
     def f(self, event):
-        jevent = ctypes.cast(ctypes.pointer(event), LP_JOYEVENT).contents
-        if jevent.which == self.device_id:
+        try:
+            event_device_id = event.jdevice.which
+        except:
+            return
+        if event_device_id == self.device_id:
             return handler(self, event)
     return f
 
@@ -134,9 +132,9 @@ class SDLControl:
           bNumConfigurations      1
         ...
 
-        Additionally, sdl_control.enumerate(), a module function, returns a list of the currently available
+        Additionally, sdl_control.enumerate_devices(), a module function, returns a list of the currently available
         SDL joystick and gamepad input devices, in the order by which SDL knows them.  So, if you know that
-        your input device is a Logilech something-or-other, and sdl_control.enumerate() returns the following:
+        your input device is a Logilech something-or-other, and sdl_control.enumerate_devices() returns the following:
         [
             'Nintenbo Olympic Sport Mat v3.5',
             'MANUFACTURER NAME HERE. DONT FORGET TO SET THIS!!     Many Product Ltd. 1132 Guangzhou    $  !*llSN9_Q   ',
@@ -183,7 +181,9 @@ class SDLControl:
             self.device_id = sdl2.SDL_JoystickInstanceID(sdl2.SDL_GameControllerGetJoystick(self.device))
         else:
             self.device_id = sdl2.SDL_JoystickInstanceID(self.device)
+        print('SDLControl is connecting to scope server...', file=sys.stderr)
         self.scope, self.scope_properties = scope_client.client_main(scope_server_host, zmq_context)
+        print('SDLControl successfully connected to scope server.', file=sys.stderr)
         self.event_loop_is_running = False
         self.warn_on_unhandled_events = False
         self.quit_event_posted = False
@@ -215,15 +215,15 @@ class SDLControl:
             assert SDL_INITED
             assert self.device
             self._init_handlers()
-            while not self.quit_event_posted:
-                event = sdl2.SDL_Event()
-                if sdl2.SDL_WaitEvent(ctypes.byref(event)):
-                    self._event_handlers.get(event.type, self._on_unhandled_event)(event)
-                else:
-                    sdl_e = sdl2.SDL_GetError()
-                    sdl_e = sdl_e.decode('utf-8') if sdl_e else 'UNKNOWN ERROR'
-                    print('SDL_WaitEvent error: {}'.format(sdl_e), file=sys.stderr)
-                    sdl2.SDL_ClearError()
+            try:
+                while not self.quit_event_posted:
+                    event = sdl2.SDL_Event()
+                    # If there is no event for an entire second, we iterate, giving CPython an opportunity to
+                    # raise KeyboardInterrupt.
+                    if sdl2.SDL_WaitEventTimeout(ctypes.byref(event), 1000):
+                        self._event_handlers.get(event.type, self._on_unhandled_event)(event)
+            except KeyboardInterrupt:
+                pass
 
     def exit_event_loop(self):
         '''The exit_event_loop method is thread safe and is safe to call even if the event loop is not running.
@@ -247,7 +247,36 @@ class SDLControl:
 
     @only_for_our_device
     def _on_axis_motion(self, event):
-        print('_on_axis_motion')
+        print('axis {} value {}'.format(event.jaxis.axis, event.jaxis.value))
+        i = event.jaxis.value
+        demand = i / (32768 if i <= 0 else 32767)
+        velocity = demand * 5
+        if event.jaxis.axis == 0:
+            scope.stage.move_along_x(velocity)
+        elif event.jaxis.axis == 1:
+            scope.stage.move_along_y(velocity)
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(epilog='Note: Either device name/index or --list must be supplied as arguments, but not both.')
+    parser.add_argument('--scope', default='127.0.0.1', help='Hostname or IP address of the scope server.  Defaults to "127.0.0.1".')
+    parserg = parser.add_mutually_exclusive_group(required=True)
+    parserg.add_argument(
+        '--list',
+        action='store_true',
+        help="Print a list of the acceptable SDL devices' indexes and names, with one device per line."
+    )
+    parserg.add_argument('device', nargs='?', help='SDL input device name or index.')
+    args = parser.parse_args()
+    if args.list:
+        for idx, name in enumerate(enumerate_devices()):
+            print('{}: "{}"'.format(idx, name))
+    else:
+        if args.device.isdigit():
+            sdlc = SDLControl(input_device_index=int(args.device), scope_server_host=args.scope)
+        else:
+            sdlc = SDLControl(input_device_name=args.device, scope_server_host=args.scope)
+        sdlc.event_loop()
 
 SDL_EVENT_NAMES = {
     sdl2.SDL_APP_DIDENTERBACKGROUND : 'SDL_APP_DIDENTERBACKGROUND',
