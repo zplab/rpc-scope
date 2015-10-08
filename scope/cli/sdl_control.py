@@ -250,11 +250,11 @@ class SDLControl:
         print('axis {} value {}'.format(event.jaxis.axis, event.jaxis.value))
         i = event.jaxis.value
         demand = i / (32768 if i <= 0 else 32767)
-        velocity = demand * 5
+        velocity = demand * 2
         if event.jaxis.axis == 0:
-            scope.stage.move_along_x(velocity)
+            self.scope.stage.move_along_x(-velocity)
         elif event.jaxis.axis == 1:
-            scope.stage.move_along_y(velocity)
+            self.scope.stage.move_along_y(velocity)
 
 if __name__ == '__main__':
     import argparse
