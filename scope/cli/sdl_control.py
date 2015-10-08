@@ -30,6 +30,7 @@ from . import device_widget
 from ..simple_rpc import rpc_client
 
 SDL_SUBSYSTEMS = sdl2.SDL_INIT_JOYSTICK | sdl2.SDL_INIT_GAMECONTROLLER
+SDL_INITED = False
 INPUT_STATE_CHANGED_EVENT = Qt.QEvent.registerEventType()
 SDL_OPEN_INPUT_DEVICE_COMMAND_EVENT = sdl2.SDL_RegisterEvent(1)
 SDL_CLOSE_INPUT_DEVICE_COMMAND_EVENT = sdl2.SDL_RegisterEvent(1)
@@ -45,11 +46,72 @@ class InputStateChanges:
     def __bool__(self):
         return any(hasattr(self, slot) for slot in self.__slots__)
 
+def init_sdl():
+    global SDL_INITED
+    if not SDL_INITED:
+        if sdl2.SDL_Init(SDL_SUBSYSTEMS) < 0:
+            raise RuntimeError('Failed to initialize SDL.')
+        SDL_INITED = True
+
+def enumerate():
+    init_sdl()
+
+
 class SDLControl:
-    def __init__(self, input_device_index=0, input_device_name=None):
-        '''Note: The input_device_index argument is ignored unless input_device_name is None.'''
-        if input_device_index is not None and input_device_name is not None:
-            raise ValueError('')
+    def __init__(self, input_device_index=0, input_device_name=None, maximum_portion_of_wallclock_time_allowed_for_axis_commands=0.333):
+        '''* input_device_index: The argument passed to SDL_JoystickOpen(index) or SDL_GameControllerOpen(index).
+        Ignored if the value of input_device_name is not None.
+        * input_device_name: If specified, input_device_name should be the exact string or UTF8-encoded bytearray
+        by which SDL identifies the controller you wish to use, as reported by SDL_JoystickName(..).  For USB devices,
+        this is USB iManufacturer + ' ' + iProduct.  EG, a Sony PS4 controller with the following lsusb -v output would
+        be known to SDL as 'Sony Computer Entertainment Wireless Controller':
+
+        Bus 003 Device 041: ID 054c:05c4 Sony Corp. 
+        Device Descriptor:
+          bLength                18
+          bDescriptorType         1
+          bcdUSB               2.00
+          bDeviceClass            0 
+          bDeviceSubClass         0 
+          bDeviceProtocol         0 
+          bMaxPacketSize0        64
+          idVendor           0x054c Sony Corp.
+          idProduct          0x05c4 
+          bcdDevice            1.00
+          iManufacturer           1 Sony Computer Entertainment
+          iProduct                2 Wireless Controller
+          iSerial                 0 
+          bNumConfigurations      1
+        ...
+
+        Additionally, sdl_control.enumerate(), a module function, returns a list of the currently available
+        SDL joystick and gamepad input devices, in the order by which SDL knows them.  So, if you know that
+        your input device is a Logilech something-or-other, and sdl_control.enumerate() returns the following:
+        [
+            'Nintenbo Olympic Sport Mat v3.5',
+            'MANUFACTURER NAME HERE. DONT FORGET TO SET THIS!!     Many Product Ltd. 1132 Guangzhou    $  !*llSN9_Q   ',
+            'Duckhunt Defender Scanline-Detecting Plastic Gun That Sadly Does Not Work With LCDs',
+            'Macrosoft ZBox-720 Controller Colossal-Hands Mondo Edition',
+            'Logilech SixThousandAxis KiloButtonPad With Haptic Feedback Explosion',
+            'Gametech Gameseries MegaGamer Excel Spreadsheet 3D-Orb For Executives, Doom3D Edition',
+            'Gametech Gameseries MegaGamer Excel Spreadsheet 3D-Orb For Light Rail Transport, Doom3D Edition',
+        ]
+        You'll want to specify input_device_index=4 or
+        input_device_name='Logilech SixThousandAxis KiloButtonPad With Haptic Feedback Explosion'.'''
+        init_sdl()
+        if input_device_name is not None:
+            if isinstance(indput_device_name, str):
+                input_device_name = input_device_name.encode('utf-8')
+            else:
+                input_device_name = bytes(input_device_name)
+            for sdl_dev_idx in range(sdl2.SDL_NumJoysticks()):
+                if sdl2.SDL_JoystickNameForIndex(sdl_dev_idx) == input_device_name:
+                    input_device_index = sdl_dev_idx
+                    break
+            else:
+                raise ValueError('No SDL joystick or gamepad device found with the name "{}".'.format(input_device_name.decode('utf-8')))
+        self.sdl_device_is_game_controller = bool(sdl2.SDL_IsGameController(sdl_dev_idx))
+        self.sdl_device = 
 
 class SDLThread(threading.Thread):
     def __init__(self, widget):
@@ -69,7 +131,6 @@ class SDLThread(threading.Thread):
         return input_state_changes
 
     def run(self):
-        assert sdl2.SDL_Init(SDL_SUBSYSTEMS) >= 0
         self.update_sdl_handlers()
         # The following SDL_SetHint call causes SDL2 to process joystick (and gamepad, as the
         # gamepad subsystem is built on the joystick subsystem) events without a window created
