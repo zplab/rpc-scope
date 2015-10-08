@@ -81,6 +81,7 @@
                 <F N="scope/cli/scope_daemon.py"/>
                 <F N="scope/cli/scope_gui.py"/>
                 <F N="scope/cli/scope_job_daemon.py"/>
+                <F N="scope/cli/sdl_control.py"/>
             </Folder>
             <Folder Name="client_util">
                 <F N="scope/client_util/__init__.py"/>
@@ -131,7 +132,6 @@
                 <F N="scope/gui/lamp_widget.py"/>
                 <F N="scope/gui/live_viewer_widget.py"/>
                 <F N="scope/gui/microscope_widget.py"/>
-                <F N="scope/gui/stage_joystick_control_widget.py"/>
             </Folder>
             <Folder Name="messaging">
                 <F N="scope/messaging/__init__.py"/>

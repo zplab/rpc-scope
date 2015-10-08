@@ -77,6 +77,8 @@ def _at_errcheck(result, func, args):
         err_type = _at_err_dict[result]
         func_name = func.__name__
         arg_str = ' ,'.join(map(str, args))
+#       with open('/home/ehvatum/d.txt', 'a') as f:
+#           print('{} error when calling {}({})'.format(err_type, func_name, args), file=f)
         raise AndorError('{} error when calling {}({})'.format(err_type, func_name, args))
     return args
 

@@ -45,6 +45,12 @@ class InputStateChanges:
     def __bool__(self):
         return any(hasattr(self, slot) for slot in self.__slots__)
 
+class SDLControl:
+    def __init__(self, input_device_index=0, input_device_name=None):
+        '''Note: The input_device_index argument is ignored unless input_device_name is None.'''
+        if input_device_index is not None and input_device_name is not None:
+            raise ValueError('')
+
 class SDLThread(threading.Thread):
     def __init__(self, widget):
         super().__init__(daemon=True, name='SDLThread')

@@ -74,7 +74,7 @@ class Camera(property_device.PropertyDevice):
         ('AuxiliaryOutSource', lowlevel.SetEnumString, 'FireAll'),
         ('TriggerMode', lowlevel.SetEnumString, 'Internal'), # need to set internal trigger mode to be able to set overlap and exposure time
         ('CycleMode', lowlevel.SetEnumString, 'Fixed'),
-        ('ElectronicShutteringMode', lowlevel.SetEnumString, 'Rolling'),
+        ('ElectronicShutteringMode', lowlevel.SetEnumString, 'Global'),
         ('ExposureTime', lowlevel.SetFloat, 0.01),
         ('FanSpeed', lowlevel.SetEnumString, 'On'),
         ('FrameCount', lowlevel.SetInt, 1),
@@ -90,7 +90,7 @@ class Camera(property_device.PropertyDevice):
         ('IOInvert', lowlevel.SetBool, False),
         ('MetadataEnable', lowlevel.SetBool, True),
         ('MetadataTimestamp', lowlevel.SetBool, True),
-        ('Overlap', lowlevel.SetBool, True),
+        ('Overlap', lowlevel.SetBool, False),
         ('PixelReadoutRate', lowlevel.SetEnumString, '100 MHz'),
         ('SensorCooling', lowlevel.SetBool, True),
         ('SimplePreAmpGainControl', lowlevel.SetEnumString, '16-bit (low noise & high well capacity)'),
