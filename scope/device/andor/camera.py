@@ -37,6 +37,10 @@ from ...util import enumerated_properties
 from ...util import property_device
 from ...config import scope_configuration
 
+
+from ...util import logging
+logger = logging.get_logger(__name__)
+
 class ReadOnly_AT_Enum(enumerated_properties.ReadonlyDictProperty):
     def __init__(self, feature):
         self._feature = feature
@@ -275,8 +279,11 @@ class Camera(property_device.PropertyDevice):
             setattr(self, 'set_'+py_name, setter)
 
     def _andor_callback(self, camera_handle, at_feature, context):
-        getter, update = self._callback_properties[at_feature]
-        update(getter())
+        try:
+            getter, update = self._callback_properties[at_feature]
+            update(getter())
+        except:
+            logger.log_exception('Error in andor callback:')
         return lowlevel.AT_CALLBACK_SUCCESS
 
     def __del__(self):

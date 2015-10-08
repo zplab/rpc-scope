@@ -27,7 +27,7 @@ import time
 
 def z_stack(scope, mm_range, num_steps):
     z = scope.stage.z
-    z_positions = numpy.linespace(z - mm_range/2, z + mm_range/2, num_steps)
+    z_positions = numpy.linspace(z - mm_range/2, z + mm_range/2, num_steps)
     scope.camera.start_image_sequence_acquisition(num_steps, trigger_mode='Software')
     images = []
     exposure_sec = scope.camera.exposure_time / 1000
@@ -45,4 +45,5 @@ def z_stack(scope, mm_range, num_steps):
             scope.camera.send_software_trigger()
             time.sleep(exposure_sec)
         images.append(scope.camera.next_image(read_timeout_ms=1000))
+    scope.camera.end_image_sequence_acquisition()
     return images

@@ -40,9 +40,6 @@ from .config import scope_configuration
 from .util import logging
 logger = logging.get_logger(__name__)
 
-def _log_exception(preamble, e):
-    logger.warn('{} {}', preamble, e)
-    logger.debug('Detailed information', exc_info=True)
 
 class Namespace:
     pass
@@ -67,17 +64,17 @@ class Scope(message_device.AsyncDeviceNamespace):
             self.tl = illumination_axes.TL(manager, property_server, property_prefix='scope.tl.')
             self._shutter_openedness_watcher = illumination_axes.ShutterOpenednessWatcher(manager, property_server, property_prefix='scope.')
             has_scope = True
-        except SerialException as e:
+        except SerialException:
             has_scope = False
-            _log_exception('Could not connect to microscope:', e)
+            logger.log_exception('Could not connect to microscope:')
 
         try:
             logger.info('Looking for IOTool.')
             self.iotool = io_tool.IOTool()
             has_iotool = True
-        except SerialException as e:
+        except SerialException:
             has_iotool = False
-            _log_exception('Could not connect to IOTool:', e)
+            logger.log_exception('Could not connect to IOTool:')
 
         if not has_scope and has_iotool:
             self.il = Namespace()
@@ -88,9 +85,9 @@ class Scope(message_device.AsyncDeviceNamespace):
                 logger.info('Looking for Spectra X.')
                 self.il.spectra_x = spectra_x.SpectraX(self.iotool, property_server, property_prefix='scope.il.spectra_x.')
                 has_spectra_x = True
-            except SerialException as e:
+            except SerialException:
                 has_spectra_x = False
-                _log_exception('Could not connect to Spectra X:', e)
+                logger.log_exception('Could not connect to Spectra X:')
             self.tl.lamp = tl_lamp.TL_Lamp(self.iotool, property_server, property_prefix='scope.tl.lamp.')
             self.footpedal = footpedal.Footpedal(self.iotool)
 
@@ -98,9 +95,9 @@ class Scope(message_device.AsyncDeviceNamespace):
             logger.info('Looking for camera.')
             self.camera = camera.Camera(property_server, property_prefix='scope.camera.')
             has_camera = True
-        except camera.lowlevel.AndorError as e:
+        except camera.lowlevel.AndorError:
             has_camera = False
-            _log_exception('Could not connect to camera:', e)
+            logger.log_exception('Could not connect to camera:')
 
         if has_camera and has_iotool and has_spectra_x:
             self.camera.acquisition_sequencer = acquisition_sequencer.AcquisitionSequencer(self)
@@ -111,6 +108,6 @@ class Scope(message_device.AsyncDeviceNamespace):
         try:
             logger.info('Looking for peltier controller.')
             self.peltier = peltier.Peltier(property_server, property_prefix='scope.peltier.')
-        except SerialException as e:
-            _log_exception('Could not connect to peltier controller:', e)
+        except SerialException:
+            logger.log_exception('Could not connect to peltier controller:')
         
