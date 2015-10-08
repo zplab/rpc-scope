@@ -25,7 +25,7 @@
 import contextlib
 import ctypes
 import sdl2
-import warnings
+import sys
 from scope.simple_rpc import rpc_client
 from scope import scope_client
 
@@ -92,6 +92,14 @@ def enumerate():
             estack.callback(sdl2.SDL_Quit)
         names = [sdl2.SDL_JoystickNameForIndex(sdl_dev_idx).decode('utf-8') for sdl_dev_idx in range(sdl2.SDL_NumJoysticks())]
     return names
+
+def only_for_our_device(handler):
+    LP_JOYEVENT = ctypes.POINTER(sdl2.SDL_JoyDeviceEvent)
+    def f(self, event):
+        jevent = ctypes.cast(ctypes.pointer(event), LP_JOYEVENT).contents
+        if jevent.which == self.device_id:
+            return handler(self, event)
+    return f
 
 class SDLControl:
     def __init__(
@@ -164,35 +172,48 @@ class SDLControl:
                     break
             else:
                 raise ValueError('No connected joystick or gamepad device recognized by SDL has the name "{}".'.format(input_device_name.decode('utf-8')))
-        self.sdl_device_is_game_controller = bool(sdl2.SDL_IsGameController(input_device_index))
-        self.sdl_device = (sdl2.SDL_GameControllerOpen if self.sdl_device_is_game_controller else sdl2.SDL_JoystickOpen)(input_device_index)
-        if not self.sdl_device:
+        self.device_is_game_controller = bool(sdl2.SDL_IsGameController(input_device_index))
+        self.device = (sdl2.SDL_GameControllerOpen if self.device_is_game_controller else sdl2.SDL_JoystickOpen)(input_device_index)
+        if not self.device:
             raise RuntimeError('Failed to open {} at device index {} with name "{}".'.format(
-                'game controller' if self.sdl_device_is_game_controller else 'joystick',
+                'game controller' if self.device_is_game_controller else 'joystick',
                 input_device_index,
                 input_device_name.decode('utf-8')))
+        if self.device_is_game_controller:
+            self.device_id = sdl2.SDL_JoystickInstanceID(sdl2.SDL_GameControllerGetJoystick(self.device))
+        else:
+            self.device_id = sdl2.SDL_JoystickInstanceID(self.device)
         self.scope, self.scope_properties = scope_client.client_main(scope_server_host, zmq_context)
         self.event_loop_is_running = False
-        self.warn_on_unhandled_events = True
+        self.warn_on_unhandled_events = False
         self.quit_event_posted = False
 
     def _init_handlers(self):
         self._event_handlers = {
             sdl2.SDL_QUIT : self._on_quit
         }
+        if self.device_is_game_controller:
+            self._event_handlers.update({
+                sdl2.SDL_CONTROLLERDEVICEREMOVED : self._on_device_removed,
+                sdl2.SDL_CONTROLLERAXISMOTION : self._on_axis_motion
+            })
+        else:
+            self._event_handlers.update({
+                sdl2.SDL_JOYDEVICEREMOVED : self._on_device_removed,
+                sdl2.SDL_JOYAXISMOTION : self._on_axis_motion
+            })
 
     def event_loop(self):
         global SDL_EVENT_LOOP_IS_RUNNING
         assert not SDL_EVENT_LOOP_IS_RUNNING
         SDL_EVENT_LOOP_IS_RUNNING = True
-        print('entering event loop')
         def on_loop_end():
             global SDL_EVENT_LOOP_IS_RUNNING
             SDL_EVENT_LOOP_IS_RUNNING = False
         with contextlib.ExitStack() as estack:
             estack.callback(on_loop_end)
             assert SDL_INITED
-            assert self.sdl_device
+            assert self.device
             self._init_handlers()
             while not self.quit_event_posted:
                 event = sdl2.SDL_Event()
@@ -201,9 +222,8 @@ class SDLControl:
                 else:
                     sdl_e = sdl2.SDL_GetError()
                     sdl_e = sdl_e.decode('utf-8') if sdl_e else 'UNKNOWN ERROR'
-                    warnings.warn('SDL_WaitEvent error: {}'.format(sdl_e))
+                    print('SDL_WaitEvent error: {}'.format(sdl_e), file=sys.stderr)
                     sdl2.SDL_ClearError()
-        print('leaving event loop')
 
     def exit_event_loop(self):
         '''The exit_event_loop method is thread safe and is safe to call even if the event loop is not running.
@@ -218,7 +238,16 @@ class SDLControl:
 
     def _on_unhandled_event(self, event):
         if self.warn_on_unhandled_events:
-            print('Received unhandled SDL event: ' + SDL_EVENT_NAMES.get(event.type, "UNKNOWN"))
+            print('Received unhandled SDL event: ' + SDL_EVENT_NAMES.get(event.type, "UNKNOWN"), file=sys.stderr)
+
+    @only_for_our_device
+    def _on_device_removed(self, event):
+        print('Our SDL input device has been disconnected.  Exiting event loop...', sys.stderr)
+        self.exit_event_loop()
+
+    @only_for_our_device
+    def _on_axis_motion(self, event):
+        print('_on_axis_motion')
 
 SDL_EVENT_NAMES = {
     sdl2.SDL_APP_DIDENTERBACKGROUND : 'SDL_APP_DIDENTERBACKGROUND',
