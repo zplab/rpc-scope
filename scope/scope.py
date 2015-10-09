@@ -76,7 +76,7 @@ class Scope(message_device.AsyncDeviceNamespace):
             has_iotool = False
             logger.log_exception('Could not connect to IOTool:')
 
-        if not has_scope and has_iotool:
+        if (not has_scope) and has_iotool:
             self.il = Namespace()
             self.tl = Namespace()
 
@@ -110,4 +110,4 @@ class Scope(message_device.AsyncDeviceNamespace):
             self.peltier = peltier.Peltier(property_server, property_prefix='scope.peltier.')
         except SerialException:
             logger.log_exception('Could not connect to peltier controller:')
-        
+

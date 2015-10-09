@@ -21,6 +21,63 @@
 # SOFTWARE.
 #
 # Authors: Erik Hvatum, Zach Pincus
+"""
+Andor Zyla camera modes are complex. There are several relevant parameters:
+
+Rolling vs. Global shutter
+Internal vs. Software triggering
+Overlap mode
+Exposure time with respect to sensor readout time
+
+For rolling vs. global: when in doubt, use rolling shutter mode.
+Global shutter is a bit of a hack, increasing readout noise and decreasing
+frame rates. It's mainly useful when objects in the frame are moving fast
+with respect to the frame readout time.
+
+In internal triggering mode, the camera fires acquisitions off as specified by
+the frame_rate parameter and the constraints below. In software triggering
+mode, the user triggers acquisitions as required. Triggers that come faster
+than the maximum frame rate will be ignored: they do not queue up! There are
+also external triggering modes, which will not be discussed here but are used
+by the IOTool device to sequence acquisitions.
+
+In overlap mode, image readout and exposing the next image are overlapped;
+in general this is a more efficient way to run the camera. However, for taking
+image sequences with frame rates intentionally slower than the maximum,
+non-overlap-mode may be required. Software triggering with rolling shutter
+exposures is incompatible with overlap mode.
+
+Frame rate constraints
+----------------------
+'exp' = exposure time
+'read' = frame readout time
+'delta' = some small time delta related to the sensor readout time.
+
+Rolling Shutter, Internal Triggering
+    overlap mode:      FPS range = [(1/exp + read), 1/(max(exp, read))]
+    non-overlap mode:  FPS range = [0.00005, 1/(exp + read)]
+
+Rolling Shutter, Software Triggering
+    overlap mode disallowed.
+    non-overlap mode: max trigger rate = 1/(exp + read)
+
+Global Shutter, Internal or Software Triggering, exp < read
+    overlap mode: setting overlap mode forcibly sets exp = read!
+    non-overlap mode:  FPS range = [0.00005, 1/(exp + 2*read + delta)]
+
+Global Shutter, Internal or Software Triggering, exp > read
+    overlap mode:      FPS range = [0.00005, 1/(max(exp, 2*read) + delta)]
+    non-overlap mode:  FPS range = [0.00005, 1/(exp + read + delta)]
+
+NB: It is possible to switch into Global Shutter, Software Triggering mode
+with exp < read, and then to modify the exposure time. However after switching
+exp to a value > read, you can no longer switch back. Similarly, if Global
+Shutter, Software Triggering mode is entered with exp > read, it is not possible
+to switch to an exposure time < read. This is probably an andor bug.
+TODO: check if the bug is still there in a future SDK release (date 2015-10)
+"""
+
+
 
 import threading
 import time
@@ -164,7 +221,6 @@ class Camera(property_device.PropertyDevice):
         self._add_andor_property('InterfaceType', 'interface_type', 'String', readonly=True)
         self._add_andor_property('IOInvert', 'selected_io_pin_inverted', 'Bool')
         self._add_andor_property('MaxInterfaceTransferRate', 'max_interface_fps', 'Float', readonly=True)
-        self._add_andor_property('Overlap', 'overlap_enabled', 'Bool')
         self._add_andor_property('SerialNumber', 'serial_number', 'String', readonly=True)
         self._add_andor_property('SpuriousNoiseFilter', 'spurious_noise_filter_enabled', 'Bool')
         self._add_andor_property('StaticBlemishCorrection', 'static_blemish_correction_enabled', 'Bool')
@@ -176,6 +232,7 @@ class Camera(property_device.PropertyDevice):
         #  custom getters and setters are defined for these features below
         self._add_property_data('ExposureTime', 'Float', False, 'exposure_time', self.get_exposure_time)
         self._add_property_data('ReadoutTime', 'Float', True, 'readout_time', self.get_readout_time)
+        self._add_property_data('Overlap', 'Bool', False, 'overlap_enabled', self.get_overlap_enabled)
 
         if property_server:
             self._c_callback = lowlevel.FeatureCallback(self._andor_callback)
@@ -343,6 +400,21 @@ class Camera(property_device.PropertyDevice):
         """Return sensor readout time in ms"""
         return 1000 * lowlevel.GetFloat('ReadoutTime')
 
+    def get_overlap_enabled(self):
+        """Return whether overlap mode is enabled"""
+        try:
+            return lowlevel.GetBool('Overlap')
+        except lowlevel.AndorError:
+            return None
+
+    def set_overlap_enabled(self, enabled):
+        """Enable or disable overlap mode."""
+        if self.get_shutter_mode() == 'Rolling' and self.get_trigger_mode() == 'Software' and enabled=False:
+            # Setting overlap mode in software trigger / rolling shutter is an error,
+            # but trying to unset it in this mode should not be...
+            return
+        lowlevel.SetBool('Overlap', enabled)
+
     def get_exposure_time(self):
         """Return exposure time in ms"""
         return 1000 * lowlevel.GetFloat('ExposureTime')
@@ -362,7 +434,6 @@ class Camera(property_device.PropertyDevice):
         """Return current exposure time minimum and maximum values in ms"""
         return (1000 * lowlevel.GetFloatMin('ExposureTime'),
                 1000 * lowlevel.GetFloatMax('ExposureTime'))
-
 
     def set_sensor_gain(self, value):
         with self.in_state(live_mode=False):
@@ -640,7 +711,7 @@ class Camera(property_device.PropertyDevice):
 
         Returns: frame_rate, overlap
            frame_rate is the closest frame rate to the one desired
-           overlap is whether overlap mode must be enabled ir disabled to allow the requested frame rate
+           overlap is whether overlap mode must be enabled or disabled to allow the requested frame rate
 
         """
         # possible options for Rolling Shutter: internal with or without overlap

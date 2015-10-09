@@ -115,6 +115,9 @@ def meter_exposure(scope, lamp, max_exposure=200, max_intensity=255,
         min_intensity_fraction: least bright value (in terms of the 95th
             percentile of image intensities) allowed for the image to count as
             'properly exposed', as a fraction of the camera bit depth.
+            NB: if no other exposure times are valid and not over-exposed, an
+            exposure time could be returned that yields images which fall below
+            this minimum.
         max_intensity_fraction: brightest value (in terms of maximum image
             intensity) allowed for the image to count as 'properly exposed', as
             a fraction of the camera bit depth.

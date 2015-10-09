@@ -24,8 +24,24 @@
 
 import numpy
 import time
+import contextlib
 
-def z_stack(scope, mm_range, num_steps):
+def z_stack(scope, mm_range, num_steps, tl_enabled=False, **spectra_x_state):
+    """Acquire a z-series of images.
+
+    Parameters:
+        scope: microscope client object
+        mm_range: number of mm around the current focus position to collect the
+            z-stack. The range will be the current focus positon +/- mm_range/2.
+        num_steps: number of focus steps within the range to acquire.
+        tl_enabled: should the transmitted lamp be enabled during acquisition?
+        spectra_x_state: state of the spectra x during acquisition (see
+         documentation for scope.il.spectra_x.lamps for parameter description; a
+         simple example would be 'cyan_enabled=True' to turn on the cyan lamp.)
+
+    Returns: images, z_positions
+
+    """
     z = scope.stage.z
     z_positions = numpy.linspace(z - mm_range/2, z + mm_range/2, num_steps)
     scope.camera.start_image_sequence_acquisition(num_steps, trigger_mode='Software')
@@ -42,8 +58,15 @@ def z_stack(scope, mm_range, num_steps):
                 # don't do this for the first position -- no image to retrieve yet!
                 images.append(scope.camera.next_image(read_timeout_ms=1000))
             scope.stage.wait()
-            scope.camera.send_software_trigger()
-            time.sleep(exposure_sec)
+            with contextlib.ExitStack() as stack:
+                scope.tl.lamp.push_state(enabled=tl_enabled)
+                stack.callback(scope.tl.lamp.pop_state)
+                if spectra_x_state:
+                    scope.il.spectra_x.push_state(**spectra_x)
+                    stack.callback(scope.il.spectra_x.pop_state)
+                scope.camera.send_software_trigger()
+                time.sleep(exposure_sec)
+
         images.append(scope.camera.next_image(read_timeout_ms=1000))
     scope.camera.end_image_sequence_acquisition()
-    return images
+    return images, z_positions
