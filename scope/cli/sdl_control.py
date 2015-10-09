@@ -26,23 +26,34 @@ import contextlib
 import ctypes
 import sdl2
 import sys
+import threading
 from scope.simple_rpc import rpc_client
 from scope import scope_client
 
 SDL_SUBSYSTEMS = sdl2.SDL_INIT_JOYSTICK | sdl2.SDL_INIT_GAMECONTROLLER | sdl2.SDL_INIT_TIMER
 SDL_INITED = False
 SDL_EVENT_LOOP_IS_RUNNING = False
+SDL_TIMER_CALLBACK_TYPE = ctypes.CFUNCTYPE(ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p)
+DEFAULT_MAX_AXIS_COMMAND_WALLCLOCK_TIME_PORTION = 0.5
+CTS_EVENT = sdl2.SDL_RegisterEvents(1)
+DEMAND_FACTOR = 2
 
 class InputStateChanges:
     __slots__ = (
         'button_presses', # a temporally ordered list, if there were any button presses
         'axes_positions', # coalesced to current axis states, if any axis's position has changed
-        'hats', # coalesced to current hat states, if any hat's position has changed
-        'device_list', # latest device list, if it has changed
-        'current_device_closed' # a True bool value, if the current device has been closed
+        'hat_positions' # coalesced to current hat states, if any hat's position has changed
     )
     def __bool__(self):
-        return any(hasattr(self, slot) for slot in self.__slots__)
+        return (
+            any(axes_position is not None for axes_position in self.axes_positions) or
+            any(hat_position is not None for hat_position in self.hat_positions) or
+            len(self.button_presses) > 0
+        )
+    def clear(self):
+        del self.button_presses[:]
+        self.axes_positions[:] = (None,) * len(self.axes_positions)
+        self.hat_positions[:] = (None,) * len(self.hat_positions)
 
 def init_sdl():
     global SDL_INITED
@@ -106,7 +117,7 @@ class SDLControl:
             input_device_name=None,
             scope_server_host='127.0.0.1',
             zmq_context=None,
-            maximum_portion_of_wallclock_time_allowed_for_axis_commands=0.5):
+            maximum_portion_of_wallclock_time_allowed_for_axis_commands=DEFAULT_MAX_AXIS_COMMAND_WALLCLOCK_TIME_PORTION):
         '''* input_device_index: The argument passed to SDL_JoystickOpen(index) or SDL_GameControllerOpen(index).
         Ignored if the value of input_device_name is not None.
         * input_device_name: If specified, input_device_name should be the exact string or UTF8-encoded bytearray
@@ -176,32 +187,55 @@ class SDLControl:
             raise RuntimeError('Failed to open {} at device index {} with name "{}".'.format(
                 'game controller' if self.device_is_game_controller else 'joystick',
                 input_device_index,
-                input_device_name.decode('utf-8')))
+                input_device_name.decode('utf-8'))
+            )
         if self.device_is_game_controller:
-            self.device_id = sdl2.SDL_JoystickInstanceID(sdl2.SDL_GameControllerGetJoystick(self.device))
+            self.jdevice = sdl2.SDL_GameControllerGetJoystick(self.device)
         else:
-            self.device_id = sdl2.SDL_JoystickInstanceID(self.device)
+            self.jdevice = self.device
+        self.device_id = sdl2.SDL_JoystickInstanceID(self.jdevice)
+        self.num_axes = sdl2.SDL_JoystickNumAxes(self.jdevice)
+        self.num_buttons = sdl2.SDL_JoystickNumButtons(self.jdevice)
+        self.num_hats = sdl2.SDL_JoystickNumHats(self.jdevice)
         print('SDLControl is connecting to scope server...', file=sys.stderr)
         self.scope, self.scope_properties = scope_client.client_main(scope_server_host, zmq_context)
         print('SDLControl successfully connected to scope server.', file=sys.stderr)
         self.event_loop_is_running = False
-        self.warn_on_unhandled_events = False
+        self.warnings_enabled = False
         self.quit_event_posted = False
+        # State info that has accumulated since we last sent a round of update commands to the scope
+        self.state_changes = InputStateChanges()
+        self.state_changes.axes_positions = [None for i in range(self.num_axes)]
+        self.state_changes.button_presses = []
+        self.state_changes.hat_positions = [None for i in range(self.num_hats)]
+        self.max_axis_command_wallclock_time_portion = maximum_portion_of_wallclock_time_allowed_for_axis_commands
+        self._c_cts_timer_callback = SDL_TIMER_CALLBACK_TYPE(self._cts_timer_callback)
+        self._actionable_cts_timer_id = None
+        self._cts_timer_id_lock = threading.Lock()
+        self._next_cts_timer_id = 0
 
     def _init_handlers(self):
         self._event_handlers = {
-            sdl2.SDL_QUIT : self._on_quit
+            sdl2.SDL_QUIT : self._on_quit,
+            CTS_EVENT : self._on_cts
         }
         if self.device_is_game_controller:
             self._event_handlers.update({
                 sdl2.SDL_CONTROLLERDEVICEREMOVED : self._on_device_removed,
-                sdl2.SDL_CONTROLLERAXISMOTION : self._on_axis_motion
+                sdl2.SDL_CONTROLLERAXISMOTION : self._on_axis_motion,
+                sdl2.SDL_CONTROLLERBUTTONDOWN : self._on_button,
+                sdl2.SDL_CONTROLLERBUTTONUP : self._on_button
             })
         else:
             self._event_handlers.update({
                 sdl2.SDL_JOYDEVICEREMOVED : self._on_device_removed,
-                sdl2.SDL_JOYAXISMOTION : self._on_axis_motion
+                sdl2.SDL_JOYAXISMOTION : self._on_axis_motion,
+                sdl2.SDL_JOYBUTTONDOWN : self._on_button,
+                sdl2.SDL_JOYBUTTONUP : self._on_button
             })
+
+    def _init_states(self):
+        pass
 
     def event_loop(self):
         global SDL_EVENT_LOOP_IS_RUNNING
@@ -237,7 +271,7 @@ class SDLControl:
         self.quit_event_posted = True
 
     def _on_unhandled_event(self, event):
-        if self.warn_on_unhandled_events:
+        if self.warnings_enabled:
             print('Received unhandled SDL event: ' + SDL_EVENT_NAMES.get(event.type, "UNKNOWN"), file=sys.stderr)
 
     @only_for_our_device
@@ -247,7 +281,9 @@ class SDLControl:
 
     @only_for_our_device
     def _on_axis_motion(self, event):
-        print('axis {} value {}'.format(event.jaxis.axis, event.jaxis.value))
+        # print('axis {} value {}'.format(event.jaxis.axis, event.jaxis.value))
+        state_changes = self.state_changes
+        if state_changes.axes_positions
         i = event.jaxis.value
         demand = i / (32768 if i <= 0 else 32767)
         velocity = demand * 2
@@ -256,18 +292,85 @@ class SDLControl:
         elif event.jaxis.axis == 1:
             self.scope.stage.move_along_y(velocity)
 
+    @only_for_our_device
+    def _on_button(self, event):
+        if self.device_is_game_controller:
+            idx = event.cbutton.button
+            state = event.cbutton.state == sdl2.SDL_PRESSED
+        else:
+            idx = event.jbutton.button
+            state = event.jbutton.state == sdl2.SDL_PRESSED
+        self.state_changes.button_presses.append((idx, state))
+
+    def _cts_timer_callback(self, interval, timer_id):
+        # NB: SDL timer callbacks execute on a special thread that is not the main thread
+        if not SDL_EVENT_LOOP_IS_RUNNING:
+            return
+        with self._cts_timer_id_lock:
+            is_actionable = (
+                self._actionable_cts_timer_id is not None and
+                self._actionable_cts_timer_id.value == self._desired_cts_timer_id.value
+            )
+        if not is_actionable:
+            return
+        event = sdl2.SDL_Event()
+        event.type = CTS_EVENT
+        event.data1 = timer_id
+        sdl2.SDL_PushEvent(event)
+
+    def _on_cts(self, event):
+        with self._cts_timer_id_lock:
+            is_actionable = (
+                self._actionable_cts_timer_id is not None and
+                self._actionable_cts_timer_id.value == self._desired_cts_timer_id.value
+            )
+            if not is_actionable:
+                return
+            self._actionable_cts_timer_id = None
+        self.execute_commands()
+
+    def execute_commands(self):
+        if not self.state_changes:
+            return
+        sent_command = False
+        t0 = sdl2.SDL_GetTicks()
+        if hasattr(self.state_changes, 'axes_positions'):
+            axes_positions = self.state_changes.axes_positions
+            if axes_positions[0] is not None:
+                i = axes_positions[0]
+                demand = i / (32768 if i <= 0 else 32767)
+                velocity = demand * DEMAND_FACTOR
+                self.scope.stage.move_along_x(-velocity)
+                sent_command = True
+            if axes_positions[1] is not None:
+                i = axes_positions[1]
+                demand = i / (32768 if i <= 0 else 32767)
+                velocity = demand * DEMAND_FACTOR
+                self.scope.stage.move_along_y(velocity)
+                sent_command = True
+        t1 = sdl2.SDL_GetTicks()
+
+
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(epilog='Note: Either device name/index or --list must be supplied as arguments, but not both.')
-    parser.add_argument('--scope', default='127.0.0.1', help='Hostname or IP address of the scope server.  Defaults to "127.0.0.1".')
+    parser.add_argument('--scope', '-s', default='127.0.0.1', help='Hostname or IP address of the scope server.  Defaults to "127.0.0.1".')
+    parser.add_argument(
+        '--enable-warnings',
+        '-w', 
+        action='store_true',
+        help='Print warnings to stderr when unhandled events are received.')
     parserg = parser.add_mutually_exclusive_group(required=True)
     parserg.add_argument(
         '--list',
+        '-l',
         action='store_true',
-        help="Print a list of the acceptable SDL devices' indexes and names, with one device per line."
+        help="Print a list of the detected, acceptable SDL devices' indexes and names, with one device per line."
     )
     parserg.add_argument('device', nargs='?', help='SDL input device name or index.')
     args = parser.parse_args()
+    print(args)
     if args.list:
         for idx, name in enumerate(enumerate_devices()):
             print('{}: "{}"'.format(idx, name))
@@ -276,6 +379,7 @@ if __name__ == '__main__':
             sdlc = SDLControl(input_device_index=int(args.device), scope_server_host=args.scope)
         else:
             sdlc = SDLControl(input_device_name=args.device, scope_server_host=args.scope)
+        sdlc.warnings_enabled = args.enable_warnings
         sdlc.event_loop()
 
 SDL_EVENT_NAMES = {
