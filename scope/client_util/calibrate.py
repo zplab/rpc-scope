@@ -146,6 +146,7 @@ def meter_exposure(scope, lamp, max_exposure=200, max_intensity=255,
                 break
         if good_intensity is None:
             raise RuntimeError('Could not find a non-overexposed lamp intensity')
+        good_exposure = exposures[0]
         for exposure in exposures:
             scope.camera.exposure_time = exposure
             scope.camera.send_software_trigger()
