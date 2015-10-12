@@ -34,13 +34,20 @@ SDL_SUBSYSTEMS = sdl2.SDL_INIT_JOYSTICK | sdl2.SDL_INIT_GAMECONTROLLER | sdl2.SD
 SDL_INITED = False
 SDL_EVENT_LOOP_IS_RUNNING = False
 SDL_TIMER_CALLBACK_TYPE = ctypes.CFUNCTYPE(ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p)
-DEFAULT_MAX_AXIS_COMMAND_WALLCLOCK_TIME_PORTION = 0.5
+DEFAULT_MAX_AXIS_COMMAND_WALLCLOCK_TIME_PORTION = 0.3333
 DEFAULT_MAX_AXIS_COMMAND_COOL_OFF = 500
 # AXES_THROTTLE_DELAY_EXPIRED_EVENT: Sent by the timer thread to wake up the main
 # SDL thread and cause it to update the scope state in response to any axis position changes
 # that have occurred since last updating the scope for an axis position change.
 AXES_THROTTLE_DELAY_EXPIRED_EVENT = sdl2.SDL_RegisterEvents(1)
-DEMAND_FACTOR = 2
+COARSE_DEMAND_FACTOR = 20
+FINE_DEMAND_FACTOR = 1
+AXES_MAP = {
+    sdl2.SDL_CONTROLLER_AXIS_LEFTX : lambda self, demand: self.scope.stage.move_along_x(-demand * COARSE_DEMAND_FACTOR),
+    sdl2.SDL_CONTROLLER_AXIS_LEFTY : lambda self, demand: self.scope.stage.move_along_y(demand * COARSE_DEMAND_FACTOR),
+    sdl2.SDL_CONTROLLER_AXIS_RIGHTX : lambda self, demand: self.scope.stage.move_along_x(-demand * FINE_DEMAND_FACTOR),
+    sdl2.SDL_CONTROLLER_AXIS_RIGHTY : lambda self, demand: self.scope.stage.move_along_y(demand * FINE_DEMAND_FACTOR)
+}
 
 def init_sdl():
     global SDL_INITED
@@ -222,10 +229,6 @@ def only_for_our_device(handler):
     return f
 
 class SDLControl:
-    AXES_MAP = {
-        sdl2.SDL_CONTROLLER_AXIS_LEFTX : lambda self, speed: self.scope.stage.move_along_x(-speed, async=False),
-        sdl2.SDL_CONTROLLER_AXIS_LEFTY : lambda self, speed: self.scope.stage.move_along_y(speed, async=False)
-    }
     def __init__(
             self,
             input_device_index=0,
@@ -326,17 +329,12 @@ class SDLControl:
                 sdl2.SDL_JOYBUTTONUP : self._on_button
             })
 
-    def __del__(self):
-        if self.device:
-            (sdl2.SDL_GameControllerClose if self.device_is_game_controller else sdl2.SDL_JoystickClose)(self.device)
-            self.device = None
-
     def event_loop(self):
         global SDL_EVENT_LOOP_IS_RUNNING
         assert not SDL_EVENT_LOOP_IS_RUNNING
         self._next_axes_tick = 0
         self._axes_throttle_delay_timer_set = False
-        self._last_axes_positions = {axis_idx : None for axis_idx in self.AXES_MAP.keys()}
+        self._last_axes_positions = {axis_idx : None for axis_idx in AXES_MAP.keys()}
         self._get_axis_pos = sdl2.SDL_GameControllerGetAxis if self.device_is_game_controller else sdl2.SDL_JoystickGetAxis
         SDL_EVENT_LOOP_IS_RUNNING = True
         def on_loop_end():
@@ -396,15 +394,16 @@ class SDLControl:
         # in response to timer expiration.
         curr_ticks = sdl2.SDL_GetTicks()
         if curr_ticks >= self._next_axes_tick:
-            self._handle_axes_motion(True)
-        elif not self._axes_throttle_delay_timer_set:
+            self._handle_axes_motion()
+        else:
             with self._axes_throttle_delay_lock:
-                defer_ticks = max(1, self._next_axes_tick - curr_ticks)
-                if not self.SDL_AddTimer(d, self._c_on_axes_throttle_delay_expired_timer_callback, ctypes.c_void_p(0)):
-                    sdl_e = sdl2.SDL_GetError()
-                    sdl_e = sdl_e.decode('utf-8') if sdl_e else 'UNKNOWN ERROR'
-                    raise RuntimeError('Failed to set timer: {}'.format(sdl_e))
-                self._axes_throttle_delay_timer_set = True
+                if not self._axes_throttle_delay_timer_set:
+                    defer_ticks = round(max(1, self._next_axes_tick - curr_ticks))
+                    if not sdl2.SDL_AddTimer(defer_ticks, self._c_on_axes_throttle_delay_expired_timer_callback, ctypes.c_void_p(0)):
+                        sdl_e = sdl2.SDL_GetError()
+                        sdl_e = sdl_e.decode('utf-8') if sdl_e else 'UNKNOWN ERROR'
+                        raise RuntimeError('Failed to set timer: {}'.format(sdl_e))
+                    self._axes_throttle_delay_timer_set = True
 
     def _on_axes_throttle_delay_expired_timer_callback(self, interval, _):
         # NB: SDL timer callbacks execute on a special thread that is not the main thread
@@ -428,23 +427,23 @@ class SDLControl:
             if self.warnings_enabled:
                 print('Axes throttling delay expiration event pre-empted.', sys.stderr)
             return
-        self._handle_axes_motion(False)
+        self._handle_axes_motion()
 
-    def _handle_axes_motion(self, set_timer):
+    def _handle_axes_motion(self):
         command_ticks = 0
-        for axis, cmd in self.AXES_MAP.keys():
+        for axis, cmd in AXES_MAP.items():
             pos = self._get_axis_pos(self.device, axis)
             if pos != self._last_axes_positions[axis]:
-                demand = pos / (32768 if i <= 0 else 32767)
-                velocity = demand * DEMAND_FACTOR
+                demand = pos / (32768 if pos <= 0 else 32767)
                 t0 = sdl2.SDL_GetTicks()
-                cmd(self, velocity)
+                cmd(self, demand)
                 t1 = sdl2.SDL_GetTicks()
                 self._last_axes_positions[axis] = pos
                 command_ticks += t1 - t0
-        self._next_axes_tick = sdl2.SDL_GetTicks() + min(
+        self._next_axes_tick = sdl2.SDL_GetTicks() + int(min(
             command_ticks * self.throttle_delay_command_time_ratio,
-            self.maximum_axis_command_cool_off)
+            self.maximum_axis_command_cool_off
+        ))
 
 SDL_EVENT_NAMES = {
     sdl2.SDL_APP_DIDENTERBACKGROUND : 'SDL_APP_DIDENTERBACKGROUND',
