@@ -35,33 +35,17 @@ SDL_INITED = False
 SDL_EVENT_LOOP_IS_RUNNING = False
 SDL_TIMER_CALLBACK_TYPE = ctypes.CFUNCTYPE(ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p)
 DEFAULT_MAX_AXIS_COMMAND_WALLCLOCK_TIME_PORTION = 0.5
-CTS_EVENT = sdl2.SDL_RegisterEvents(1)
+DEFAULT_MAX_AXIS_COMMAND_COOL_OFF = 500
+# AXES_THROTTLE_DELAY_EXPIRED_EVENT: Sent by the timer thread to wake up the main
+# SDL thread and cause it to update the scope state in response to any axis position changes
+# that have occurred since last updating the scope for an axis position change.
+AXES_THROTTLE_DELAY_EXPIRED_EVENT = sdl2.SDL_RegisterEvents(1)
 DEMAND_FACTOR = 2
-
-class InputStateChanges:
-    __slots__ = (
-        'button_presses', # a temporally ordered list, if there were any button presses
-        'axes_positions', # coalesced to current axis states, if any axis's position has changed
-        'hat_positions' # coalesced to current hat states, if any hat's position has changed
-    )
-    def __bool__(self):
-        return (
-            any(axes_position is not None for axes_position in self.axes_positions) or
-            any(hat_position is not None for hat_position in self.hat_positions) or
-            len(self.button_presses) > 0
-        )
-    def clear(self):
-        del self.button_presses[:]
-        self.axes_positions[:] = (None,) * len(self.axes_positions)
-        self.hat_positions[:] = (None,) * len(self.hat_positions)
 
 def init_sdl():
     global SDL_INITED
     if SDL_INITED:
-        # Prompt SDL to process any input queued by the OS, generating SDL events
-        sdl2.SDL_PumpEvents()
-        # Get rid of those and any other accumulated SDL events
-        sdl2.SDL_FlushEvents(sdl2.SDL_FIRSTEVENT, 2**32 - 1)
+        sdl2.SDL_SetHint(sdl2.SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, b"1")
     else:
         if sdl2.SDL_Init(SDL_SUBSYSTEMS) < 0:
             sdl_e = sdl2.SDL_GetError()
@@ -111,13 +95,18 @@ def only_for_our_device(handler):
     return f
 
 class SDLControl:
+    AXES_MAP = {
+        sdl2.SDL_CONTROLLER_AXIS_LEFTX : lambda self, speed: self.scope.stage.move_along_x(-speed, async=False),
+        sdl2.SDL_CONTROLLER_AXIS_LEFTY : lambda self, speed: self.scope.stage.move_along_y(speed, async=False)
+    }
     def __init__(
             self,
             input_device_index=0,
             input_device_name=None,
             scope_server_host='127.0.0.1',
             zmq_context=None,
-            maximum_portion_of_wallclock_time_allowed_for_axis_commands=DEFAULT_MAX_AXIS_COMMAND_WALLCLOCK_TIME_PORTION):
+            maximum_portion_of_wallclock_time_allowed_for_axis_commands=DEFAULT_MAX_AXIS_COMMAND_WALLCLOCK_TIME_PORTION,
+            maximum_axis_command_cool_off=DEFAULT_MAX_AXIS_COMMAND_COOL_OFF):
         '''* input_device_index: The argument passed to SDL_JoystickOpen(index) or SDL_GameControllerOpen(index).
         Ignored if the value of input_device_name is not None.
         * input_device_name: If specified, input_device_name should be the exact string or UTF8-encoded bytearray
@@ -156,7 +145,17 @@ class SDLControl:
             'Gametech Gameseries MegaGamer Excel Spreadsheet 3D-Orb For Light Rail Transport, Doom3D Edition'
         ]
         You will therefore want to specify input_device_index=4 or
-        input_device_name='Logilech SixThousandAxis KiloButtonPad With Haptic Feedback Explosion'.'''
+        input_device_name='Logilech SixThousandAxis KiloButtonPad With Haptic Feedback Explosion'
+
+        * scope_server_host: IP address or hostname of scope server.
+        * zmq_context: If None, one is created.
+        * maximum_portion_of_wallclock_time_allowed_for_axis_commands: Limit the rate at which commands are sent to the scope
+        in response to controller axis motion such that the scope such that the scope is busy processing those commands no more
+        than this fraction of the time.
+        * maximum_axis_command_cool_off: The maximum number of milliseconds to defer issuance of scope commands in response
+        to controller axis motion (in order to enforce maximum_portion_of_wallclock_time_allowed_for_axis_commands).
+        '''
+        assert 0 < maximum_portion_of_wallclock_time_allowed_for_axis_commands <= 1
         if input_device_name is None and int(input_device_index) != input_device_index:
             raise ValueError('If input_device_name is not specified, the value supplied for input_device_index must be an integer.')
         init_sdl()
@@ -203,21 +202,16 @@ class SDLControl:
         self.event_loop_is_running = False
         self.warnings_enabled = False
         self.quit_event_posted = False
-        # State info that has accumulated since we last sent a round of update commands to the scope
-        self.state_changes = InputStateChanges()
-        self.state_changes.axes_positions = [None for i in range(self.num_axes)]
-        self.state_changes.button_presses = []
-        self.state_changes.hat_positions = [None for i in range(self.num_hats)]
-        self.max_axis_command_wallclock_time_portion = maximum_portion_of_wallclock_time_allowed_for_axis_commands
-        self._c_cts_timer_callback = SDL_TIMER_CALLBACK_TYPE(self._cts_timer_callback)
-        self._actionable_cts_timer_id = None
-        self._cts_timer_id_lock = threading.Lock()
-        self._next_cts_timer_id = 0
+        self.throttle_delay_command_time_ratio = 1 - maximum_portion_of_wallclock_time_allowed_for_axis_commands
+        self.throttle_delay_command_time_ratio /= maximum_portion_of_wallclock_time_allowed_for_axis_commands
+        self.maximum_axis_command_cool_off = maximum_axis_command_cool_off
+        self._axes_throttle_delay_lock = threading.Lock()
+        self._c_on_axes_throttle_delay_expired_timer_callback = SDL_TIMER_CALLBACK_TYPE(self._on_axes_throttle_delay_expired_timer_callback)
 
     def _init_handlers(self):
         self._event_handlers = {
             sdl2.SDL_QUIT : self._on_quit,
-            CTS_EVENT : self._on_cts
+            AXES_THROTTLE_DELAY_EXPIRED_EVENT : self._on_axes_throttle_delay_expired_event
         }
         if self.device_is_game_controller:
             self._event_handlers.update({
@@ -234,12 +228,13 @@ class SDLControl:
                 sdl2.SDL_JOYBUTTONUP : self._on_button
             })
 
-    def _init_states(self):
-        pass
-
     def event_loop(self):
         global SDL_EVENT_LOOP_IS_RUNNING
         assert not SDL_EVENT_LOOP_IS_RUNNING
+        self._next_axes_tick = 0
+        self._axes_throttle_delay_timer_set = False
+        self._last_axes_positions = {axis_idx : None for axis_idx in self.AXES_MAP.keys()}
+        self._get_axis_pos = sdl2.SDL_GameControllerGetAxis if self.device_is_game_controller else sdl2.SDL_JoystickGetAxis
         SDL_EVENT_LOOP_IS_RUNNING = True
         def on_loop_end():
             global SDL_EVENT_LOOP_IS_RUNNING
@@ -280,19 +275,6 @@ class SDLControl:
         self.exit_event_loop()
 
     @only_for_our_device
-    def _on_axis_motion(self, event):
-        # print('axis {} value {}'.format(event.jaxis.axis, event.jaxis.value))
-        state_changes = self.state_changes
-        if state_changes.axes_positions
-        i = event.jaxis.value
-        demand = i / (32768 if i <= 0 else 32767)
-        velocity = demand * 2
-        if event.jaxis.axis == 0:
-            self.scope.stage.move_along_x(-velocity)
-        elif event.jaxis.axis == 1:
-            self.scope.stage.move_along_y(velocity)
-
-    @only_for_our_device
     def _on_button(self, event):
         if self.device_is_game_controller:
             idx = event.cbutton.button
@@ -300,57 +282,63 @@ class SDLControl:
         else:
             idx = event.jbutton.button
             state = event.jbutton.state == sdl2.SDL_PRESSED
-        self.state_changes.button_presses.append((idx, state))
+        # TODO: something in response to button presses
 
-    def _cts_timer_callback(self, interval, timer_id):
+    @only_for_our_device
+    def _on_axis_motion(self, event):
+        # A subtle point: we need to set the axes throttle delay timer only when cooldown has not expired and
+        # no timer is set.  That is, if the joystick moves, SDL tells us about it.  When SDL tells us, if we
+        # have too recently handled an axis move event, we defer handling the event by setting a timer that wakes
+        # us up when the cooldown has expired.  There is never a need to set a new axes throttle delay timer
+        # in response to timer expiration.
+        curr_ticks = sdl2.SDL_GetTicks()
+        if curr_ticks >= self._next_axes_tick:
+            self._handle_axes_motion(True)
+        elif not self._axes_throttle_delay_timer_set:
+            with self._axes_throttle_delay_lock:
+                defer_ticks = max(1, self._next_axes_tick - curr_ticks)
+                self.SDL_AddTimer(d, self._c_on_axes_throttle_delay_expired_timer_callback, ctypes.c_void_p(0))
+                self._axes_throttle_delay_timer_set = True
+
+    def _on_axes_throttle_delay_expired_timer_callback(self, interval, _):
         # NB: SDL timer callbacks execute on a special thread that is not the main thread
         if not SDL_EVENT_LOOP_IS_RUNNING:
             return
-        with self._cts_timer_id_lock:
-            is_actionable = (
-                self._actionable_cts_timer_id is not None and
-                self._actionable_cts_timer_id.value == self._desired_cts_timer_id.value
-            )
-        if not is_actionable:
-            return
+        with self._axes_throttle_delay_lock:
+            self._axes_throttle_delay_timer_set = False
+            if sdl2.SDL_GetTicks() < self._next_axes_tick:
+                if self.warnings_enabled:
+                    print('Axes throttling delay expiration callback pre-empted.', sys.stderr)
+                return 0
         event = sdl2.SDL_Event()
-        event.type = CTS_EVENT
-        event.data1 = timer_id
+        event.type = AXES_THROTTLE_DELAY_EXPIRED_EVENT
         sdl2.SDL_PushEvent(event)
+        # Returning 0 tells SDL to not recycle this timer.  _handle_axes_motion, in the main SDL thread, will
+        # ultimately be caused to set a new timer by the event we just pushed.
+        return 0
 
-    def _on_cts(self, event):
-        with self._cts_timer_id_lock:
-            is_actionable = (
-                self._actionable_cts_timer_id is not None and
-                self._actionable_cts_timer_id.value == self._desired_cts_timer_id.value
-            )
-            if not is_actionable:
-                return
-            self._actionable_cts_timer_id = None
-        self.execute_commands()
-
-    def execute_commands(self):
-        if not self.state_changes:
+    def _on_axes_throttle_delay_expired_event(self, event):
+        if sdl2.SDL_GetTicks() < self._next_axes_tick:
+            if self.warnings_enabled:
+                print('Axes throttling delay expiration event pre-empted.', sys.stderr)
             return
-        sent_command = False
-        t0 = sdl2.SDL_GetTicks()
-        if hasattr(self.state_changes, 'axes_positions'):
-            axes_positions = self.state_changes.axes_positions
-            if axes_positions[0] is not None:
-                i = axes_positions[0]
-                demand = i / (32768 if i <= 0 else 32767)
-                velocity = demand * DEMAND_FACTOR
-                self.scope.stage.move_along_x(-velocity)
-                sent_command = True
-            if axes_positions[1] is not None:
-                i = axes_positions[1]
-                demand = i / (32768 if i <= 0 else 32767)
-                velocity = demand * DEMAND_FACTOR
-                self.scope.stage.move_along_y(velocity)
-                sent_command = True
-        t1 = sdl2.SDL_GetTicks()
+        self._handle_axes_motion(False)
 
-
+    def _handle_axes_motion(self, set_timer):
+        command_ticks = 0
+        for axis, cmd in self.AXES_MAP.keys():
+            pos = self._get_axis_pos(self.device, axis)
+            if pos != self._last_axes_positions[axis]:
+                demand = pos / (32768 if i <= 0 else 32767)
+                velocity = demand * DEMAND_FACTOR
+                t0 = sdl2.SDL_GetTicks()
+                cmd(self, velocity)
+                t1 = sdl2.SDL_GetTicks()
+                self._last_axes_positions[axis] = pos
+                command_ticks += t1 - t0
+        self._next_axes_tick = sdl2.SDL_GetTicks() + min(
+            command_ticks * self.throttle_delay_command_time_ratio,
+            self.maximum_axis_command_cool_off)
 
 if __name__ == '__main__':
     import argparse
@@ -370,7 +358,6 @@ if __name__ == '__main__':
     )
     parserg.add_argument('device', nargs='?', help='SDL input device name or index.')
     args = parser.parse_args()
-    print(args)
     if args.list:
         for idx, name in enumerate(enumerate_devices()):
             print('{}: "{}"'.format(idx, name))
