@@ -52,8 +52,8 @@ def init_sdl():
             sdl_e = sdl_e.decode('utf-8') if sdl_e else 'UNKNOWN ERROR'
             sdl2.SDL_Quit()
             raise RuntimeError('Failed to initialize SDL ("{}").'.format(sdl_e))
-        # The following SDL_SetHint call causes SDL2 to process joystick (and gamepad, as the
-        # gamepad subsystem is built on the joystick subsystem) events without a window created
+        # The following SDL_SetHint call causes SDL2 to process joystick (and game controller, as the
+        # game controller subsystem is built on the joystick subsystem) events without a window created
         # and owned by SDL2 focused or even extant.  In our case, we have no SDL2 window, and
         # we do not even initialize the SDL2 video subsystem.
         sdl2.SDL_SetHint(sdl2.SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, b"1")
@@ -71,18 +71,145 @@ def init_sdl():
 def enumerate_devices():
     with contextlib.ExitStack() as estack:
         # We may be called from a different thread than the one that will run the SDL event loop.  In case that
-        # will happen, if SDL is not already initialized, we do not leave it initialized - bound to our current
-        # thread.
+        # will happen, if SDL is not already initialized, we do not leave it initialized (if we did, it would be
+        # bound to our current thread, which may not be desired).
         if not SDL_INITED:
-            if sdl2.SDL_Init(sdl2.SDL_INIT_JOYSTICK) < 0:
+            if sdl2.SDL_Init(sdl2.SDL_INIT_JOYSTICK | sdl2.SDL_INIT_GAMECONTROLLER) < 0:
                 sdl_e = sdl2.SDL_GetError()
                 sdl_e = sdl_e.decode('utf-8') if sdl_e else 'UNKNOWN ERROR'
                 sdl2.SDL_Quit()
                 raise RuntimeError('Failed to initialize SDL ("{}").'.format(sdl_e))
-            estack.callback(lambda: sdl2.SDL_QuitSubSystem(sdl2.SDL_INIT_JOYSTICK))
+            estack.callback(lambda: sdl2.SDL_QuitSubSystem(sdl2.SDL_INIT_JOYSTICK | sdl2.SDL_INIT_GAMECONTROLLER))
             estack.callback(sdl2.SDL_Quit)
-        names = [sdl2.SDL_JoystickNameForIndex(sdl_dev_idx).decode('utf-8') for sdl_dev_idx in range(sdl2.SDL_NumJoysticks())]
-    return names
+        rows = []
+        for sdl_dev_idx in range(sdl2.SDL_NumJoysticks()):
+            device_is_game_controller = bool(sdl2.SDL_IsGameController(sdl_dev_idx))
+            device_type = 'game controller' if device_is_game_controller else 'joystick'
+            cols = [sdl_dev_idx, device_type, sdl2.SDL_JoystickNameForIndex(sdl_dev_idx).decode('utf-8')]
+            if device_is_game_controller:
+                cols.append(sdl2.SDL_GameControllerNameForIndex(sdl_dev_idx).decode('utf-8'))
+            rows.append(cols)
+    return rows
+
+def open_device(input_device_index=0, input_device_name=None, _used_idx_and_name=None):
+    if input_device_name is None and int(input_device_index) != input_device_index:
+        raise ValueError('If input_device_name is not specified, the value supplied for input_device_index must be an integer.')
+    input_device_count = sdl2.SDL_NumJoysticks()
+    if input_device_count == 0:
+        raise RuntimeError('According to SDL, there are no joysticks/game controllers attached.')
+    if input_device_name is None:
+        if not 0 <= input_device_index < input_device_count:
+            isare, ssuffix = ('is', '') if input_device_count == 1 else ('are', 's')
+            e = ('According to SDL, there {0} {1} joystick{2}/game controller{2} attached.  Therefore, input_device_index must be '
+                 'an integer in the closed interval [0, {3}], which the supplied value, {4}, is not.')
+            raise ValueError(e.format(isare, input_device_count, ssuffix, input_device_count - 1, input_device_index))
+        input_device_name = sdl2.SDL_JoystickNameForIndex(input_device_index)
+    else:
+        if isinstance(input_device_name, str):
+            input_device_name = input_device_name.encode('utf-8')
+        else:
+            input_device_name = bytes(input_device_name)
+        for sdl_dev_idx in range(sdl2.SDL_NumJoysticks()):
+            if sdl2.SDL_JoystickNameForIndex(sdl_dev_idx) == input_device_name:
+                input_device_index = sdl_dev_idx
+                break
+        else:
+            raise ValueError('No connected joystick or game controller device recognized by SDL has the name "{}".'.format(input_device_name.decode('utf-8')))
+    device_is_game_controller = bool(sdl2.SDL_IsGameController(input_device_index))
+    device = (sdl2.SDL_GameControllerOpen if device_is_game_controller else sdl2.SDL_JoystickOpen)(input_device_index)
+    if not device:
+        raise RuntimeError('Failed to open {} at device index {} with name "{}".'.format(
+            'game controller' if device_is_game_controller else 'joystick',
+            input_device_index,
+            input_device_name.decode('utf-8'))
+        )
+    if _used_idx_and_name is not None:
+        _used_idx_and_name[0] = input_device_index
+        _used_idx_and_name[1] = input_device_name
+    return device, device_is_game_controller
+
+def dump_input(input_device_index=0, input_device_name=None):
+    init_sdl()
+    used_idx_and_name = [None, None]
+    device, device_is_game_controller = open_device(input_device_index, input_device_name, used_idx_and_name)
+    if device_is_game_controller:
+        s = 'Opened game controller, c_name "{}", j_name "{}", idx {}, c_id {}, j_id {}'.format(
+            sdl2.SDL_GameControllerName(device),
+            used_idx_and_name[1],
+            used_idx_and_name[0],
+            device,
+            sdl2.SDL_GameControllerGetJoystick(device)
+        )
+    else:
+        s = 'Opened joystick, j_name "{}", idx {}, j_id {}'.format(
+            used_idx_and_name[1],
+            used_idx_and_name[0],
+            device
+        )
+    print(s)
+    def on_joydeviceaddedevent(event):
+        return 'idx: {} j_name: {}'.format(event.jdevice.which, sdl2.SDL_JoystickNameForIndex(event.jdevice.which).decode('utf-8'))
+    def on_joydeviceremovedevent(event):
+        return 'j_id: {}'.format(event.jdevice.which)
+    def on_joyaxismotionevent(event):
+        return 'j_id: {} axis: {} pos: {}'.format(event.jaxis.which, event.jaxis.axis, event.jaxis.value)
+    def on_joyballmotionevent(event):
+        return 'j_id: {} ball: {} xdelta: {} ydelta: {}'.format(event.jball.which, event.jball.ball, event.jball.xrel, event.jball.yrel)
+    def on_joyhatmotionevent(event):
+        return 'j_id: {} hat: {} pos: {}'.format(event.jhat.which, event.jhat.hat, SDL_HAT_DIRECTION_NAMES.get(event.jhat.value, event.jhat.value))
+    def on_joybuttonevent(event):
+        return 'j_id: {} button: {} state: {}'.format(
+            event.jbutton.which,
+            event.jbutton.button,
+            'is_pressed' if bool(event.jbutton.state) else 'is_not_pressed'
+        )
+    def on_controllerdeviceaddedevent(event):
+        return 'idx: {} c_name: {}'.format(event.cdevice.which, sdl2.SDL_GameControllerNameForIndex(event.cdevice.which).decode('utf-8'))
+    def on_controllerdeviceremovedevent(event):
+        return 'c_id: {}'.format(event.cdevice.which)
+    def on_controlleraxismotionevent(event):
+        return 'c_id: {} axis: {} pos: {}'.format(
+            event.caxis.which,
+            SDL_CONTROLLER_AXIS_NAMES.get(event.caxis.axis, event.caxis.axis),
+            event.caxis.value
+        )
+    def on_controllerbuttonevent(event):
+        return 'c_id: {} button: {} state: {}'.format(
+            event.cbutton.which,
+            SDL_CONTROLLER_BUTTON_NAMES.get(event.cbutton.button, event.cbutton.button),
+            'is_pressed' if bool(event.cbutton.state) else 'is_not_pressed'
+        )
+    event_handlers = {
+        sdl2.SDL_JOYDEVICEADDED : on_joydeviceaddedevent,
+        sdl2.SDL_JOYDEVICEREMOVED : on_joydeviceremovedevent,
+        sdl2.SDL_JOYAXISMOTION : on_joyaxismotionevent,
+        sdl2.SDL_JOYBALLMOTION : on_joyballmotionevent,
+        sdl2.SDL_JOYHATMOTION : on_joyhatmotionevent,
+        sdl2.SDL_JOYBUTTONDOWN : on_joybuttonevent,
+        sdl2.SDL_JOYBUTTONUP : on_joybuttonevent,
+        sdl2.SDL_CONTROLLERDEVICEADDED : on_controllerdeviceaddedevent,
+        sdl2.SDL_CONTROLLERDEVICEREMOVED : on_controllerdeviceremovedevent,
+        sdl2.SDL_CONTROLLERAXISMOTION : on_controlleraxismotionevent,
+        sdl2.SDL_CONTROLLERBUTTONDOWN : on_controllerbuttonevent,
+        sdl2.SDL_CONTROLLERBUTTONUP : on_controllerbuttonevent
+    }
+    print('milliseconds since SDL initialization, SDL_EventType, some event-type-specific information (not necessarily exhaustive)')
+    try:
+        while 1:
+            event = sdl2.SDL_Event()
+            # If there is no event for an entire second, we iterate, giving CPython an opportunity to
+            # raise KeyboardInterrupt.
+            if sdl2.SDL_WaitEventTimeout(ctypes.byref(event), 1000):
+                s = '{}, {}'.format(event.generic.timestamp, SDL_EVENT_NAMES.get(event.type, "UNKNOWN"))
+                try:
+                    s += ', {}'.format(event_handlers[event.type](event))
+                except KeyError:
+                    pass
+                print(s)
+                if event.type == sdl2.SDL_QUIT:
+                    break
+    except KeyboardInterrupt:
+        pass
 
 def only_for_our_device(handler):
     def f(self, event):
@@ -111,8 +238,17 @@ class SDLControl:
         Ignored if the value of input_device_name is not None.
         * input_device_name: If specified, input_device_name should be the exact string or UTF8-encoded bytearray
         by which SDL identifies the controller you wish to use, as reported by SDL_JoystickName(..).  For USB devices,
-        this is USB iManufacturer + ' ' + iProduct.  EG, a Sony PS4 controller with the following lsusb -v output would
-        be known to SDL as 'Sony Computer Entertainment Wireless Controller':
+        this is USB iManufacturer + ' ' + iProduct.  (See example below.)
+        * scope_server_host: IP address or hostname of scope server.
+        * zmq_context: If None, one is created.
+        * maximum_portion_of_wallclock_time_allowed_for_axis_commands: Limit the rate at which commands are sent to the scope
+        in response to controller axis motion such that the scope such that the scope is busy processing those commands no more
+        than this fraction of the time.
+        * maximum_axis_command_cool_off: The maximum number of milliseconds to defer issuance of scope commands in response
+        to controller axis motion (in order to enforce maximum_portion_of_wallclock_time_allowed_for_axis_commands).
+
+        For example, a Sony PS4 controller with the following lsusb -v output would be known to SDL as 'Sony Computer
+        Entertainment Wireless Controller':
 
         Bus 003 Device 041: ID 054c:05c4 Sony Corp.
         Device Descriptor:
@@ -133,7 +269,7 @@ class SDLControl:
         ...
 
         Additionally, sdl_control.enumerate_devices(), a module function, returns a list of the currently available
-        SDL joystick and gamepad input devices, in the order by which SDL knows them.  So, if you know that
+        SDL joystick and game controller input devices, in the order by which SDL knows them.  So, if you know that
         your input device is a Logilech something-or-other, and sdl_control.enumerate_devices() returns the following:
         [
             'Nintenbo Olympic Sport Mat v3.5',
@@ -146,48 +282,10 @@ class SDLControl:
         ]
         You will therefore want to specify input_device_index=4 or
         input_device_name='Logilech SixThousandAxis KiloButtonPad With Haptic Feedback Explosion'
-
-        * scope_server_host: IP address or hostname of scope server.
-        * zmq_context: If None, one is created.
-        * maximum_portion_of_wallclock_time_allowed_for_axis_commands: Limit the rate at which commands are sent to the scope
-        in response to controller axis motion such that the scope such that the scope is busy processing those commands no more
-        than this fraction of the time.
-        * maximum_axis_command_cool_off: The maximum number of milliseconds to defer issuance of scope commands in response
-        to controller axis motion (in order to enforce maximum_portion_of_wallclock_time_allowed_for_axis_commands).
         '''
         assert 0 < maximum_portion_of_wallclock_time_allowed_for_axis_commands <= 1
-        if input_device_name is None and int(input_device_index) != input_device_index:
-            raise ValueError('If input_device_name is not specified, the value supplied for input_device_index must be an integer.')
         init_sdl()
-        input_device_count = sdl2.SDL_NumJoysticks()
-        if input_device_count == 0:
-            raise RuntimeError('According to SDL, there are no joysticks/gamepads attached.')
-        if input_device_name is None:
-            if not 0 <= input_device_index < input_device_count:
-                isare, ssuffix = ('is', '') if input_device_count == 1 else ('are', 's')
-                e = ('According to SDL, there {0} {1} joystick{2}/gamepad{2} attached.  Therefore, input_device_index must be '
-                     'an integer in the closed interval [0, {3}], which the supplied value, {4}, is not.')
-                raise ValueError(e.format(isare, input_device_count, ssuffix, input_device_count - 1, input_device_index))
-            input_device_name = sdl2.SDL_JoystickNameForIndex(input_device_index)
-        else:
-            if isinstance(input_device_name, str):
-                input_device_name = input_device_name.encode('utf-8')
-            else:
-                input_device_name = bytes(input_device_name)
-            for sdl_dev_idx in range(sdl2.SDL_NumJoysticks()):
-                if sdl2.SDL_JoystickNameForIndex(sdl_dev_idx) == input_device_name:
-                    input_device_index = sdl_dev_idx
-                    break
-            else:
-                raise ValueError('No connected joystick or gamepad device recognized by SDL has the name "{}".'.format(input_device_name.decode('utf-8')))
-        self.device_is_game_controller = bool(sdl2.SDL_IsGameController(input_device_index))
-        self.device = (sdl2.SDL_GameControllerOpen if self.device_is_game_controller else sdl2.SDL_JoystickOpen)(input_device_index)
-        if not self.device:
-            raise RuntimeError('Failed to open {} at device index {} with name "{}".'.format(
-                'game controller' if self.device_is_game_controller else 'joystick',
-                input_device_index,
-                input_device_name.decode('utf-8'))
-            )
+        self.device, self.device_is_game_controller = open_device(input_device_index, input_device_name)
         if self.device_is_game_controller:
             self.jdevice = sdl2.SDL_GameControllerGetJoystick(self.device)
         else:
@@ -227,6 +325,11 @@ class SDLControl:
                 sdl2.SDL_JOYBUTTONDOWN : self._on_button,
                 sdl2.SDL_JOYBUTTONUP : self._on_button
             })
+
+    def __del__(self):
+        if self.device:
+            (sdl2.SDL_GameControllerClose if self.device_is_game_controller else sdl2.SDL_JoystickClose)(self.device)
+            self.device = None
 
     def event_loop(self):
         global SDL_EVENT_LOOP_IS_RUNNING
@@ -278,10 +381,10 @@ class SDLControl:
     def _on_button(self, event):
         if self.device_is_game_controller:
             idx = event.cbutton.button
-            state = event.cbutton.state == sdl2.SDL_PRESSED
+            state = bool(event.cbutton.state)
         else:
             idx = event.jbutton.button
-            state = event.jbutton.state == sdl2.SDL_PRESSED
+            state = bool(event.jbutton.state)
         # TODO: something in response to button presses
 
     @only_for_our_device
@@ -297,7 +400,10 @@ class SDLControl:
         elif not self._axes_throttle_delay_timer_set:
             with self._axes_throttle_delay_lock:
                 defer_ticks = max(1, self._next_axes_tick - curr_ticks)
-                self.SDL_AddTimer(d, self._c_on_axes_throttle_delay_expired_timer_callback, ctypes.c_void_p(0))
+                if not self.SDL_AddTimer(d, self._c_on_axes_throttle_delay_expired_timer_callback, ctypes.c_void_p(0)):
+                    sdl_e = sdl2.SDL_GetError()
+                    sdl_e = sdl_e.decode('utf-8') if sdl_e else 'UNKNOWN ERROR'
+                    raise RuntimeError('Failed to set timer: {}'.format(sdl_e))
                 self._axes_throttle_delay_timer_set = True
 
     def _on_axes_throttle_delay_expired_timer_callback(self, interval, _):
@@ -339,35 +445,6 @@ class SDLControl:
         self._next_axes_tick = sdl2.SDL_GetTicks() + min(
             command_ticks * self.throttle_delay_command_time_ratio,
             self.maximum_axis_command_cool_off)
-
-if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser(epilog='Note: Either device name/index or --list must be supplied as arguments, but not both.')
-    parser.add_argument('--scope', '-s', default='127.0.0.1', help='Hostname or IP address of the scope server.  Defaults to "127.0.0.1".')
-    parser.add_argument(
-        '--enable-warnings',
-        '-w', 
-        action='store_true',
-        help='Print warnings to stderr when unhandled events are received.')
-    parserg = parser.add_mutually_exclusive_group(required=True)
-    parserg.add_argument(
-        '--list',
-        '-l',
-        action='store_true',
-        help="Print a list of the detected, acceptable SDL devices' indexes and names, with one device per line."
-    )
-    parserg.add_argument('device', nargs='?', help='SDL input device name or index.')
-    args = parser.parse_args()
-    if args.list:
-        for idx, name in enumerate(enumerate_devices()):
-            print('{}: "{}"'.format(idx, name))
-    else:
-        if args.device.isdigit():
-            sdlc = SDLControl(input_device_index=int(args.device), scope_server_host=args.scope)
-        else:
-            sdlc = SDLControl(input_device_name=args.device, scope_server_host=args.scope)
-        sdlc.warnings_enabled = args.enable_warnings
-        sdlc.event_loop()
 
 SDL_EVENT_NAMES = {
     sdl2.SDL_APP_DIDENTERBACKGROUND : 'SDL_APP_DIDENTERBACKGROUND',
@@ -413,3 +490,90 @@ SDL_EVENT_NAMES = {
     sdl2.SDL_TEXTINPUT : 'SDL_TEXTINPUT',
     sdl2.SDL_WINDOWEVENT : 'SDL_WINDOWEVENT'
 }
+
+SDL_CONTROLLER_AXIS_NAMES = {
+    sdl2.SDL_CONTROLLER_AXIS_INVALID : 'SDL_CONTROLLER_AXIS_INVALID',
+    sdl2.SDL_CONTROLLER_AXIS_LEFTX : 'SDL_CONTROLLER_AXIS_LEFTX',
+    sdl2.SDL_CONTROLLER_AXIS_LEFTY : 'SDL_CONTROLLER_AXIS_LEFTY',
+    sdl2.SDL_CONTROLLER_AXIS_RIGHTX : 'SDL_CONTROLLER_AXIS_RIGHTX',
+    sdl2.SDL_CONTROLLER_AXIS_RIGHTY : 'SDL_CONTROLLER_AXIS_RIGHTY',
+    sdl2.SDL_CONTROLLER_AXIS_TRIGGERLEFT : 'SDL_CONTROLLER_AXIS_TRIGGERLEFT',
+    sdl2.SDL_CONTROLLER_AXIS_TRIGGERRIGHT : 'SDL_CONTROLLER_AXIS_TRIGGERRIGHT',
+    sdl2.SDL_CONTROLLER_AXIS_MAX : 'SDL_CONTROLLER_AXIS_MAX'
+}
+
+SDL_CONTROLLER_BUTTON_NAMES = {
+    sdl2.SDL_CONTROLLER_BUTTON_INVALID : 'SDL_CONTROLLER_BUTTON_INVALID',
+    sdl2.SDL_CONTROLLER_BUTTON_A : 'SDL_CONTROLLER_BUTTON_A',
+    sdl2.SDL_CONTROLLER_BUTTON_B : 'SDL_CONTROLLER_BUTTON_B',
+    sdl2.SDL_CONTROLLER_BUTTON_X : 'SDL_CONTROLLER_BUTTON_X',
+    sdl2.SDL_CONTROLLER_BUTTON_Y : 'SDL_CONTROLLER_BUTTON_Y',
+    sdl2.SDL_CONTROLLER_BUTTON_BACK : 'SDL_CONTROLLER_BUTTON_BACK',
+    sdl2.SDL_CONTROLLER_BUTTON_GUIDE : 'SDL_CONTROLLER_BUTTON_GUIDE',
+    sdl2.SDL_CONTROLLER_BUTTON_START : 'SDL_CONTROLLER_BUTTON_START',
+    sdl2.SDL_CONTROLLER_BUTTON_LEFTSTICK : 'SDL_CONTROLLER_BUTTON_LEFTSTICK',
+    sdl2.SDL_CONTROLLER_BUTTON_RIGHTSTICK : 'SDL_CONTROLLER_BUTTON_RIGHTSTICK',
+    sdl2.SDL_CONTROLLER_BUTTON_LEFTSHOULDER : 'SDL_CONTROLLER_BUTTON_LEFTSHOULDER',
+    sdl2.SDL_CONTROLLER_BUTTON_RIGHTSHOULDER : 'SDL_CONTROLLER_BUTTON_RIGHTSHOULDER',
+    sdl2.SDL_CONTROLLER_BUTTON_DPAD_UP : 'SDL_CONTROLLER_BUTTON_DPAD_UP',
+    sdl2.SDL_CONTROLLER_BUTTON_DPAD_DOWN : 'SDL_CONTROLLER_BUTTON_DPAD_DOWN',
+    sdl2.SDL_CONTROLLER_BUTTON_DPAD_LEFT : 'SDL_CONTROLLER_BUTTON_DPAD_LEFT',
+    sdl2.SDL_CONTROLLER_BUTTON_DPAD_RIGHT : 'SDL_CONTROLLER_BUTTON_DPAD_RIGHT',
+    sdl2.SDL_CONTROLLER_BUTTON_MAX : 'SDL_CONTROLLER_BUTTON_MAX'
+}
+
+SDL_HAT_DIRECTION_NAMES = {
+    sdl2.SDL_HAT_LEFTUP : 'SDL_HAT_LEFTUP',
+    sdl2.SDL_HAT_UP : 'SDL_HAT_UP',
+    sdl2.SDL_HAT_RIGHTUP : 'SDL_HAT_RIGHTUP',
+    sdl2.SDL_HAT_LEFT : 'SDL_HAT_LEFT',
+    sdl2.SDL_HAT_CENTERED : 'SDL_HAT_CENTERED',
+    sdl2.SDL_HAT_RIGHT : 'SDL_HAT_RIGHT',
+    sdl2.SDL_HAT_LEFTDOWN : 'SDL_HAT_LEFTDOWN',
+    sdl2.SDL_HAT_DOWN : 'SDL_HAT_DOWN',
+    sdl2.SDL_HAT_RIGHTDOWN : 'SDL_HAT_RIGHTDOWN'
+}
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(epilog='Note: Either device_name/index, --list (-l), or --dump-sdl-input (-d) device_name/index must be supplied.')
+    parser.add_argument('--scope', '-s', default='127.0.0.1', help='Hostname or IP address of the scope server.  Defaults to "127.0.0.1".')
+    parser.add_argument(
+        '--enable-warnings',
+        '-w', 
+        action='store_true',
+        help='Print warnings to stderr when unhandled events are received.')
+    parserg = parser.add_mutually_exclusive_group(required=True)
+    parserg.add_argument(
+        '--list',
+        '-l',
+        action='store_true',
+        help='For each detected SDL joystick and game controller, print a line containing "index, type, joystick name, game controller name".  '
+             'The game controller name field is omitted for joysticks that are not also game controllers (all game controllers are joysticks, but '
+             'the reverse is not always true).  Then exit.  No connection to the scope server is established.'
+    )
+    parserg.add_argument(
+        '--dump-sdl-input',
+        '-d',
+        metavar='DEVICE_NAME_OR_INDEX',
+        help='Print SDL input from the specified device, formatted for human consumption, to stdout.  Exit gracefully upon '
+             'ctrl-c.  Nothing is done with the input aside from printing it to stdout, and no connection to the scope server '
+             'is established.'
+    )
+    parserg.add_argument('device', metavar='DEVICE_NAME_OR_INDEX', nargs='?', help='SDL input device name or index.')
+    args = parser.parse_args()
+    if args.list:
+        for cols in enumerate_devices():
+            print(', '.join(str(col) for col in cols))
+    elif args.dump_sdl_input is not None:
+        if args.dump_sdl_input.isdigit():
+            dump_input(input_device_index=int(args.dump_sdl_input))
+        else:
+            dump_input(input_device_name=args.dump_sdl_input)
+    else:
+        if args.device.isdigit():
+            sdlc = SDLControl(input_device_index=int(args.device), scope_server_host=args.scope)
+        else:
+            sdlc = SDLControl(input_device_name=args.device, scope_server_host=args.scope)
+        sdlc.warnings_enabled = args.enable_warnings
+        sdlc.event_loop()
