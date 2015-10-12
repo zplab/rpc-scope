@@ -139,19 +139,19 @@ def dump_input(input_device_index=0, input_device_name=None):
     init_sdl()
     used_idx_and_name = [None, None]
     device, device_is_game_controller = open_device(input_device_index, input_device_name, used_idx_and_name)
+    device_id = sdl2.SDL_JoystickInstanceID(sdl2.SDL_GameControllerGetJoystick(device) if device_is_game_controller else device)
     if device_is_game_controller:
-        s = 'Opened game controller, c_name "{}", j_name "{}", idx {}, c_id {}, j_id {}'.format(
-            sdl2.SDL_GameControllerName(device),
-            used_idx_and_name[1],
+        s = 'Opened game controller, c_name "{}", j_name "{}", idx {}, j_id {}'.format(
+            sdl2.SDL_GameControllerName(device).decode('utf-8'),
+            used_idx_and_name[1].decode('utf-8'),
             used_idx_and_name[0],
-            device,
-            sdl2.SDL_GameControllerGetJoystick(device)
+            device_id
         )
     else:
         s = 'Opened joystick, j_name "{}", idx {}, j_id {}'.format(
-            used_idx_and_name[1],
+            used_idx_and_name[1].decode('utf-8'),
             used_idx_and_name[0],
-            device
+            device_id
         )
     print(s)
     def on_joydeviceaddedevent(event):
@@ -200,7 +200,7 @@ def dump_input(input_device_index=0, input_device_name=None):
         sdl2.SDL_CONTROLLERBUTTONDOWN : on_controllerbuttonevent,
         sdl2.SDL_CONTROLLERBUTTONUP : on_controllerbuttonevent
     }
-    print('milliseconds since SDL initialization, SDL_EventType, some event-type-specific information (not necessarily exhaustive)')
+    print('# milliseconds since SDL initialization, SDL_EventType, some event-type-specific information (not necessarily exhaustive)')
     try:
         while 1:
             event = sdl2.SDL_Event()
@@ -214,9 +214,13 @@ def dump_input(input_device_index=0, input_device_name=None):
                     pass
                 print(s)
                 if event.type == sdl2.SDL_QUIT:
+                    print('# SDL_QUIT received.  Exiting...')
+                    break
+                if event.type == sdl2.SDL_JOYDEVICEREMOVED and event.jdevice.which == device_id:
+                    print('# Our SDL input device has been disconnected.  Exiting...')
                     break
     except KeyboardInterrupt:
-        pass
+        print('\n# ctrl-c received.  Exiting...')
 
 def only_for_our_device(handler):
     def f(self, event):
