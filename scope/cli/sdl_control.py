@@ -42,11 +42,14 @@ DEFAULT_MAX_AXIS_COMMAND_COOL_OFF = 500
 AXES_THROTTLE_DELAY_EXPIRED_EVENT = sdl2.SDL_RegisterEvents(1)
 COARSE_DEMAND_FACTOR = 20
 FINE_DEMAND_FACTOR = 1
+Z_DEMAND_FACTOR = 0.5
 AXES_MAP = {
     sdl2.SDL_CONTROLLER_AXIS_LEFTX : lambda self, demand: self.scope.stage.move_along_x(-demand * COARSE_DEMAND_FACTOR),
     sdl2.SDL_CONTROLLER_AXIS_LEFTY : lambda self, demand: self.scope.stage.move_along_y(demand * COARSE_DEMAND_FACTOR),
     sdl2.SDL_CONTROLLER_AXIS_RIGHTX : lambda self, demand: self.scope.stage.move_along_x(-demand * FINE_DEMAND_FACTOR),
-    sdl2.SDL_CONTROLLER_AXIS_RIGHTY : lambda self, demand: self.scope.stage.move_along_y(demand * FINE_DEMAND_FACTOR)
+    sdl2.SDL_CONTROLLER_AXIS_RIGHTY : lambda self, demand: self.scope.stage.move_along_y(demand * FINE_DEMAND_FACTOR),
+    sdl2.SDL_CONTROLLER_AXIS_TRIGGERLEFT : lambda self, demand: self.scope.stage.move_along_z(-demand * Z_DEMAND_FACTOR),
+    sdl2.SDL_CONTROLLER_AXIS_TRIGGERRIGHT : lambda self, demand: self.scope.stage.move_along_z(demand * Z_DEMAND_FACTOR)
 }
 
 def init_sdl():
@@ -387,7 +390,11 @@ class SDLControl:
         else:
             idx = event.jbutton.button
             state = bool(event.jbutton.state)
-        # TODO: something in response to button presses
+        if idx == sdl2.SDL_CONTROLLER_BUTTON_A:
+            # Hardcode ps4 X button to stop all stage movement
+            self.scope.stage.stop_x()
+            self.scope.stage.stop_y()
+            self.scope.stage.stop_z()
 
     @only_for_our_device
     def _on_axis_motion(self, event):
