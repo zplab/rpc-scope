@@ -103,7 +103,7 @@ class ObjectiveTurret(stand.DM6000Device):
             return int(mag)
 
     def get_magnification_values(self):
-        return list(sorted(self._mags_to_positions.keys()))
+        return list(sorted(filter(lambda m: m is not None, self._mags_to_positions.keys())))
 
     def get_safe_mode(self):
         '''True if the microscope must be explicitly set to "dry" or "immersion" mode before changing to
