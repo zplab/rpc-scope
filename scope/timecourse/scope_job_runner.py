@@ -23,6 +23,29 @@ STATUS_SUSPENDED = 'suspended'
 MAIL_RELAY = 'mailrelay.wustl.edu'
 MAIL_SENDER = 'scope-daemon@zplab.wustl.edu'
 
+def main(timepoint_function):
+    """Example main function designed to interact with the job running daemon, which
+    starts a process with the timestamp of the scheduled start time as the first
+    argument, and expects stdout to contain the timestamp of the next scheduled
+    run-time.
+
+    Parameters:
+        timepoint_function: function to call to do whatever the job is supposed
+            to do during its invocation. Usually it will be the run_timepoint
+            method of a TimepointHandler subclass. The function must return
+            the number of seconds the job-runner should wait before running
+            the job again. If None is returned, then the job will not be re-run.
+            The scheduled starting timestamp will be passed to timepoint_function
+            as a parameter.
+    """
+    if len(sys.argv) > 1:
+        scheduled_start = float(sys.argv[1])
+    else:
+        scheduled_start = time.time()
+    next_run_time = timepoint_function(scheduled_start)
+    if next_run_time:
+        print(next_run_time)
+
 class JobRunner(base_daemon.Runner):
     def __init__(self, backingfile_path, jobfile_path, pidfile_path):
         super().__init__(name='Scope Job Manager', pidfile_path=pidfile_path)

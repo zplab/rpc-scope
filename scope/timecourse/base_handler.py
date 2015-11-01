@@ -32,31 +32,10 @@ from ..util import json_encode
 from ..util import threaded_image_io
 from ..util import log_util
 
-def main(timepoint_function):
-    """Main function designed to interact with the job running daemon, which
-    starts a process with the timestamp of the scheduled start time as the first
-    argument, and expects stdout to contain the timestamp of the next scheduled
-    run-time.
-
-    Parameters:
-        timepoint_function: function to call to do whatever the job is supposed
-            to do during its invocation. Usually it will be the run_timepoint
-            method of a TimepointHandler subclass. The function must return
-            the number of seconds the job-runner should wait before running
-            the job again. If None is returned, then the job will not be re-run.
-            The scheduled starting timestamp will be passed to timepoint_function
-            as a parameter.
-    """
-    if len(sys.argv) > 1:
-        scheduled_start = float(sys.argv[1])
-    else:
-        scheduled_start = time.time()
-    next_run_time = timepoint_function(scheduled_start)
-    if next_run_time:
-        print(next_run_time)
-
 class TimepointHandler:
-    def __init__(self, data_dir, io_threads=4, loglevel=logging.INFO, scope_host='127.0.0.1'):
+    IMAGE_COMPRESSION = threaded_image_io.COMPRESSION.DEFAULT
+
+    def __init__(self, data_dir, io_threads=4, loglevel=logging.INFO, scope_host='127.0.0.1', dry_run=False):
         """Setup the basic code to take a single timepoint from a timecourse experiment.
 
         Parameters:
@@ -80,12 +59,14 @@ class TimepointHandler:
                 self.scope.camera.return_to_default_state()
         else:
             self.scope = None
-        self.image_io = threaded_image_io.ThreadedIO(io_threads)
+        self.write_files = not dry_run
         self.logger = log_util.get_logger(str(data_dir))
         self.logger.setLevel(loglevel)
-        handler = logging.FileHandler(str(self.data_dir/'acquisitions.log'))
-        handler.setFormatter(log_util.get_formatter())
-        self.logger.addHandler(handler)
+        if self.write_files:
+            self.image_io = threaded_image_io.ThreadedIO(io_threads)
+            handler = logging.FileHandler(str(self.data_dir/'acquisitions.log'))
+            handler.setFormatter(log_util.get_formatter())
+            self.logger.addHandler(handler)
 
     def run_timepoint(self, scheduled_start):
         try:
@@ -106,8 +87,9 @@ class TimepointHandler:
             self.finalize_timepoint()
             self.end_time = time.time()
             self.experiment_metadata.setdefault('durations', []).append(self.end_time - self.start_time)
-            with self.experiment_metadata_path.open('w') as f:
-                json_encode.encode_legible_to_file(self.experiment_metadata, f)
+            if self.write_files:
+                with self.experiment_metadata_path.open('w') as f:
+                    json_encode.encode_legible_to_file(self.experiment_metadata, f)
             run_again = self.skip_positions != self.positions.keys() # don't run again if we're skipping all the positions
             self.logger.info('Timepoint {} ended ({:.0f} minutes after starting)', self.timepoint_prefix,
                              (time.time()-self.start_time)/60)
@@ -160,13 +142,14 @@ class TimepointHandler:
         images, image_names, new_metadata = self.acquire_images(position_name, position_dir,
             position_metadata)
         image_paths = [position_dir / (self.timepoint_prefix + ' ' + name) for name in image_names]
-        self.image_io.write(images, image_paths)
         if new_metadata is None:
             new_metadata = {}
         new_metadata['timestamp'] = timestamp
         position_metadata.append(new_metadata)
-        with metadata_path.open('w') as f:
-             json_encode.encode_legible_to_file(position_metadata, f)
+        if self.write_files:
+            self.image_io.write(images, image_paths, self.IMAGE_COMPRESSION)
+            with metadata_path.open('w') as f:
+                 json_encode.encode_legible_to_file(position_metadata, f)
 
     def acquire_images(self, position_name, position_dir, position_metadata):
         """Override this method in a subclass to define the image-acquisition sequence.
@@ -204,3 +187,42 @@ class TimepointHandler:
                 position_metadata[-1].
         """
         raise NotImplementedError()
+
+    @classmethod
+    def main(cls, timepoint_dir=None, **cls_init_args):
+        """Main method to run a timepoint.
+
+        Parse sys.argv to find an (optional) scheduled_start time as a positional
+        argument. Any arguments that contain an '=' will be assumed to be
+        python variable definitions to pass to the class init method. (Leading
+        '-' or '--' will be stripped, and internal '-'s will be converted to '_'.)
+
+        e.g. this allows the following usage: ./acquire.py --dry-run=True
+
+        Parameters:
+            timepoint_dir: location of timepoint directory. If not specified, default
+                to the parent dir of the file that defines the class that this
+                method is called on.
+            **cls_init_args: dict of arguments to pass to the class init method.
+        """
+        if timepoint_dir is None:
+            timepoint_dir = pathlib.Path(inspect.getfile(cls)).parent
+        scheduled_start = None
+        for arg in sys.argv[1:]:
+            if arg.count('='):
+                while arg.startswith('-'):
+                    arg = arg[1:]
+                arg = arg.replace('-', '_')
+                exec(arg, {}, cls_init_args)
+            elif scheduled_start is None:
+                scheduled_start = float(arg)
+            else:
+                raise ValueError('More than one schedule start time provided')
+
+        if scheduled_start is None:
+            scheduled_start = time.time()
+        handler = cls(timepoint_dir, **cls_init_args)
+        next_run_time = handler.run_timepoint(scheduled_start)
+        if next_run_time:
+            print(next_run_time)
+

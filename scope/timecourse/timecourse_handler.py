@@ -22,13 +22,13 @@
 #
 # Authors: Erik Hvatum <ice.rikh@gmail.com>, Zach Pincus <zpincus@wustl.edu>
 
-import pathlib
 import numpy
-import inspect
 
 from . import base_handler
 from ..client_util import autofocus
 from ..client_util import calibrate
+
+from ..util.threaded_image_io import COMPRESSION
 
 class BasicAcquisitionHandler(base_handler.TimepointHandler):
     """Base class for most timecourse acquisition needs.
@@ -86,6 +86,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     PIXEL_READOUT_RATE = '100 MHz'
     USE_LAST_FOCUS_POSITION = True
     INTERVAL_MODE = 'scheduled start'
+    IMAGE_COMPRESSION = COMPRESSION.DEFAULT # useful options include PNG_FAST, PNG_NONE, TIFF_NONE
 
     def configure_additional_acquisition_steps(self):
         """Add more steps to the acquisition_sequencer's sequence as desired,
@@ -242,9 +243,3 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         if self.should_skip(position_dir, position_metadata, images):
             self.skip_positions.append(position_name)
         return images, self.image_names, metadata
-
-    @classmethod
-    def main(cls):
-        data_dir = pathlib.Path(inspect.getfile(cls)).parent
-        handler = cls(data_dir)
-        base_handler.main(handler.run_timepoint)

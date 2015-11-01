@@ -29,7 +29,8 @@ import math
 from ..util import json_encode
 
 handler_template = string.Template(
-'''from scope.timecourse import timecourse_handler
+'''import pathlib
+from scope.timecourse import timecourse_handler
 
 class Handler(timecourse_handler.BasicAcquisitionHandler):
     FILTER_CUBE = $filter_cube
@@ -38,6 +39,7 @@ class Handler(timecourse_handler.BasicAcquisitionHandler):
     PIXEL_READOUT_RATE = '100 MHz'
     USE_LAST_FOCUS_POSITION = True
     INTERVAL_MODE = 'scheduled start'
+    IMAGE_COMPRESSION = timecourse_handler.COMPRESSION.DEFAULT # useful options include PNG_FAST, PNG_NONE, TIFF_NONE
 
     def configure_additional_acquisition_steps(self):
         """Add more steps to the acquisition_sequencer's sequence as desired,
@@ -66,7 +68,9 @@ class Handler(timecourse_handler.BasicAcquisitionHandler):
         return $run_interval
 
 if __name__ == '__main__':
-    Handler.main()
+    # note: can add any desired keyword arguments to the Handler init method
+    # to the below call to main(), which is defined by scope.timecourse.base_handler.TimepointHandler
+    Handler.main(pathlib.Path(__file__).parent)
 ''')
 
 def create_acquire_file(data_dir, run_interval, filter_cube, fluorescence_flatfield_lamp=None):
