@@ -24,6 +24,7 @@
 
 import collections
 
+from ...messaging import message_device
 from . import stand
 from . import microscopy_method_names
 
@@ -44,7 +45,14 @@ class ObjectiveTurret(stand.DM6000Device):
     turret is between positions when it is in the process of responding to a position change request and also when
     manually placed there by physical intervention.'''
     def _setup_device(self):
-        self.set_safe_mode(False)
+        self._has_safe_mode = True
+        try:
+            self.set_safe_mode(False)
+        except message_device.LeicaError as e:
+            if e.response.header == '76925':
+                self._has_safe_mode = False
+            else:
+                raise
         self._minp = int(self.send_message(GET_MIN_POS_OBJ, async=False, intent="get minimum objective turret position").response)
         self._maxp = int(self.send_message(GET_MAX_POS_OBJ, async=False, intent="get maximum objective turret position").response)
         self._mags = [None for i in range(self._maxp + 1)]
@@ -105,19 +113,26 @@ class ObjectiveTurret(stand.DM6000Device):
     def get_magnification_values(self):
         return list(sorted(filter(lambda m: m is not None, self._mags_to_positions.keys())))
 
+    def get_has_safe_mode(self):
+        return self._has_safe_mode
+
     def get_safe_mode(self):
         '''True if the microscope must be explicitly set to "dry" or "immersion" mode before changing to
         a dry or immersion lens.'''
-        return self.send_message(GET_MODE, async=False, intent="get objective turret mode").response == '1'
+        if self._has_safe_mode:
+            return self.send_message(GET_MODE, async=False, intent="get objective turret mode").response == '1'
+        else:
+            return False
 
     def set_safe_mode(self, mode):
         '''If set to True, the microscope must be explicitly set to "dry" or "immersion" mode before changing to
         a dry or immersion lens.'''
-        if mode:
-            leica_mode = 1
-        else:
-            leica_mode = 0
-        self.send_message(SET_MODE, leica_mode, intent="set objective turret mode")
+        if self._has_safe_mode:
+            if mode:
+                leica_mode = 1
+            else:
+                leica_mode = 0
+            self.send_message(SET_MODE, leica_mode, intent="set objective turret mode")
 
     def get_immersion_mode(self):
         '''True if the microscope is in immersion mode.'''

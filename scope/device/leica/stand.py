@@ -28,6 +28,7 @@ from ...messaging import message_device
 from ...util import property_device
 from . import microscopy_method_names
 
+GET_MODUL_TYPE = 70001
 GET_ALL_METHODS = 70026
 GET_ACT_METHOD = 70028
 SET_ACT_METHOD = 70029
@@ -72,6 +73,15 @@ class Stand(DM6000Device):
     def _setup_device(self):
         self.send_message(SET_STAND_EVENT_SUBSCRIPTIONS, 1, 0, 0, 0, 0, 0, 0, 0, async=False, intent="subscribe to stand method change events")
         self.register_event_callback(GET_ACT_METHOD, self._on_method_event)
+        r = self.send_message(GET_MODUL_TYPE, async=False, intent="get master model name and list of available function unit IDs").response.split(' ')
+        self._model_name = r[0]
+        self._available_function_unit_IDs = [int(rv) for rv in r[1:]]
+
+    def get_model_name(self):
+        return self._model_name
+
+    def get_available_function_unit_IDs(self):
+        return self._available_function_unit_IDs
 
     def _on_method_event(self, response):
         self._update_property('active_microscopy_method', microscopy_method_names.NAMES[int(response.response)])

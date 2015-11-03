@@ -53,10 +53,5 @@ scope_configuration = dict(
     Peltier = dict(
         SERIAL_PORT = '/dev/ttyPeltier',
         SERIAL_BAUD = 2400
-    ),
-
-    EhFootPedals = dict(
-        SERIAL_PORT = '/dev/ttyPedals',
-        SERIAL_BAUD = 115200
-    ),
+    )
 )
