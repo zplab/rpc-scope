@@ -103,7 +103,7 @@ def main(argv):
     parser_restart = subparsers.add_parser('restart', help='restart the microscope server, if running')
     parser_restart.add_argument('-f', '--force', action='store_true', help='forcibly kill the server process')
     parser_status = subparsers.add_parser('status', help='report whether the microscope server is running')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     try:
         runner, log_dir, config = make_runner()
@@ -133,4 +133,4 @@ def main(argv):
 
 if __name__ == '__main__':
     import sys
-    sys.exit(main(sys.argv))
+    sys.exit(main(sys.argv[1:]))
