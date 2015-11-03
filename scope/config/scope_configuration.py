@@ -60,6 +60,9 @@ def get_config():
 def create_config_file_if_necessary():
     if CONFIG_FILE is not None:
         config_file = pathlib.Path(CONFIG_FILE)
+        config_file_dir = config_file.parent()
+        if not config_file_dir.exists():
+            config_file_dir.mkdir(parents=True)
         if not config_file.exists():
             shutil.copyfile(str(_get_default_config_path()), str(config_file))
 
