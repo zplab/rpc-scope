@@ -409,7 +409,7 @@ class Camera(property_device.PropertyDevice):
 
     def set_overlap_enabled(self, enabled):
         """Enable or disable overlap mode."""
-        if self.get_shutter_mode() == 'Rolling' and self.get_trigger_mode() == 'Software' and enabled=False:
+        if self.get_shutter_mode() == 'Rolling' and self.get_trigger_mode() == 'Software' and enabled==False:
             # Setting overlap mode in software trigger / rolling shutter is an error,
             # but trying to unset it in this mode should not be...
             return
