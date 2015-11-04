@@ -81,7 +81,7 @@ class Stand(LeicaComponent):
         self.register_event_callback(GET_ACT_METHOD, self._on_method_event)
         r = self.send_message(GET_MODUL_TYPE, async=False, intent="get master model name and list of available function unit IDs").response.split(' ')
         self._model_name = r[0]
-        self._available_function_unit_IDs = [int(rv) for rv in r[1:]]
+        self._available_function_unit_IDs = set(int(rv) for rv in r[1:])
 
     def get_model_name(self):
         return self._model_name

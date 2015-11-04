@@ -60,8 +60,12 @@ class Scope(message_device.AsyncDeviceNamespace):
             self.stand = stand.Stand(manager, property_server, property_prefix='scope.stand.')
             self.nosepiece = objective_turret.ObjectiveTurret(manager, property_server, property_prefix='scope.nosepiece.')
             self.stage = stage.Stage(manager, property_server, property_prefix='scope.stage.')
-            self.il = illumination_axes.IL(manager, property_server, property_prefix='scope.il.')
-            self.tl = illumination_axes.TL(manager, property_server, property_prefix='scope.tl.')
+            if all(FU in self.stand.get_available_function_unit_IDs() for FU in [81, 83, 84, 94]):
+                self.il = illumination_axes.DM6000B_IL(manager, property_server, property_prefix='scope.il.')
+                self.tl = illumination_axes.DM6000B_TL(manager, property_server, property_prefix='scope.tl.')
+            else:
+                self.il = illumination_axes.IL(manager, property_server, property_prefix='scope.il.')
+                self.tl = illumination_axes.TL(manager, property_server, property_prefix='scope.tl.')
             self._shutter_openedness_watcher = illumination_axes.ShutterOpenednessWatcher(manager, property_server, property_prefix='scope.')
             has_scope = True
         except SerialException:

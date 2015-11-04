@@ -144,7 +144,23 @@ class _ShutterDevice(stand.LeicaComponent):
     def set_shutter_open(self, shutter_open):
         self.send_message(SET_SHUTTER_LAMP, self._shutter_idx, int(shutter_open), coalesce=False, intent="set shutter openedness")
 
-class IL(_ShutterDevice):
+class IL(stand.LeicaComponent):
+    '''IL represents an interface into elements used in Incident Light (Fluorescence) mode.'''
+    def _setup_device(self):
+        self._filter_cube = FilterCube(self)
+        self.get_filter_cube = self._filter_cube.get_value
+        self.get_filter_cube_values = self._filter_cube.get_recognized_values
+        self._update_property('filter_cube', self.get_filter_cube())
+        self.send_message(SET_IL_TURRET_EVENT_SUBSCRIPTIONS, 1, async=False, intent="subscribe to filter cube turret position change events")
+        self.register_event_callback(GET_POS_IL_TURRET, self._on_turret_pos_event)
+
+    def set_filter_cube(self, cube):
+        self._filter_cube.set_value(cube)
+
+    def _on_turret_pos_event(self, response):
+        self._update_property('filter_cube', response.response[1:].strip())
+
+class DM6000B_IL(_ShutterDevice):
     '''IL represents an interface into elements used in Incident Light (Fluorescence) mode.'''
     _shutter_idx = 1
     # TODO(?): if needed, add DIC fine shearing
@@ -178,6 +194,12 @@ class TL(_ShutterDevice):
     '''IL represents an interface into elements used in Transmitted Light (Brighftield and DIC) mode.'''
     _shutter_idx = 0
     def _setup_device(self):
+        self._update_property('shutter_open', self.get_shutter_open())
+
+class DM6000B_TL(TL):
+    '''IL represents an interface into elements used in Transmitted Light (Brighftield and DIC) mode.'''
+    def _setup_device(self):
+        super()._setup_device()
         self.send_message(SET_KOND_EVENT_SUBSCRIPTIONS, 1, async=False, intent="subscribe to flapping condenser flap events")
         self.register_event_callback(GET_POS_KOND, self._on_condenser_flap_event)
         self._update_property('condenser_retracted', self.get_condenser_retracted())
@@ -187,7 +209,6 @@ class TL(_ShutterDevice):
         self.send_message(SET_APBL_TL_EVENT_SUBSCRIPTIONS, 0, 1, async=False, intent="subscribe to TL aperture diaphragm position change events")
         self.register_event_callback(GET_POS_APBL_TL, self._on_aperture_diaphragm_position_change_event)
         self._update_property('aperture_diaphragm', self.get_aperture_diaphragm())
-        self._update_property('shutter_open', self.get_shutter_open())
 
     def get_condenser_retracted(self):
         '''True: condenser head is deployed, False: condenser head is retracted.'''
