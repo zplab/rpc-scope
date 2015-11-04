@@ -40,7 +40,7 @@ GET_MIN_POS_OBJ = 76038
 GET_MAX_POS_OBJ = 76039
 SET_OBJECTIVE_TURRET_EVENT_SUBSCRIPTIONS = 76003
 
-class ObjectiveTurret(stand.DM6000Device):
+class ObjectiveTurret(stand.LeicaComponent):
     '''Note that objective position is reported as 0 when the objective turret is between positions. The objective
     turret is between positions when it is in the process of responding to a position change request and also when
     manually placed there by physical intervention.'''

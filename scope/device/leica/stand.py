@@ -34,7 +34,7 @@ GET_ACT_METHOD = 70028
 SET_ACT_METHOD = 70029
 SET_STAND_EVENT_SUBSCRIPTIONS = 70003
 
-class DM6000Device(message_device.LeicaAsyncDevice, property_device.PropertyDevice):
+class LeicaComponent(message_device.LeicaAsyncDevice, property_device.PropertyDevice):
     def __init__(self, message_manager, property_server=None, property_prefix=''):
         # init LeicaAsyncDevice last because that calls the subclasses _setup_device() method, which might need
         # access to the property_server etc.
@@ -69,7 +69,7 @@ class DM6000Device(message_device.LeicaAsyncDevice, property_device.PropertyDevi
         super().pop_state()
         self.wait() # no-op if not in async, otherwise wait for all setting to be done.
 
-class Stand(DM6000Device):
+class Stand(LeicaComponent):
     def _setup_device(self):
         self.send_message(SET_STAND_EVENT_SUBSCRIPTIONS, 1, 0, 0, 0, 0, 0, 0, 0, async=False, intent="subscribe to stand method change events")
         self.register_event_callback(GET_ACT_METHOD, self._on_method_event)

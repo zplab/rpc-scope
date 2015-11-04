@@ -132,7 +132,7 @@ class ILFieldWheel(enumerated_properties.DictProperty):
     def _write(self, value):
         self._il.send_message(POS_ABS_LFWHEEL, value, intent="set IL field wheel position")
 
-class _ShutterDevice(stand.DM6000Device):
+class _ShutterDevice(stand.LeicaComponent):
     def get_shutter_open(self):
         '''True: shutter open, False: shutter closed.'''
         shutter_open = self.send_message(GET_SHUTTER_LAMP, async=False, intent="get shutter openedness").response.split(' ')[self._shutter_idx]
@@ -233,7 +233,7 @@ class TL(_ShutterDevice):
         pos_max = int(self.send_message(GET_MAX_POS_APBL_TL, async=False, intent="get aperture diaphragm max position").response)
         return pos_min, pos_max
 
-class ShutterOpenednessWatcher(stand.DM6000Device):
+class ShutterOpenednessWatcher(stand.LeicaComponent):
     def _setup_device(self):
         self.send_message(
             SET_SHUTTER_EVENT_SUBSCRIPTIONS,

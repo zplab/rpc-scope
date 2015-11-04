@@ -92,7 +92,7 @@ Z_SPEED_MM_PER_SECOND_PER_UNIT = 0.1488
 Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT = 1449
 Z_MOVE_FUDGE_FACTOR = 0.056
 
-class Stage(stand.DM6000Device):
+class Stage(stand.LeicaComponent):
     def _setup_device(self):
         self._x_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_X, async=False).response) / 1000
         self._y_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_Y, async=False).response) / 1000
