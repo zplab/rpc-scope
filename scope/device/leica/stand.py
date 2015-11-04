@@ -71,6 +71,12 @@ class LeicaComponent(message_device.LeicaAsyncDevice, property_device.PropertyDe
 
 class Stand(LeicaComponent):
     def _setup_device(self):
+        # If we're talking to a DMi8 that has not received a command since being attached, its first reply contains a leading null byte.  So, we provoke
+        # this reply by issuing an empty command (a carriage return), knowing that we will receive one of two replies: a '99999' or a '\099999'.  Receiving
+        # one removes the expectation of receiving the other.
+        self._message_manager.pending_standalone_responses['9999'].append(lambda response: self._message_manager.pending_standalone_responses.pop('\0999'))
+        self._message_manager.pending_standalone_responses['\0999'].append(lambda response: self._message_manager.pending_standalone_responses.pop('999'))
+        self._message_manager._send_message('\r')
         self.send_message(SET_STAND_EVENT_SUBSCRIPTIONS, 1, 0, 0, 0, 0, 0, 0, 0, async=False, intent="subscribe to stand method change events")
         self.register_event_callback(GET_ACT_METHOD, self._on_method_event)
         r = self.send_message(GET_MODUL_TYPE, async=False, intent="get master model name and list of available function unit IDs").response.split(' ')
