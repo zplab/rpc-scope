@@ -132,7 +132,10 @@ class ILFieldWheel(enumerated_properties.DictProperty):
     def _write(self, value):
         self._il.send_message(POS_ABS_LFWHEEL, value, intent="set IL field wheel position")
 
-class _ShutterDevice(stand.LeicaComponent):
+class _ShutterDeviceMixin:
+    def _setup_device(self):
+        self._update_property('shutter_open', self.get_shutter_open())
+
     def get_shutter_open(self):
         '''True: shutter open, False: shutter closed.'''
         shutter_open = self.send_message(GET_SHUTTER_LAMP, async=False, intent="get shutter openedness").response.split(' ')[self._shutter_idx]
@@ -160,26 +163,20 @@ class IL(stand.LeicaComponent):
     def _on_turret_pos_event(self, response):
         self._update_property('filter_cube', response.response[1:].strip())
 
-class DM6000B_IL(_ShutterDevice):
+class DM6000B_IL(_ShutterDeviceMixin, IL):
     '''IL represents an interface into elements used in Incident Light (Fluorescence) mode.'''
     _shutter_idx = 1
     # TODO(?): if needed, add DIC fine shearing
     def _setup_device(self):
-        self._filter_cube = FilterCube(self)
-        self.get_filter_cube = self._filter_cube.get_value
-        self.get_filter_cube_values = self._filter_cube.get_recognized_values
-        self._update_property('filter_cube', self.get_filter_cube())
+        _ShutterDeviceMixin._setup_device(self)
+        IL._setup_device(self)
         self._field_wheel = ILFieldWheel(self)
         self.get_field_wheel = self._field_wheel.get_value
         self.get_field_wheel_positions = self._field_wheel.get_recognized_values
         self.set_field_wheel = self._field_wheel.set_value
-        self.send_message(SET_IL_TURRET_EVENT_SUBSCRIPTIONS, 1, async=False, intent="subscribe to filter cube turret position change events")
-        self.register_event_callback(GET_POS_IL_TURRET, self._on_turret_pos_event)
-        self._update_property('filter_cube', self.get_filter_cube())
         self.send_message(SET_LFWHEEL_EVENT_SUBSCRIPTIONS, 0, 1, async=False, intent="subscribe to field diaphragm disk position change events")
         self.register_event_callback(GET_POS_LFWHEEL, self._on_lfwheel_position_change_event)
         self._update_property('field_wheel', self.get_field_wheel())
-        self._update_property('shutter_open', self.get_shutter_open())
 
     def set_filter_cube(self, cube):
         self._filter_cube.set_value(cube)
@@ -190,11 +187,11 @@ class DM6000B_IL(_ShutterDevice):
     def _on_lfwheel_position_change_event(self, response):
         self._update_property('field_wheel', self._field_wheel._hw_to_usr[int(response.response)])
 
-class TL(_ShutterDevice):
+class TL(_ShutterDeviceMixin, stand.LeicaComponent):
     '''IL represents an interface into elements used in Transmitted Light (Brighftield and DIC) mode.'''
     _shutter_idx = 0
     def _setup_device(self):
-        self._update_property('shutter_open', self.get_shutter_open())
+        _ShutterDeviceMixin._setup_device(self)
 
 class DM6000B_TL(TL):
     '''IL represents an interface into elements used in Transmitted Light (Brighftield and DIC) mode.'''
