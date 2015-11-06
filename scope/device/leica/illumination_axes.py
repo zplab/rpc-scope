@@ -23,6 +23,7 @@
 # Authors: Erik Hvatum, Zach Pincus
 
 from . import stand
+from ...messaging import message_device
 from ...util import enumerated_properties
 
 # TL and IL shutters
@@ -41,6 +42,8 @@ SET_SHUTTER_EVENT_SUBSCRIPTIONS = 77003
 # documentation for details) we are at least guaranteed to be able
 # to wait for the same number of responses as messages sent, even if we can't
 # match up the precise message and responses. This should be good enough.
+SET_SHUTTER_CTL = 77034
+GET_SHUTTER_CTL = 77035
 
 # filter cube positions
 POS_ABS_IL_TURRET = 78022
@@ -187,11 +190,26 @@ class DM6000B_IL(_ShutterDeviceMixin, IL):
     def _on_lfwheel_position_change_event(self, response):
         self._update_property('field_wheel', self._field_wheel._hw_to_usr[int(response.response)])
 
+# TODO: clean this up once we decide whether we will even use the TL lamp from Leica
+def get_TTL_shutter_control_enabled(self):
+    return bool(int(self.send_message(GET_SHUTTER_CTL, 0, async=False).response.split(' ')[0]))
+
+def set_TTL_shutter_control_enabled(self, enabled):
+    self.send_message(SET_SHUTTER_CTL, int(enabled), 0, async=False)
+
 class TL(_ShutterDeviceMixin, stand.LeicaComponent):
     '''IL represents an interface into elements used in Transmitted Light (Brighftield and DIC) mode.'''
     _shutter_idx = 0
     def _setup_device(self):
         _ShutterDeviceMixin._setup_device(self)
+        # TODO: clean this up once we decide whether we will even use the TL lamp from Leica
+        try:
+            get_TTL_shutter_control_enabled(self)
+            import types
+            self.get_TTL_shutter_control_enabled = types.MethodType(get_TTL_shutter_control_enabled, self)
+            self.set_TTL_shutter_control_enabled = types.MethodType(set_TTL_shutter_control_enabled, self)
+        except message_device.LeicaError:
+            pass
 
 class DM6000B_TL(TL):
     '''IL represents an interface into elements used in Transmitted Light (Brighftield and DIC) mode.'''

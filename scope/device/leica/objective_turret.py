@@ -24,6 +24,7 @@
 
 import collections
 
+from ...config import scope_configuration
 from ...messaging import message_device
 from . import stand
 from . import microscopy_method_names
@@ -65,8 +66,10 @@ class ObjectiveTurret(stand.LeicaComponent):
             self._mags[p] = mag
             self._mags_to_positions[mag].append(p)
 
-        # Ensure that halogen variable spectra correction filter is always set to maximum (least attenuation)
-        self._set_objectives_intensities(255)
+        config = scope_configuration.get_config()
+        if config.Stand.INITIALIZE_ALL_OBJECTIVE_LAMP_INTENSITIES_TO_MAXIMUM:
+            # Ensure that halogen variable spectra correction filter is always set to maximum (least attenuation)
+            self._set_objectives_intensities(255)
 
         self.send_message(SET_OBJECTIVE_TURRET_EVENT_SUBSCRIPTIONS, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, async=False, intent="subscribe to objective turret position change events")
         self.register_event_callback(GET_OBJPAR, self._on_turret_moved_event)

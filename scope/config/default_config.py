@@ -11,7 +11,8 @@ scope_configuration = dict(
 
     Stand = dict(
         SERIAL_PORT = '/dev/ttyScope',
-        SERIAL_BAUD = 115200
+        SERIAL_BAUD = 115200,
+        INITIALIZE_ALL_OBJECTIVE_LAMP_INTENSITIES_TO_MAXIMUM = True
     ),
 
     Camera = dict(

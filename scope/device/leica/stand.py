@@ -75,7 +75,7 @@ class Stand(LeicaComponent):
         # this reply by issuing an empty command (a carriage return), knowing that we will receive one of two replies: a '99999' or a '\099999'.  Receiving
         # one removes the expectation of receiving the other.
         self._message_manager.pending_standalone_responses['9999'].append(lambda response: self._message_manager.pending_standalone_responses.pop('\0999'))
-        self._message_manager.pending_standalone_responses['\0999'].append(lambda response: self._message_manager.pending_standalone_responses.pop('999'))
+        self._message_manager.pending_standalone_responses['\0999'].append(lambda response: self._message_manager.pending_standalone_responses.pop('9999'))
         self._message_manager._send_message('\r')
         self.send_message(SET_STAND_EVENT_SUBSCRIPTIONS, 1, 0, 0, 0, 0, 0, 0, 0, async=False, intent="subscribe to stand method change events")
         self.register_event_callback(GET_ACT_METHOD, self._on_method_event)
