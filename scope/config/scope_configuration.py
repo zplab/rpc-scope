@@ -57,7 +57,7 @@ def get_config():
         if not CONFIG_FILE.exists():
             from . import default_config
             shutil.copyfile(default_config.__file__, str(CONFIG_FILE))
-        module_globals = runpy.run_path(CONFIG_FILE)
+        module_globals = runpy.run_path(str(CONFIG_FILE))
         _CONFIG = ConfigDict(module_globals['scope_configuration'])
     return _CONFIG
 

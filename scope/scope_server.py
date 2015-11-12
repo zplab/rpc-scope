@@ -26,6 +26,7 @@ import zmq
 import time
 import threading
 import json
+import pathlib
 
 from . import scope
 from . import scope_client
@@ -43,7 +44,7 @@ class ScopeServer(base_daemon.Runner):
         self.base_dir = pathlib.Path(scope_configuration.CONFIG_DIR)
         self.log_dir = self.base_dir / 'scope_server_logs'
         self.arg_file = self.base_dir / 'server_options.json'
-        super().__init__(name='Scope Server', pidfile_path=base_dir / 'scope_server.pid')
+        super().__init__(name='Scope Server', pidfile_path=self.base_dir / 'scope_server.pid')
 
     def start(self):
         with self.arg_file.open('r') as f:
@@ -100,7 +101,7 @@ class ScopeServer(base_daemon.Runner):
         self.scope_server = rpc_server.ZMQServer(scope_controller, interrupter,
             addresses['rpc'], context=self.context)
 
-        logger.info('Scope Server Ready (Listening on {})', self.server_host)
+        logger.info('Scope Server Ready (Listening on {})', self.host)
 
     def run_daemon(self):
         try:

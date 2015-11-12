@@ -1,5 +1,5 @@
 import argparse
-import sys
+import traceback
 
 from ..util import json_encode
 from .. import scope_server
@@ -26,7 +26,7 @@ def main(argv):
         if args.command in {'stop', 'restart'}:
             server.stop(args.force)
         if args.command == 'start':
-            with server_arg_file.open('w') as f:
+            with server.arg_file.open('w') as f:
                 json_encode.encode_legible_to_file(dict(public=args.public, verbose=args.verbose), f)
         if args.command in {'start', 'restart'}:
             server.start()

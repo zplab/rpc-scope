@@ -71,7 +71,7 @@ class Runner:
             raise RuntimeError('{} is already running'.format(self.name))
 
         homedir = os.path.expanduser('~')
-        log_dir = os.path.realpath(log_dir)
+        log_dir = os.path.realpath(str(log_dir))
         daemon.prevent_core_dump()
         for sig, handler in DEFAULT_SIGNAL_MAP.items():
             if sig not in signal_map:
