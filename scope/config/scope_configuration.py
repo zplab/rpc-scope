@@ -30,6 +30,9 @@ import runpy
 import pathlib
 import shutil
 
+CONFIG_DIR = pathlib.Path('/usr/local/scope')
+CONFIG_FILE = CONFIG_DIR / 'scope_configuration.py'
+
 def _make_tcp_host(host, port):
     return 'tcp://{}:{}'.format(host, port)
 
@@ -44,30 +47,19 @@ def get_addresses(host=None):
         async_rpc=_make_tcp_host(host, config.Server.ASYNC_RPC_PORT)
      )
 
-CONFIG_FILE = None
 _CONFIG = None
 
 def get_config():
     global _CONFIG
     if _CONFIG is None:
-        if CONFIG_FILE is None:
-            config_file = str(_get_default_config_path())
-        else:
-            config_file = CONFIG_FILE
-        _CONFIG = _load_config(config_file)
+        if not CONFIG_DIR.exists():
+            CONFIG_DIR.mkdir(parents=True)
+        if not CONFIG_FILE.exists():
+            from . import default_config
+            shutil.copyfile(default_config.__file__, str(CONFIG_FILE))
+        module_globals = runpy.run_path(CONFIG_FILE)
+        _CONFIG = ConfigDict(module_globals['scope_configuration'])
     return _CONFIG
-
-def create_config_file_if_necessary():
-    if CONFIG_FILE is not None:
-        config_file = pathlib.Path(CONFIG_FILE)
-        config_file_dir = config_file.parent
-        if not config_file_dir.exists():
-            config_file_dir.mkdir(parents=True)
-        if not config_file.exists():
-            shutil.copyfile(str(_get_default_config_path()), str(config_file))
-
-def _get_default_config_path():
-    return pathlib.Path(__file__).parent / 'default_config.py'
 
 class ConfigDict(dict):
     """dict subclass that supports attribute-style value access, as well
@@ -91,7 +83,3 @@ class ConfigDict(dict):
 
     def __dir__(self):
         return super().__dir__() + list(self.keys())
-
-def _load_config(config_file):
-    module_globals = runpy.run_path(config_file)
-    return ConfigDict(module_globals['scope_configuration'])

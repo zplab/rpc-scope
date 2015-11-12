@@ -51,7 +51,7 @@ DEFAULT_SIGNAL_MAP = {
 class Runner:
     def __init__(self, name, pidfile_path):
         self.name = name
-        self.pidfile = pidlockfile.PIDLockFile(os.path.realpath(pidfile_path), timeout=10)
+        self.pidfile = pidlockfile.PIDLockFile(os.path.realpath(str(pidfile_path)), timeout=10)
 
     def initialize_daemon(self):
         pass

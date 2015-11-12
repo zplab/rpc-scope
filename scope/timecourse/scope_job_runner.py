@@ -47,10 +47,12 @@ def main(timepoint_function):
         print(next_run_time)
 
 class JobRunner(base_daemon.Runner):
-    def __init__(self, backingfile_path, jobfile_path, pidfile_path):
-        super().__init__(name='Scope Job Manager', pidfile_path=pidfile_path)
-        self.jobs = _JobList(backingfile_path)
-        self.current_job = _JobFile(jobfile_path)
+    def __init__(self):
+        self.base_dir = pathlib.Path(scope_configuration.CONFIG_DIR)
+        self.jobs = _JobList(self.base_dir / 'scope_jobs.json')
+        self.current_job = _JobFile(self.base_dir / 'scope_job_current')
+        self.log_dir = self.base_dir / 'scope_job_logs'
+        super().__init__(name='Scope Job Manager', pidfile_path=self.base_dir / 'scope_job_runner.pid')
 
     # THE FOLLOWING FUNCTIONS ARE FOR COMMUNICATING WITH / STARTING A RUNNING DAEMON
     def add_job(self, exec_file, alert_emails, next_run_time='now'):
@@ -183,9 +185,8 @@ class JobRunner(base_daemon.Runner):
         else:
             return 'scheduled in {}'.format(timediff)
 
-
-    def start(self, log_dir, verbose):
-        super().start(log_dir, verbose, SIGINT=self.sigint_handler, SIGHUP=self.sighup_handler)
+    def start(self, verbose):
+        super().start(self.log_dir, verbose, SIGINT=self.sigint_handler, SIGHUP=self.sighup_handler)
 
     def stop(self):
         """Gracefully terminate job daemon.

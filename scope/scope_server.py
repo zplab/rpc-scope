@@ -23,21 +23,65 @@
 # Authors: Zach Pincus
 
 import zmq
+import time
+import threading
+import json
 
-from .simple_rpc import rpc_server, property_server
 from . import scope
+from . import scope_client
+from .simple_rpc import rpc_server
+from .simple_rpc import property_server
 from .util import transfer_ism_buffer
 from .util import logging
+from .util import base_daemon
 from .config import scope_configuration
 
 logger = logging.get_logger(__name__)
 
-class Namespace:
-    pass
+class ScopeServer(base_daemon.Runner):
+    def __init__(self):
+        self.base_dir = pathlib.Path(scope_configuration.CONFIG_DIR)
+        self.log_dir = self.base_dir / 'scope_server_logs'
+        self.arg_file = self.base_dir / 'server_options.json'
+        super().__init__(name='Scope Server', pidfile_path=base_dir / 'scope_server.pid')
 
-class ScopeServer:
-    def __init__(self, host):
-        addresses = scope_configuration.get_addresses(host)
+    def start(self):
+        with self.arg_file.open('r') as f:
+            args = json.load(f)
+        config = scope_configuration.get_config()
+        self.host = config.Server.PUBLICHOST if args['public'] else config.Server.LOCALHOST
+        super().start(self.log_dir, args['verbose'])
+
+    # function is to be run only when NOT running as a daemon
+    def status(self):
+        is_running = self.is_running()
+        if not is_running:
+            print('Microscope server is NOT running.')
+        else:
+            print('Microscope server is running (PID {}).'.format(self.get_pid()))
+            client_tester = ScopeClientTester()
+            connected = lambda: client_tester.connected # wait for connection to be established
+            if _wait_for_it(connected, 'Establishing connection to scope server'):
+                print('Microscope server is responding to new connections.')
+            else:
+                raise RuntimeError('Could not communicate with microscope server')
+
+    def stop(self, force=False):
+        self.assert_daemon()
+        pid = self.get_pid()
+        if force:
+            self.kill() # send SIGKILL -- immeiate exit
+        else:
+            self.terminate() # send SIGTERM -- allow for cleanup
+        exited = lambda: not base_daemon.is_valid_pid(pid) # wait for pid to become invalid (i.e. process no longer is running)
+        if _wait_for_it(exited, 'Waiting for server to terminate'):
+            print('Microscope server is stopped.')
+        else:
+            raise RuntimeError('Could not terminate microscope server')
+
+    # overrides from base_daemon.Runner to implement server behavior
+    def initialize_daemon(self):
+        addresses = scope_configuration.get_addresses(self.host)
         self.context = zmq.Context()
 
         property_update_server = property_server.ZMQServer(addresses['property'], context=self.context)
@@ -56,27 +100,38 @@ class ScopeServer:
         self.scope_server = rpc_server.ZMQServer(scope_controller, interrupter,
             addresses['rpc'], context=self.context)
 
-    def run(self):
+        logger.info('Scope Server Ready (Listening on {})', self.server_host)
+
+    def run_daemon(self):
         try:
             self.scope_server.run()
         finally:
             self.context.term()
 
-def simple_server_main(host, verbose=False):
-    logging.set_verbose(verbose)
-    server = ScopeServer(host)
-    logger.info('Scope Server Ready (Listening on {})', host)
-    try:
-        server.run()
-    except KeyboardInterrupt:
-        return
+class ScopeClientTester(threading.Thread):
+    def __init__(self):
+        self.connected = False
+        super().__init__(daemon=True)
+        self.start()
 
-if __name__ == '__main__':
-    import argparse
-    config = scope_configuration.get_config()
-    parser = argparse.ArgumentParser(description="Run the microscope server")
-    parser.add_argument("--public", action='store_true', help="Allow network connections to the server [default: allow only local connections]")
-    parser.add_argument("--verbose", action='store_true', help="Print human-readable representations of all RPC calls and property state changes to stdout.")
-    args = parser.parse_args()
-    host = config.Server.PUBLICHOST if args.public else config.Server.LOCALHOST
-    simple_server_main(host, verbose=args.verbose)
+    def run(self):
+        scope_client.client_main()
+        self.connected = True
+
+class Namespace:
+    pass
+
+def _wait_for_it(wait_condition, message, wait_time=15, output_interval=0.5, sleep_time=0.1):
+    wait_iters = int(wait_time // sleep_time)
+    output_iters = int(output_interval // sleep_time)
+    condition_true = False
+    print('(' + message + '...', end='', flush=True)
+    for i in range(wait_iters):
+        condition_true = wait_condition()
+        if condition_true:
+            break
+        if i % output_iters == 0:
+            print('.', end='', flush=True)
+        time.sleep(sleep_time)
+    print(')')
+    return condition_true

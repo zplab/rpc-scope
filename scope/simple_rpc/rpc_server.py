@@ -54,6 +54,8 @@ class BaseRPCServer:
                 command, args, kwargs = received
                 logger.debug("Received command: {}\n    args: {}\n    kwargs: {}", command, args, kwargs)
                 self.call(command, args, kwargs)
+            else:
+                logger.debug("_receive() returned None!?")
 
     def call(self, command, args, kwargs):
         """Call the named command with *args and **kwargs"""

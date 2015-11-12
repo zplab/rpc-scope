@@ -1,19 +1,9 @@
 import argparse
-import os.path
 import sys
 import time
 import traceback
 
 from ..timecourse import scope_job_runner
-
-def make_runner(base_dir='~'):
-    base_dir = os.path.realpath(os.path.expanduser(base_dir))
-    backingfile_path = os.path.join(base_dir, 'scope_jobs.json')
-    jobfile_path = os.path.join(base_dir, 'scope_job_current')
-    pidfile_path = os.path.join(base_dir, 'scope_job_runner.pid')
-    log_dir = os.path.join(base_dir, 'scope_job_logs')
-    runner = scope_job_runner.JobRunner(backingfile_path, jobfile_path, pidfile_path)
-    return runner, log_dir
 
 def parse_delay(arg):
     vals = arg.split(':')
@@ -67,9 +57,9 @@ def main(argv):
     args = parser.parse_args()
 
     try:
-        runner, log_dir = make_runner()
+        runner = scope_job_runner.JobRunner()
         if args.command == 'start':
-            runner.start(log_dir, args.verbose)
+            runner.start(args.verbose)
         elif args.command == 'stop':
             if args.force:
                 runner.terminate()

@@ -1,94 +1,8 @@
 import argparse
-import os.path
 import sys
-import time
-import threading
-import json
 
-from ..util import base_daemon
-from .. import scope_server
-from .. import scope_client
-from ..config import scope_configuration
 from ..util import json_encode
-from ..util import logging
-logger = logging.get_logger(__name__)
-
-def _wait_for_it(wait_condition, message, wait_time=15, output_interval=0.5, sleep_time=0.1):
-    wait_iters = int(wait_time // sleep_time)
-    output_iters = int(output_interval // sleep_time)
-    condition_true = False
-    print('(' + message + '...', end='', flush=True)
-    for i in range(wait_iters):
-        condition_true = wait_condition()
-        if condition_true:
-            break
-        if i % output_iters == 0:
-            print('.', end='', flush=True)
-        time.sleep(sleep_time)
-    print(')')
-    return condition_true
-
-
-class ScopeServerRunner(base_daemon.Runner):
-    def __init__(self, pidfile_path):
-        super().__init__(name='Scope Server', pidfile_path=pidfile_path)
-
-    # function is to be run only when not running as a daemon
-    def status(self):
-        is_running = self.is_running()
-        if not is_running:
-            print('Microscope server is NOT running.')
-        else:
-            print('Microscope server is running (PID {}).'.format(self.get_pid()))
-            client_tester = ScopeClientTester()
-            connected = lambda: client_tester.connected # wait for connection to be established
-            if _wait_for_it(connected, 'Establishing connection to scope server'):
-                print('Microscope server is responding to new connections.')
-            else:
-                raise RuntimeError('Could not communicate with microscope server')
-
-    def stop(self, force=False):
-        self.assert_daemon()
-        pid = self.get_pid()
-        if force:
-            self.kill() # send SIGKILL -- immeiate exit
-        else:
-            self.terminate() # send SIGTERM -- allow for cleanup
-        exited = lambda: not base_daemon.is_valid_pid(pid) # wait for pid to become invalid (i.e. process no longer is running)
-        if _wait_for_it(exited, 'Waiting for server to terminate'):
-            print('Microscope server is stopped.')
-        else:
-            raise RuntimeError('Could not terminate microscope server')
-
-    def initialize_daemon(self):
-        self.server = scope_server.ScopeServer(self.server_host)
-        logger.info('Scope Server Ready (Listening on {})', self.server_host)
-
-    def run_daemon(self):
-        self.server.run()
-
-class ScopeClientTester(threading.Thread):
-    def __init__(self):
-        self.connected = False
-        super().__init__(daemon=True)
-        self.start()
-
-    def run(self):
-        scope_client.client_main()
-        self.connected = True
-
-def make_runner(base_dir='~'):
-    base_dir = os.path.realpath(os.path.expanduser(base_dir))
-    pidfile_path = os.path.join(base_dir, 'scope_server.pid')
-    configfile_path = os.path.join(base_dir, 'scope_configuration.py')
-    log_dir = os.path.join(base_dir, 'scope_logs')
-    #initialize scope config
-    scope_configuration.CONFIG_FILE = configfile_path
-    # if it doesn't exist, make it so that it can be customized.
-    scope_configuration.create_config_file_if_necessary()
-    config = scope_configuration.get_config()
-    runner = ScopeServerRunner(pidfile_path)
-    return runner, log_dir, config
+from .. import scope_server
 
 def main(argv):
     parser = argparse.ArgumentParser(description='microscope server control')
@@ -106,23 +20,16 @@ def main(argv):
     args = parser.parse_args(argv)
 
     try:
-        runner, log_dir, config = make_runner()
-        server_args = os.path.join(log_dir, 'server_options.json')
+        server = scope_server.ScopeServer()
         if args.command == 'status':
-            runner.status()
+            server.status()
         if args.command in {'stop', 'restart'}:
-            runner.stop(args.force)
-        if args.command == 'restart':
-            with open(server_args, 'r') as f:
-                server_args = json.load(f)
-            args.public = server_args['public']
-            args.verbose = server_args['verbose']
+            server.stop(args.force)
         if args.command == 'start':
-            with open(server_args, 'w') as f:
+            with server_arg_file.open('w') as f:
                 json_encode.encode_legible_to_file(dict(public=args.public, verbose=args.verbose), f)
         if args.command in {'start', 'restart'}:
-            runner.server_host = config.Server.PUBLICHOST if args.public else config.Server.LOCALHOST
-            runner.start(log_dir, args.verbose)
+            server.start()
     except Exception as e:
         if args.debug:
             traceback.print_exc(file=sys.stderr)
