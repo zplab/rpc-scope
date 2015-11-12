@@ -23,6 +23,10 @@
 # Authors: Zach Pincus
 
 import zmq
+# PyZMQ 15.0.0's __init__.py apparently does not import utils, requiring this explicit import
+import zmq.utils
+# Likewise for zmq.utils.jsonapi
+import zmq.utils.jsonapi
 import traceback
 import inspect
 import threading
@@ -45,9 +49,11 @@ class BaseRPCServer:
         set the 'running' attribute to False."""
         self.running = True
         while self.running:
-            command, args, kwargs = self._receive()
-            logger.debug("Received command: {}\n    args: {}\n    kwargs: {}", command, args, kwargs)
-            self.call(command, args, kwargs)
+            received = self._receive()
+            if received is not None:
+                command, args, kwargs = received
+                logger.debug("Received command: {}\n    args: {}\n    kwargs: {}", command, args, kwargs)
+                self.call(command, args, kwargs)
 
     def call(self, command, args, kwargs):
         """Call the named command with *args and **kwargs"""
@@ -110,9 +116,9 @@ class ZMQServerMixin:
         json = self.socket.recv()
         try:
             command, args, kwargs = zmq.utils.jsonapi.loads(json)
-        except:
-            self._reply(error='Could not unpack command, arguments, and keyword arguments from JSON message.')
-        return command, args, kwargs
+            return command, args, kwargs
+        except Exception as e:
+            self._reply('Could not unpack command, arguments, and keyword arguments from JSON message: {}'.format(e), error=True)
 
     def _reply(self, reply, error=False):
         if error:

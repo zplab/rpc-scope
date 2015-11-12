@@ -192,13 +192,16 @@ class ObjectiveTurret(stand.LeicaComponent):
                     'lower z': int(self._get_objpar(p, 7)),
                     'immerse z': int(self._get_objpar(p, 8)),
                     'z step increment': int(self._get_objpar(p, 9)),
-                    'z lowering flag': bool(int(self._get_objpar(p, 19))),
                     'x paracentric correction': int(self._get_objpar(p, 20)),
                     'y paracentric correction': int(self._get_objpar(p, 21))
                 }
+                try:
+                    details['z lowering flag'] = bool(int(self._get_objpar(p, 19)))
+                except message_device.LeicaError:
+                    pass
                 for objpar_idx, objpar_name in self._PER_METHOD_PROPERTIES:
                     meth_objpars = reversed(self._get_objpar(p, objpar_idx))
-                    details[objpar_name] = { microscopy_method_names.NAMES[meth_idx]: int(meth_objpar)
+                    details[objpar_name] = {microscopy_method_names.NAMES[meth_idx]: int(meth_objpar)
                                                  for meth_idx, meth_objpar in enumerate(meth_objpars)}
                 method_mask = reversed(list(self._get_objpar(p, 1)))
                 details['microscopy methods'] = [microscopy_method_names.NAMES[meth_idx] for meth_idx, v in enumerate(method_mask) if bool(int(v))]
