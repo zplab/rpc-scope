@@ -146,6 +146,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.scope.nosepiece.magnification = self.OBJECTIVE
         self.scope.camera.sensor_gain = '16-bit (low noise & high well capacity)'
         self.scope.camera.readout_rate = self.PIXEL_READOUT_RATE
+        self.scope.camera.shutter_mode = 'Rolling'
         self.configure_calibrations() # sets self.bf_exposure and self.tl_intensity
         self.scope.camera.acquisition_sequencer.new_sequence()
         self.scope.camera.acquisition_sequencer.add_step(exposure_ms=self.bf_exposure,
@@ -157,34 +158,39 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.dark_corrector = calibrate.DarkCurrentCorrector(self.scope)
         ref_positions = self.experiment_metadata['reference_positions']
 
-        self.scope.stage.position = ref_positions[0]
-        with self.scope.tl.lamp.in_state(enabled=True):
-            calibrate.meter_exposure(self.scope, self.scope.tl.lamp, max_exposure=32)
-            bf_avg = calibrate.get_averaged_images(self.scope, ref_positions,
-                self.dark_corrector, frames_to_average=2)
-        vignette_mask = calibrate.get_vignette_mask(bf_avg)
-        bf_flatfield = calibrate.get_flat_field(bf_avg, vignette_mask)
-        cal_image_names = ['vignette_mask.png', 'bf_flatfield.tiff']
-        cal_images = [vignette_mask.astype(numpy.uint8)*255, bf_flatfield]
-
-        if self.FLUORESCENCE_FLATFIELD_LAMP:
-            self.scope.stage.position = ref_positions[0]
-            lamp = getattr(self.scope.il.spectra_x, self.FLUORESCENCE_FLATFIELD_LAMP)
-            with lamp.in_state(enabled=True):
-                calibrate.meter_exposure(self.scope, lamp, max_exposure=400,
-                    min_intensity_fraction=0.1)
-                fl_avg = calibrate.get_averaged_images(self.scope, ref_positions,
-                    self.dark_corrector, frames_to_average=5)
-            fl_flatfield = calibrate.get_flat_field(fl_avg, vignette_mask)
-            cal_image_names.append('fl_flatfield.tiff')
-            cal_images.append(fl_flatfield)
-
         # go to a data-acquisition position and figure out the right brightfield exposure
         data_positions = self.experiment_metadata['positions']
         some_pos = list(data_positions.values())[0]
         self.scope.stage.position = some_pos
-        self.bf_exposure, self.tl_intensity = calibrate.meter_exposure(self.scope, self.scope.tl.lamp,
+        self.bf_exposure, self.tl_intensity = calibrate.meter_exposure_and_intensity(self.scope, self.scope.tl.lamp,
             max_exposure=32, min_intensity_fraction=0.2, max_intensity_fraction=0.5)
+
+        # calculate the BF flatfield image and reference intensity value
+        self.scope.stage.position = ref_positions[0]
+        with self.scope.tl.lamp.in_state(enabled=True):
+            exposure = calibrate.meter_exposure(self.scope, self.scope.tl.lamp,
+            max_exposure=32, min_intensity_fraction=0.3, max_intensity_fraction=0.85)
+            exposure_ratio = self.bf_exposure / exposure
+            bf_avg = calibrate.get_averaged_images(self.scope, ref_positions,
+                self.dark_corrector, frames_to_average=2)
+        vignette_mask = calibrate.get_vignette_mask(bf_avg)
+        bf_flatfield, ref_intensity = calibrate.get_flat_field(bf_avg, vignette_mask)
+        ref_intensity *= exposure_ratio
+        cal_image_names = ['vignette_mask.png', 'bf_flatfield.tiff']
+        cal_images = [vignette_mask.astype(numpy.uint8)*255, bf_flatfield]
+
+        # calculate a fluorescent flatfield if requested
+        if self.FLUORESCENCE_FLATFIELD_LAMP:
+            self.scope.stage.position = ref_positions[0]
+            lamp = getattr(self.scope.il.spectra_x, self.FLUORESCENCE_FLATFIELD_LAMP)
+            with lamp.in_state(enabled=True):
+                calibrate.meter_exposure_and_intensity(self.scope, lamp, max_exposure=400,
+                    min_intensity_fraction=0.1)
+                fl_avg = calibrate.get_averaged_images(self.scope, ref_positions,
+                    self.dark_corrector, frames_to_average=5)
+            fl_flatfield, fl_intensity = calibrate.get_flat_field(fl_avg, vignette_mask)
+            cal_image_names.append('fl_flatfield.tiff')
+            cal_images.append(fl_flatfield)
 
         # save out calibration information
         calibration_dir = self.data_dir / 'calibrations'
@@ -193,7 +199,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         cal_image_paths = [calibration_dir / (self.timepoint_prefix + ' ' + name) for name in cal_image_names]
         self.image_io.write(cal_images, cal_image_paths)
         metering = self.experiment_metadata.setdefault('brightfield metering', {})
-        metering[self.timepoint_prefix] = dict(exposure=self.bf_exposure, intensity=self.tl_intensity)
+        metering[self.timepoint_prefix] = dict(exposure=self.bf_exposure, intensity=self.tl_intensity, ref_intensity=ref_intensity)
 
     def get_next_run_time(self):
         interval_mode = self.INTERVAL_MODE
@@ -229,6 +235,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             z_start = self.positions[position_name][2]
         z_max = self.experiment_metadata['z_max']
         self.scope.camera.exposure_time = self.bf_exposure
+        self.scope.tl.intensity = self.tl_intensity
         coarse_z, fine_z = autofocus.autofocus(self.scope, z_start, z_max,
             self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
             self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS)

@@ -52,12 +52,14 @@ class DarkCurrentCorrector:
             if hasattr(scope.il, 'spectra_x'):
                 scope.il.spectra_x.push_state(**{lamp+'_enabled':False for lamp in
                     scope.il.spectra_x.lamp_specs.keys()})
+            scope.camera.start_image_sequence_acquisition(frame_count=len(self.exposures)*frames_to_average, trigger_mode='Software')
             for exp in self.exposures:
-                scope.camera.start_image_sequence_acquisition(exposure_time=exp,
-                    frame_count=frames_to_average, trigger_mode='Internal')
-                images = [scope.camera.next_image() for i in range(frames_to_average)]
-                scope.camera.end_image_sequence_acquisition()
+                images = []
+                for i in range(frames_to_average):
+                    scope.camera.send_software_trigger()
+                    images.append(scope.camera.next_image(max(1000, 2*exp)))
                 self.dark_images.append(numpy.mean(images, axis=0))
+            scope.camera.end_image_sequence_acquisition()
             if hasattr(scope.il, 'spectra_x'):
                 scope.il.spectra_x.pop_state()
 
@@ -89,7 +91,7 @@ class DarkCurrentCorrector:
         int_image[int_image < 0] = 0
         return int_image.astype(numpy.uint16)
 
-def meter_exposure(scope, lamp, max_exposure=200, max_intensity=255,
+def meter_exposure_and_intensity(scope, lamp, max_exposure=200, max_intensity=255,
     min_intensity_fraction=0.3, max_intensity_fraction=0.75):
     """Find an appropriate brightfield exposure setting.
 
@@ -124,22 +126,14 @@ def meter_exposure(scope, lamp, max_exposure=200, max_intensity=255,
 
     Returns: exposure_time, lamp_intensity
     """
-    max_exposure_exponent = numpy.log2(max_exposure)
-    # Exposure range is set by the curious property of the Zyla camera that
-    # short exposures with bright lights yield really noisy images. So avoid
-    # exposures < 2 ms...
-    # TODO: verify that this is still the case with new cameras once obtained
-    exposures = 2**numpy.arange(1, numpy.ceil(max_exposure_exponent)+1)
-    exposures[-1] = max_exposure
     intensities = numpy.array([255, 224, 192, 160, 128,  96,  64,  32])
     intensities = intensities[intensities <= max_intensity]
     with lamp.in_state(enabled=True):
         scope.camera.start_image_sequence_acquisition(frame_count=len(exposures)+len(intensities), trigger_mode='Software')
         bit_depth = int(scope.camera.sensor_gain[:2])
-        min_good_value = min_intensity_fraction * (2**bit_depth-1)
         max_good_value = max_intensity_fraction * (2**bit_depth-1)
         good_intensity = None
-        scope.camera.exposure_time = exposures[0]
+        scope.camera.exposure_time = 3 # find a good intensity for a short exposure time (not the shortest! Leave some room for good_exposure to start out underexposed...)
         for intensity in intensities:
             lamp.intensity = intensity
             scope.camera.send_software_trigger()
@@ -149,22 +143,72 @@ def meter_exposure(scope, lamp, max_exposure=200, max_intensity=255,
                 break
         if good_intensity is None:
             raise RuntimeError('Could not find a non-overexposed lamp intensity')
-        good_exposure = exposures[0]
+    scope.camera.end_image_sequence_acquisition()
+    good_exposure = meter_exposure(scope, lamp, max_exposure, min_intensity_fraction, max_intensity_fraction)
+    return good_exposure, good_intensity
+
+def meter_exposure(scope, lamp, max_exposure=200, min_intensity_fraction=0.3,
+    max_intensity_fraction=0.75):
+    """Find an appropriate brightfield exposure setting.
+
+    This function searches through camera exposure times
+    to find a combination where the brightfield image is neither overexposed nor
+    under-exposed. Ideally this should be run on a sample region that will
+    generate images as bright or brighter than any other region, so that
+    the selected exposure time does not lead to overexposure on different sample
+    regions.
+
+    The camera and lamp will be left with the appropriate intensity and exposure
+    settings.
+
+    NB: generally the exposure time will only be valid for images acquired with
+    identical camera parameters.
+
+    Parameters:
+        scope: scope client object
+        lamp: lamp object to adjust (should be scope.camera.tl.lamp or one of
+            the several lamps in scope.il.spectra_x)
+        max_exposure: longest allowable exposure in ms
+        min_intensity_fraction: least bright value (in terms of the 95th
+            percentile of image intensities) allowed for the image to count as
+            'properly exposed', as a fraction of the camera bit depth.
+            NB: if no other exposure times are valid and not over-exposed, an
+            exposure time could be returned that yields images which fall below
+            this minimum.
+        max_intensity_fraction: brightest value (in terms of maximum image
+            intensity) allowed for the image to count as 'properly exposed', as
+            a fraction of the camera bit depth.
+
+    Returns: exposure_time
+    """
+    max_exposure_exponent = numpy.log2(max_exposure)
+    # Exposure range is set by the curious property of the Zyla camera that
+    # short exposures with bright lights yield really noisy images. So avoid
+    # exposures < 2 ms...
+    # TODO: verify that this is still the case with new cameras once obtained
+    exposures = 2**numpy.arange(1, numpy.ceil(max_exposure_exponent)+1)
+    exposures[-1] = max_exposure
+    with lamp.in_state(enabled=True):
+        scope.camera.start_image_sequence_acquisition(frame_count=len(exposures), trigger_mode='Software')
+        bit_depth = int(scope.camera.sensor_gain[:2])
+        min_good_value = min_intensity_fraction * (2**bit_depth-1)
+        max_good_value = max_intensity_fraction * (2**bit_depth-1)
+        good_exposure = None
         for exposure in exposures:
             scope.camera.exposure_time = exposure
             scope.camera.send_software_trigger()
-            image = scope.camera.next_image(1000)
+            image = scope.camera.next_image(max(1000, 2*exposure))
             if image.max() < max_good_value:
                 good_exposure = exposure
             else:
                 break
             if numpy.percentile(image, 95) > min_good_value:
                 break
+    if good_exposure is None:
+        raise RuntimeError('Could not find a valid exposure time')
     scope.camera.end_image_sequence_acquisition()
     scope.camera.exposure_time = good_exposure
-    return good_exposure, good_intensity
-
-
+    return good_exposure
 
 def get_vignette_mask(image):
     """Convert a well-exposed image (ideally a brightfield image with ~uniform
@@ -231,7 +275,9 @@ def get_flat_field(image, vignette_mask):
         vignette_mask: image mask that is True for regions that are NOT obscured
            by vignetting (the dark areas around the edge of the image).
 
-    Returns: flat-field correction image.
+    Returns: flat-field correction image and the mean intensity of the non-
+        vignetted image regions (after smoothing), for use as a measure of
+        overall illumination intensity.
     """
     flat_field = numpy.array(image, dtype=float) # make a copy of the image because we modify it in-place
     near_vignette_mask = vignette_mask ^ ndimage.binary_erosion(vignette_mask, iterations=10)
@@ -240,11 +286,12 @@ def get_flat_field(image, vignette_mask):
     # don't muck things up too much.
     flat_field[~vignette_mask] = flat_field[near_vignette_mask].mean()
     flat_field = _smooth_flat_field(flat_field)
-    flat_field /= flat_field[vignette_mask].mean()
+    mean_intensity = flat_field[vignette_mask].mean()
+    flat_field /= mean_intensity
     flat_field[flat_field <= 0] = 1 # we're going to reciprocate, so prevent div/0 errors
     flat_field = 1 / flat_field # take reciprocal so that the mask can be used multiplicatively
     flat_field[~vignette_mask] = 0
-    return flat_field
+    return flat_field, mean_intensity
 
 
 def _circular_mask(s):

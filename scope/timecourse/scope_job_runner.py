@@ -77,7 +77,11 @@ class JobRunner(base_daemon.Runner):
         """Remove the job specified by the given exec_file.
 
         Note: this will NOT terminate a currenlty-running job."""
+        exec_file = canonical_path(exec_file)
         self.jobs.remove(exec_file)
+        print('Job {} has been removed from the queue for future execution.'.format(exec_file))
+        if self.current_job.get() == exec_file:
+            print('This job is currently running. The current run has NOT been terminated.')
         if self.is_running():
             self._awaken_daemon()
 
@@ -86,7 +90,11 @@ class JobRunner(base_daemon.Runner):
 
         Note: If the job is currently running, it will complete but further runs
         will not be executed."""
+        exec_file = canonical_path(exec_file)
         self.jobs.update(exec_file, status=STATUS_SUSPENDED)
+        print('Job {} has been suspended and will not be executed in the future unless resumed.'.format(exec_file))
+        if self.current_job.get() == exec_file:
+            print('This job is currently running. The current run has NOT been terminated.')
         if self.is_running():
             self._awaken_daemon()
 
@@ -101,8 +109,12 @@ class JobRunner(base_daemon.Runner):
             self.jobs.update(exec_file, status=STATUS_QUEUED)
         else:
             self.jobs.update(exec_file, status=STATUS_QUEUED, next_run_time=next_run_time)
+        print('Job {} has been placed in the active job queue.'.format(exec_file))
         if self.is_running():
             self._awaken_daemon()
+        else:
+            print('NOTE: The job-runner is NOT CURRENTLY RUNNING. Until it is started again, queued jobs WILL NOT BE RUN.')
+
 
     def suspend_all(self):
         """Suspend further execution of all queued jobs."""
@@ -115,6 +127,9 @@ class JobRunner(base_daemon.Runner):
         that are not running due to errors and are marked with 'error' status
         will not be resumed except by specifically calling resume_job()."""
         self._change_all_status(STATUS_SUSPENDED, STATUS_QUEUED)
+        if not self.is_running():
+            print('NOTE: The job-runner is NOT CURRENTLY RUNNING. Until it is started again, queued jobs WILL NOT BE RUN.')
+
 
     def _change_all_status(self, status_from, status_to):
         """Change all jobs with status_from to have status_to instead."""
@@ -150,11 +165,13 @@ class JobRunner(base_daemon.Runner):
                 non_queued_jobs.append(job)
         now = time.time()
         if current_job and not upcoming_jobs:
-            print('No other upcoming jobs.')
+            print('No other queued jobs.')
         elif not upcoming_jobs:
-            print('No upcoming jobs.')
+            print('No queued jobs.')
         else:
-            print('Upcoming jobs:')
+            print('Queued jobs:')
+            if not is_running:
+                print('NOTE: As the job-runner is NOT CURRENTLY RUNNING, queued jobs WILL NOT BE RUN until the runner is started.')
             for job in upcoming_jobs:
                 blurb = self._format_job_blurb(now, job)
                 print('{}: {} (status: {})'.format(blurb, job.exec_file, job.status))
@@ -264,8 +281,11 @@ class JobRunner(base_daemon.Runner):
         logger.info('Running job {}', job.exec_file)
         args = [sys.executable, str(job.exec_file), str(job.next_run_time)]
         logger.debug('Parameters: {}', args)
+        start_time = time.time()
         sub = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
         stdout_data, stderr_data = sub.communicate()
+        elapsed_time = time.time() - start_time
+        logger.info('Job done (elapsed time: {:.0f} min)', elapsed_time/60)
         logger.debug('Stdout {}', stdout_data)
         logger.debug('Stderr {}', stderr_data)
         logger.debug('Retcode {}', sub.returncode)
@@ -283,10 +303,10 @@ class JobRunner(base_daemon.Runner):
         try:
             self.jobs.update(job.exec_file, next_run_time=next_run_time)
         except ValueError:
-            logger.info('Could not updatae job {}: perhaps it was removed while running?', job.exec_file)
+            logger.info('Could not update job {}: perhaps it was removed while running?', job.exec_file)
 
         log_run_time = 'in {:.0f} seconds'.format(next_run_time - time.time()) if next_run_time else 'never'
-        logger.info('Job done; next run time: {}', log_run_time)
+        logger.info('Next run time: {}', log_run_time)
 
     def _get_next_job(self):
         """Get the job that should be run next."""
