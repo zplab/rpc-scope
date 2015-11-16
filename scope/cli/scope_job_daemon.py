@@ -2,7 +2,7 @@ import argparse
 import time
 import traceback
 
-from ..timecourse import scope_job_runner
+from .. import scope_job_runner
 
 def parse_delay(arg):
     vals = arg.split(':')

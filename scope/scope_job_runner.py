@@ -11,9 +11,9 @@ import email.mime.text as mimetext
 
 import lockfile
 
-from ..util import json_encode
-from ..util import base_daemon
-from ..util import logging
+from .util import json_encode
+from .util import base_daemon
+from .util import logging
 logger = logging.get_logger(__name__)
 
 STATUS_QUEUED = 'queued'
@@ -81,7 +81,7 @@ class JobRunner(base_daemon.Runner):
         self.jobs.remove(exec_file)
         print('Job {} has been removed from the queue for future execution.'.format(exec_file))
         if self.current_job.get() == exec_file:
-            print('This job is currently running. The current run has NOT been terminated.')
+            print('This job is currently running. This run has NOT been terminated.')
         if self.is_running():
             self._awaken_daemon()
 
@@ -94,7 +94,7 @@ class JobRunner(base_daemon.Runner):
         self.jobs.update(exec_file, status=STATUS_SUSPENDED)
         print('Job {} has been suspended and will not be executed in the future unless resumed.'.format(exec_file))
         if self.current_job.get() == exec_file:
-            print('This job is currently running. The current run has NOT been terminated.')
+            print('This job is currently running. This run has NOT been terminated.')
         if self.is_running():
             self._awaken_daemon()
 
@@ -119,6 +119,11 @@ class JobRunner(base_daemon.Runner):
     def suspend_all(self):
         """Suspend further execution of all queued jobs."""
         self._change_all_status(STATUS_QUEUED, STATUS_SUSPENDED)
+        print('All jobs have been suspended and will not be executed in the future unless resumed.')
+        exec_file = self.current_job.get()
+        if exec_file:
+            print('Job {} is currently running. This run has NOT been terminated.'.format(exec_file))
+
 
     def resume_all(self):
         """Resume all suspended jobs.
