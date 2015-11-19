@@ -31,33 +31,77 @@ class TablePosTable(Qt.QWidget):
             self,
             scope, scope_properties,
             positions=(),
-            window_title='Table Positions Table',
+            window_title='Stage Position Table',
             parent=None):
         super().__init__(parent)
+        self.scope = scope
+        self.scope_properties = scope_properties
         self.setWindowTitle(window_title)
-        self.model = PosTableModel(('x', 'y', 'z'), om.SignalingList(), self)
+        self.model = PosTableModel(
+            ('x', 'y', 'z', 'info'),
+            positions if isinstance(positions, om.SignalingList) else om.SignalingList(Pos(*e) for e in positions),
+            self)
         self.view = PosTableView(self.model, self)
         self.setLayout(Qt.QVBoxLayout())
         self.layout().addWidget(self.view)
+        self.store_current_stage_position_button = Qt.QPushButton('Store Current Stage Position')
+        self.store_current_stage_position_button.clicked.connect(self.store_current_stage_position)
+        self.layout().addWidget(self.store_current_stage_position_button)
+        self.move_to_focused_stage_position_button = Qt.QPushButton('Move To Selected Position')
+        self.move_to_focused_stage_position_button.clicked.connect(self.move_to_focused_stage_position)
+        self.layout().addWidget(self.move_to_focused_stage_position_button)
+        hlayout = Qt.QHBoxLayout()
+        self.export_to_clipboard_button = Qt.QPushButton('Export To Clipboard (JSON)')
+        self.export_to_clipboard_button.clicked.connect(self.export_to_clipboard)
+        hlayout.addWidget(self.export_to_clipboard_button)
+        self.import_from_clipboard_button = Qt.QPushButton('Import From Clipboard (JSON)')
+        self.import_from_clipboard_button.clicked.connect(self.import_from_clipboard)
+        hlayout.addWidget(self.import_from_clipboard_button)
+        self.layout().addLayout(hlayout)
+        self.view.selectionModel().currentRowChanged.connect(self._on_stage_position_focus_changed)
+        self._on_stage_position_focus_changed(self.view.selectionModel().currentIndex(), None)
 
-    def store_current_position(self):
+    def store_current_stage_position(self):
         self.positions_signaling_list.append(Pos(*self.scope.stage.position))
+
+    def move_to_focused_stage_position(self):
+        midx = self.view.selectionModel().currentIndex()
+        if midx.isValid():
+            try:
+                scope.stage.push_state(async=False)
+                pos = self.positions_signaling_list[midx.row()]
+                scope.stage.position = pos.x, pos.y, pos.z
+            except Exception as e:
+                Qt.QMessageBox.warning(self, 'Command Failed', 'Could not move stage to selected position ({}).'.format(e))
+
+    def export_to_clipboard(self):
+        Qt.QApplication.clipboard().setText(json.dumps(self.positions, indent=2))
+
+    def import_from_clipboard(self):
+        try:
+            positions = [Pos(*e) for e in json.loads(Qt.QApplication.clipboard().text())]
+        except Exception as e:
+            Qt.QMessageBox.warning(self, 'Bad Data', 'Failed to import positions from clipboard ({}).'.format(e))
+        self.positions = positions
 
     @property
     def positions_signaling_list(self):
-        return self.pos_table_widget.model.signaling_list
+        return self.model.signaling_list
 
     @positions_signaling_list.setter
     def positions_signaling_list(self, v):
-        self.pos_table_widget.model.signaling_list = v
+        self.model.signaling_list = v
 
     @property
     def positions(self):
-        return [(e.x, e.y, e.z) for e in self.positions_signaling_list]
+        return [(e.x, e.y, e.z, e.info) for e in self.positions_signaling_list]
 
     @positions.setter
     def positions(self, v):
-        self.positions_signaling_list = om.SignalingList(Pos(*e) for e in v)
+        self.positions_signaling_list[:] = [e if isinstance(e, Pos) else Pos(*e) for e in v]
+
+    def _on_stage_position_focus_changed(self, midx, old_midx):
+        self.move_to_focused_stage_position_button.setEnabled(midx.isValid())
 
 class PosTableView(Qt.QTableView):
     def __init__(self, model, parent=None):
@@ -93,11 +137,11 @@ class PosTableModel(om.signaling_list.DragDropModelBehavior, om.signaling_list.P
 class Pos(Qt.QObject):
     changed = Qt.pyqtSignal(object)
 
-    def __init__(self, x=None, y=None, z=None, parent=None):
+    def __init__(self, x=None, y=None, z=None, info='', parent=None):
         super().__init__(parent)
         for property in self.properties:
             property.instantiate(self)
-        self.x, self.y, self.z = x, y, z
+        self.x, self.y, self.z, self.info = x, y, z, info
 
     properties = []
 
@@ -107,6 +151,14 @@ class Pos(Qt.QObject):
     def take_component_arg_callback(self, v):
         if v is not None:
             return float(v)
+
+    def info_default_value_callback(self):
+        return ''
+
+    def take_info_arg_callback(self, v):
+        if v is None:
+            return ''
+        return str(v)
 
     x = om.Property(
         properties,
@@ -126,6 +178,21 @@ class Pos(Qt.QObject):
         default_value_callback=component_default_value_callback,
         take_arg_callback=take_component_arg_callback)
 
+    info = om.Property(
+        properties,
+        "info",
+        default_value_callback=info_default_value_callback,
+        take_arg_callback=take_info_arg_callback)
+
     for property in properties:
         exec(property.changed_signal_name + ' = Qt.pyqtSignal(object)')
     del property
+
+if __name__ == '__main__':
+    import sys
+    app = Qt.QApplication(sys.argv)
+    from scope import scope_client;scope, scope_properties = scope_client.client_main()
+    tpt = TablePosTable(scope, scope_properties)
+    tpt.show()
+    app.exec()
+    print(json.dumps(tpt.positions, indent=2))
