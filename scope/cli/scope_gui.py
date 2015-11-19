@@ -2,14 +2,14 @@ import argparse
 
 from ..gui import andor_camera_widget
 from ..gui import lamp_widget
-from ..gui import live_viewer_widget
+from ..gui import scope_viewer
 from ..gui import microscope_widget
 from ..gui import build_gui
 
 WIDGETS = {
     'camera': andor_camera_widget.AndorCameraWidget,
     'lamps': lamp_widget.LampWidget,
-    'viewer': live_viewer_widget.LiveViewerWidget,
+    'viewer': scope_viewer.ScopeViewer,
     'microscope': microscope_widget.MicroscopeWidget
 }
 
