@@ -23,7 +23,7 @@
 # Authors: Erik Hvatum <ice.rikh@gmail.com>
 
 from PyQt5 import Qt
-from ris_widget import om, ris_widget
+from ris_widget import ris_widget
 from ris_widget import image as ris_widget_image
 from .. import scope_client
 
