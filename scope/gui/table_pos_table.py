@@ -27,6 +27,14 @@ from PyQt5 import Qt
 from ris_widget import om
 
 class TablePosTable(Qt.QWidget):
+    @classmethod
+    def can_run(cls, scope):
+        try:
+            x, y, z = (float(c) for c in scope.stage.position)
+        except:
+            return False
+        return True
+
     def __init__(
             self,
             scope, scope_properties,
@@ -34,6 +42,7 @@ class TablePosTable(Qt.QWidget):
             window_title='Stage Position Table',
             parent=None):
         super().__init__(parent)
+        self.setAttribute(Qt.Qt.WA_DeleteOnClose, True)
         self.scope = scope
         self.scope_properties = scope_properties
         self.setWindowTitle(window_title)
@@ -68,9 +77,9 @@ class TablePosTable(Qt.QWidget):
         midx = self.view.selectionModel().currentIndex()
         if midx.isValid():
             try:
-                scope.stage.push_state(async=False)
+                self.scope.stage.push_state(async=False)
                 pos = self.positions_signaling_list[midx.row()]
-                scope.stage.position = pos.x, pos.y, pos.z
+                self.scope.stage.position = pos.x, pos.y, pos.z
             except Exception as e:
                 Qt.QMessageBox.warning(self, 'Command Failed', 'Could not move stage to selected position ({}).'.format(e))
 
@@ -102,6 +111,12 @@ class TablePosTable(Qt.QWidget):
 
     def _on_stage_position_focus_changed(self, midx, old_midx):
         self.move_to_focused_stage_position_button.setEnabled(midx.isValid())
+
+    def closeEvent(self, event):
+        if self.positions:
+            print('POSITIONS:')
+            print(json.dumps(self.positions, indent=2))
+        super().closeEvent(event)
 
 class PosTableView(Qt.QTableView):
     def __init__(self, model, parent=None):
@@ -187,12 +202,3 @@ class Pos(Qt.QObject):
     for property in properties:
         exec(property.changed_signal_name + ' = Qt.pyqtSignal(object)')
     del property
-
-if __name__ == '__main__':
-    import sys
-    app = Qt.QApplication(sys.argv)
-    from scope import scope_client;scope, scope_properties = scope_client.client_main()
-    tpt = TablePosTable(scope, scope_properties)
-    tpt.show()
-    app.exec()
-    print(json.dumps(tpt.positions, indent=2))
