@@ -4,11 +4,11 @@ import freeimage
 class COMPRESSION:
     DEFAULT = 0 # save TIFFs using FreeImage default LZW compression, and PNGs with ZLib level 6 compression
 
-    PNG_NONE = freeimage.PNG_Z_NO_COMPRESSION # save without compression
-    PNG_FAST = freeimage.PNG_Z_BEST_SPEED # save using ZLib level 1 compression flag
-    PNG_BEST = freeimage.PNG_Z_BEST_COMPRESSION # save using ZLib level 9 compression flag
+    PNG_NONE = freeimage.IO_FLAGS.PNG_Z_NO_COMPRESSION # save without compression
+    PNG_FAST = freeimage.IO_FLAGS.PNG_Z_BEST_SPEED # save using ZLib level 1 compression flag
+    PNG_BEST = freeimage.IO_FLAGS.PNG_Z_BEST_COMPRESSION # save using ZLib level 9 compression flag
 
-    TIFF_NONE = freeimage.TIFF_NONE # save without compression
+    TIFF_NONE = freeimage.IO_FLAGS.TIFF_NONE # save without compression
 
 
 class ThreadedIO:

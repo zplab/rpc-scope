@@ -27,6 +27,7 @@ import time
 import pathlib
 import json
 import logging
+import inspect
 
 from ..util import json_encode
 from ..util import threaded_image_io
@@ -139,8 +140,10 @@ class TimepointHandler:
 
         if self.scope is not None:
             self.scope.stage.position = position_coords
+        self.logger.info('Stage at position')
         images, image_names, new_metadata = self.acquire_images(position_name, position_dir,
             position_metadata)
+        self.logger.info('Images Acquired ({})', len(images))
         image_paths = [position_dir / (self.timepoint_prefix + ' ' + name) for name in image_names]
         if new_metadata is None:
             new_metadata = {}
@@ -150,6 +153,7 @@ class TimepointHandler:
             self.image_io.write(images, image_paths, self.IMAGE_COMPRESSION)
             with metadata_path.open('w') as f:
                  json_encode.encode_legible_to_file(position_metadata, f)
+        self.logger.info('Position done')
 
     def acquire_images(self, position_name, position_dir, position_metadata):
         """Override this method in a subclass to define the image-acquisition sequence.

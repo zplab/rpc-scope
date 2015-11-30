@@ -129,7 +129,7 @@ def meter_exposure_and_intensity(scope, lamp, max_exposure=200, max_intensity=25
     intensities = numpy.array([255, 224, 192, 160, 128,  96,  64,  32])
     intensities = intensities[intensities <= max_intensity]
     with lamp.in_state(enabled=True):
-        scope.camera.start_image_sequence_acquisition(frame_count=len(exposures)+len(intensities), trigger_mode='Software')
+        scope.camera.start_image_sequence_acquisition(frame_count=len(intensities), trigger_mode='Software')
         bit_depth = int(scope.camera.sensor_gain[:2])
         max_good_value = max_intensity_fraction * (2**bit_depth-1)
         good_intensity = None

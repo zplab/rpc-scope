@@ -11,6 +11,8 @@ import email.mime.text as mimetext
 
 import lockfile
 
+from .config import scope_configuration
+
 from .util import json_encode
 from .util import base_daemon
 from .util import logging
