@@ -58,14 +58,17 @@ class Scope(message_device.AsyncDeviceNamespace):
             logger.info('Looking for microscope.')
             manager = message_manager.LeicaMessageManager(config.Stand.SERIAL_PORT, config.Stand.SERIAL_BAUD)
             self.stand = stand.Stand(manager, property_server, property_prefix='scope.stand.')
-            self.nosepiece = objective_turret.ObjectiveTurret(manager, property_server, property_prefix='scope.nosepiece.')
+            is_dm6000 = all(FU in self.stand.get_available_function_unit_IDs() for FU in [81, 83, 84, 94])
+            has_obj_safe_mode = is_dm6000
+
+            self.nosepiece = objective_turret.ObjectiveTurret(has_obj_safe_mode, manager, property_server, property_prefix='scope.nosepiece.')
             self.stage = stage.Stage(manager, property_server, property_prefix='scope.stage.')
-            if all(FU in self.stand.get_available_function_unit_IDs() for FU in [81, 83, 84, 94]):
+            if is_dm6000:
                 self.il = illumination_axes.DM6000B_IL(manager, property_server, property_prefix='scope.il.')
                 self.tl = illumination_axes.DM6000B_TL(manager, property_server, property_prefix='scope.tl.')
             else:
-                self.il = illumination_axes.IL(manager, property_server, property_prefix='scope.il.')
-                self.tl = illumination_axes.TL(manager, property_server, property_prefix='scope.tl.')
+                self.il = illumination_axes.DMi8_IL(manager, property_server, property_prefix='scope.il.')
+                self.tl = illumination_axes.DMi8_TL(manager, property_server, property_prefix='scope.tl.')
             self._shutter_openedness_watcher = illumination_axes.ShutterOpenednessWatcher(manager, property_server, property_prefix='scope.')
             has_scope = True
         except SerialException:
@@ -92,7 +95,10 @@ class Scope(message_device.AsyncDeviceNamespace):
             except SerialException:
                 has_spectra_x = False
                 logger.log_exception('Could not connect to Spectra X:')
-            self.tl.lamp = tl_lamp.TL_Lamp(self.iotool, property_server, property_prefix='scope.tl.lamp.')
+            if has_scope and not is_dm6000: # using DMi8, and scope is turned on
+                self.tl_lamp = tl_lamp.DMi8_Lamp(self.tl, self.iotool, property_server, property_prefix='scope.tl.lamp.')
+            else:
+                self.tl.lamp = tl_lamp.TL_Lamp(self.iotool, property_server, property_prefix='scope.tl.lamp.')
             self.footpedal = footpedal.Footpedal(self.iotool)
 
         try:
@@ -109,9 +115,10 @@ class Scope(message_device.AsyncDeviceNamespace):
         if has_scope and has_camera:
             self.camera.autofocus = autofocus.Autofocus(self.camera, self.stage)
 
-        try:
-            logger.info('Looking for peltier controller.')
-            self.peltier = peltier.Peltier(property_server, property_prefix='scope.peltier.')
-        except SerialException:
-            logger.log_exception('Could not connect to peltier controller:')
+        if 'Peltier' in config:
+            try:
+                logger.info('Looking for peltier controller.')
+                self.peltier = peltier.Peltier(property_server, property_prefix='scope.peltier.')
+            except SerialException:
+                logger.log_exception('Could not connect to peltier controller:')
 

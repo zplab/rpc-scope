@@ -775,7 +775,7 @@ class Camera(property_device.PropertyDevice):
             trigger_mode='Internal', overlap_enabled=overlap, **camera_params)
         image_names = []
         timestamps = []
-        read_time = 1/self.get_max_interface_fps()
+        read_time = 1/min(self.get_max_interface_fps(), frame_rate)
         for _ in range(frame_count):
             image_names.append(self.next_image(3 * read_time * 1000))
             timestamps.append(self._latest_timestamp)

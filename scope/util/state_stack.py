@@ -35,10 +35,8 @@ def in_state(device, **state):
         device.pop_state()
 
 class StateStackDevice:
-
     def __init__(self):
         self._state_stack = []
-
 
     def _set_state(self, properties_and_values):
         """Set a number of device properties at once, in the order specified"""

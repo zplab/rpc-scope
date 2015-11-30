@@ -57,3 +57,9 @@ class TL_Lamp(property_device.PropertyDevice):
         # IOTool to change the intensity behind the scenes and thus wants to
         # push the current intensity/enabled state onto the stack.
         pass
+
+class DMi8_Lamp(TL_Lamp):
+    def __init__(self, dmi8_tl, iotool, property_server=None, property_prefix=''):
+        super().__init__(iotool, property_server, property_prefix)
+        self.set_intensity = dmi8_tl.set_lamp_intensity
+        self.get_intensity = dmi8_tl.get_lamp_intensity

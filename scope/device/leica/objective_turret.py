@@ -45,15 +45,11 @@ class ObjectiveTurret(stand.LeicaComponent):
     '''Note that objective position is reported as 0 when the objective turret is between positions. The objective
     turret is between positions when it is in the process of responding to a position change request and also when
     manually placed there by physical intervention.'''
+    def __init__(self, has_safe_mode, message_manager, property_server=None, property_prefix=''):
+        self._has_safe_mode = has_safe_mode
+        super().__init__(message_manager, property_server, property_prefix)
+
     def _setup_device(self):
-        self._has_safe_mode = True
-        try:
-            self.set_safe_mode(False)
-        except message_device.LeicaError as e:
-            if e.response.header == '76925':
-                self._has_safe_mode = False
-            else:
-                raise
         self._minp = int(self.send_message(GET_MIN_POS_OBJ, async=False, intent="get minimum objective turret position").response)
         self._maxp = int(self.send_message(GET_MAX_POS_OBJ, async=False, intent="get maximum objective turret position").response)
         self._mags = [None for i in range(self._maxp + 1)]

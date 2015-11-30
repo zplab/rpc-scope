@@ -26,7 +26,9 @@ from . import stand
 from ...messaging import message_device
 from ...util import enumerated_properties
 
-# TL and IL shutters
+# TL and IL lamp and shutters
+SET_LAMP = 77020
+GET_LAMP = 77021
 SET_SHUTTER_LAMP = 77032
 GET_SHUTTER_LAMP = 77033
 SET_SHUTTER_EVENT_SUBSCRIPTIONS = 77003
@@ -166,6 +168,9 @@ class IL(stand.LeicaComponent):
     def _on_turret_pos_event(self, response):
         self._update_property('filter_cube', response.response[1:].strip())
 
+class DMi8_IL(IL):
+    pass
+
 class DM6000B_IL(_ShutterDeviceMixin, IL):
     '''IL represents an interface into elements used in Incident Light (Fluorescence) mode.'''
     _shutter_idx = 1
@@ -190,26 +195,22 @@ class DM6000B_IL(_ShutterDeviceMixin, IL):
     def _on_lfwheel_position_change_event(self, response):
         self._update_property('field_wheel', self._field_wheel._hw_to_usr[int(response.response)])
 
-# TODO: clean this up once we decide whether we will even use the TL lamp from Leica
-def get_TTL_shutter_control_enabled(self):
-    return bool(int(self.send_message(GET_SHUTTER_CTL, 0, async=False).response.split(' ')[0]))
-
-def set_TTL_shutter_control_enabled(self, enabled):
-    self.send_message(SET_SHUTTER_CTL, int(enabled), 0, async=False)
-
 class TL(_ShutterDeviceMixin, stand.LeicaComponent):
     '''IL represents an interface into elements used in Transmitted Light (Brighftield and DIC) mode.'''
     _shutter_idx = 0
-    def _setup_device(self):
-        _ShutterDeviceMixin._setup_device(self)
-        # TODO: clean this up once we decide whether we will even use the TL lamp from Leica
-        try:
-            get_TTL_shutter_control_enabled(self)
-            import types
-            self.get_TTL_shutter_control_enabled = types.MethodType(get_TTL_shutter_control_enabled, self)
-            self.set_TTL_shutter_control_enabled = types.MethodType(set_TTL_shutter_control_enabled, self)
-        except message_device.LeicaError:
-            pass
+
+class DMi8_TL(TL):
+    def get_TTL_shutter_control_enabled(self):
+        return bool(int(self.send_message(GET_SHUTTER_CTL, self._shutter_idx, async=False).response.split(' ')[0]))
+
+    def set_TTL_shutter_control_enabled(self, enabled):
+        self.send_message(SET_SHUTTER_CTL, int(enabled), self._shutter_idx, async=False, intent='set TTL shutter control')
+
+    def get_lamp_intensity(self):
+        return int(self.send_message(GET_LAMP, self._shutter_idx, async=False).response.split(' ')[0])
+
+    def set_lamp_intensity(self, intensity):
+        self.send_message(SET_LAMP, int(intensity), self._shutter_idx, async=False, intent='set TL lamp intensity')
 
 class DM6000B_TL(TL):
     '''IL represents an interface into elements used in Transmitted Light (Brighftield and DIC) mode.'''
