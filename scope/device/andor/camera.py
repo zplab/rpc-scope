@@ -414,6 +414,7 @@ class Camera(property_device.PropertyDevice):
             # but trying to unset it in this mode should not be...
             return
         lowlevel.SetBool('Overlap', enabled)
+        self._maybe_update_frame_rate_and_range('Overlap')
 
     def get_exposure_time(self):
         """Return exposure time in ms"""

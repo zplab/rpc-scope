@@ -96,7 +96,7 @@ class Scope(message_device.AsyncDeviceNamespace):
                 has_spectra_x = False
                 logger.log_exception('Could not connect to Spectra X:')
             if has_scope and not is_dm6000: # using DMi8, and scope is turned on
-                self.tl_lamp = tl_lamp.DMi8_Lamp(self.tl, self.iotool, property_server, property_prefix='scope.tl.lamp.')
+                self.tl.lamp = tl_lamp.DMi8_Lamp(self.tl, self.iotool, property_server, property_prefix='scope.tl.lamp.')
             else:
                 self.tl.lamp = tl_lamp.TL_Lamp(self.iotool, property_server, property_prefix='scope.tl.lamp.')
             self.footpedal = footpedal.Footpedal(self.iotool)
