@@ -270,7 +270,7 @@ class DM6000B_TL(TL):
         pos_max = int(self.send_message(GET_MAX_POS_APBL_TL, async=False, intent="get aperture diaphragm max position").response)
         return pos_min, pos_max
 
-class ShutterOpenednessWatcher(stand.LeicaComponent):
+class DM6000B_ShutterWatcher(stand.LeicaComponent):
     def _setup_device(self):
         self.send_message(
             SET_SHUTTER_EVENT_SUBSCRIPTIONS,
@@ -289,3 +289,31 @@ class ShutterOpenednessWatcher(stand.LeicaComponent):
         tl_open, il_open = (bool(int(c)) for c in response.response.split())
         self._update_property('tl.shutter_open', tl_open)
         self._update_property('il.shutter_open', il_open)
+
+class DMi8_ShutterWatcher(stand.LeicaComponent):
+    def _setup_device(self):
+        self.send_message(
+            SET_SHUTTER_EVENT_SUBSCRIPTIONS,
+            0, # lamp switched on/switched off
+            1, # new lamp voltage
+            0, # lamp switched
+            0, # lamp step mode switched on/off
+            1, # TL shutter open/closed
+            0, # IL shutter open/closed
+            async=False,
+            intent="subscribe to TL and IL shutter opened/closed events"
+        )
+        self.register_event_callback(GET_SHUTTER_LAMP, self._on_shutter_event)
+        self.register_event_callback(GET_LAMP, self._on_lamp_event)
+
+    def _on_shutter_event(self, response):
+        tl_open, il_open = (bool(int(c)) for c in response.response.split())
+        self._update_property('tl.shutter_open', tl_open)
+        # no IL shutter
+
+    def _on_lamp_event(self, response):
+        intensity, lamp = (bool(int(c)) for c in response.response.split())
+        if lamp != 1:
+            logger.warn('Received IL lamp event from DMi8 which has no Leica-controlled IL lamp')
+        else:
+            self._update_property('tl.lamp.intensity', intensity)

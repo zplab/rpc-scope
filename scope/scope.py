@@ -59,17 +59,21 @@ class Scope(message_device.AsyncDeviceNamespace):
             manager = message_manager.LeicaMessageManager(config.Stand.SERIAL_PORT, config.Stand.SERIAL_BAUD)
             self.stand = stand.Stand(manager, property_server, property_prefix='scope.stand.')
             is_dm6000 = all(FU in self.stand.get_available_function_unit_IDs() for FU in [81, 83, 84, 94])
-            has_obj_safe_mode = is_dm6000
 
+            has_obj_safe_mode = is_dm6000
             self.nosepiece = objective_turret.ObjectiveTurret(has_obj_safe_mode, manager, property_server, property_prefix='scope.nosepiece.')
             self.stage = stage.Stage(manager, property_server, property_prefix='scope.stage.')
             if is_dm6000:
-                self.il = illumination_axes.DM6000B_IL(manager, property_server, property_prefix='scope.il.')
-                self.tl = illumination_axes.DM6000B_TL(manager, property_server, property_prefix='scope.tl.')
+                il = illumination_axes.DM6000B_IL
+                tl = illumination_axes.DM6000B_TL
+                watcher = illumination_axes.DM6000B_ShutterWatcher
             else:
-                self.il = illumination_axes.DMi8_IL(manager, property_server, property_prefix='scope.il.')
-                self.tl = illumination_axes.DMi8_TL(manager, property_server, property_prefix='scope.tl.')
-            self._shutter_openedness_watcher = illumination_axes.ShutterOpenednessWatcher(manager, property_server, property_prefix='scope.')
+                il = illumination_axes.DMi8_IL
+                tl = illumination_axes.DMi8_TL
+                watcher = illumination_axes.DMi8_ShutterWatcher
+            self.il = il(manager, property_server, property_prefix='scope.il.')
+            self.tl = tl(manager, property_server, property_prefix='scope.tl.')
+            self._shutter_watcher = watcher(manager, property_server, property_prefix='scope.')
             has_scope = True
         except SerialException:
             has_scope = False
