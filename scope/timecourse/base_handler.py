@@ -33,6 +33,12 @@ from ..util import json_encode
 from ..util import threaded_image_io
 from ..util import log_util
 
+class DummyIO:
+    def __init__(self, logger):
+        self.logger = logger
+    def write(*args, **kws):
+        self.logger.warn('Trying to write files, but file writing was disabled!')
+
 class TimepointHandler:
     IMAGE_COMPRESSION = threaded_image_io.COMPRESSION.DEFAULT
 
@@ -66,8 +72,11 @@ class TimepointHandler:
         if self.write_files:
             self.image_io = threaded_image_io.ThreadedIO(io_threads)
             handler = logging.FileHandler(str(self.data_dir/'acquisitions.log'))
-            handler.setFormatter(log_util.get_formatter())
-            self.logger.addHandler(handler)
+        else:
+            self.image_io = DummyIO(self.logger)
+            handler = logging.StreamHandler()
+        handler.setFormatter(log_util.get_formatter())
+        self.logger.addHandler(handler)
 
     def run_timepoint(self, scheduled_start):
         try:

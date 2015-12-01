@@ -197,7 +197,8 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         if not calibration_dir.exists():
             calibration_dir.mkdir()
         cal_image_paths = [calibration_dir / (self.timepoint_prefix + ' ' + name) for name in cal_image_names]
-        self.image_io.write(cal_images, cal_image_paths)
+        if self.write_files:
+            self.image_io.write(cal_images, cal_image_paths)
         metering = self.experiment_metadata.setdefault('brightfield metering', {})
         metering[self.timepoint_prefix] = dict(exposure=self.bf_exposure, intensity=self.tl_intensity, ref_intensity=ref_intensity)
 
