@@ -369,7 +369,7 @@ class Camera(property_device.PropertyDevice):
     # and trigger_mode AFTER exposure_time, and overlap_mode after all the things it depends on.
     # when popping, better to go in reverse order from setting the dependent parameters like overlap and frame_count.
     # Also, always better to set frame_rate last, because many things can change the available range.
-    # In all cases, want to turn off live mode ASAP or turn it on only at the end.
+    # In all cases, want to turn off live mode ASAP or turn it on at the end
     # NB: low-value weights cause the property to be set sooner. All non-named properties get zero weight
     def _get_push_weights(self, state):
         weights = dict(frame_count=1, trigger_mode=2, overlap_enabled=3, frame_rate=4) # high weight = done later
@@ -383,7 +383,7 @@ class Camera(property_device.PropertyDevice):
     def _get_pop_weights(self, state):
         weights = dict(frame_count=-1, trigger_mode=-2, overlap_enabled=-3, frame_rate=1) # low weight = done earlier
         if state.get('live_mode', False): # turning on live mode
-            live_weight = 2 # turn on last
+            live_weight = 2  # turn on last
         else:
             live_weight = -4 # turn off first
         weights['live_mode'] = live_weight
@@ -666,7 +666,8 @@ class Camera(property_device.PropertyDevice):
         else:
             cycle_mode = 'Fixed'
             camera_params['frame_count'] = frame_count
-        self.push_state(live_mode=False, cycle_mode=cycle_mode, trigger_mode=trigger_mode, **camera_params)
+        self.push_state(live_mode=False) # turn off live mode first so that when we push the rest of the state, we don't get state parameters that are valid only for live mode
+        self.push_state(cycle_mode=cycle_mode, trigger_mode=trigger_mode, **camera_params)
         lowlevel.Flush()
         self._buffer_maker = BufferFactory(namebase, frame_count=frame_count, cycle=False)
         if frame_count is not None:
@@ -696,6 +697,7 @@ class Camera(property_device.PropertyDevice):
         """Stop an image-acquisition sequence and perform necessary cleanup."""
         lowlevel.Command('AcquisitionStop')
         lowlevel.Flush()
+        self.pop_state() # need to pop twice because we pushed twice in start_image_sequence_acquisition() (see above)
         self.pop_state()
         del self._buffer_maker
 

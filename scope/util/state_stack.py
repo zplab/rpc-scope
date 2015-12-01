@@ -70,8 +70,9 @@ class StateStackDevice:
         """
         old_state = {p:getattr(self, 'get_'+p)() for p, v in state.items()}
         self._update_push_states(state, old_state)
-        properties_and_values = self._order(state, self._get_push_weights(state))
-        self._set_state(properties_and_values)
+        if old_state:
+            properties_and_values = self._order(state, self._get_push_weights(state))
+            self._set_state(properties_and_values)
         self._state_stack.append(old_state)
 
     def pop_state(self):
@@ -79,8 +80,9 @@ class StateStackDevice:
         call.
         """
         old_state = self._state_stack.pop()
-        properties_and_values = self._order(old_state, self._get_pop_weights(old_state))
-        self._set_state(properties_and_values)
+        if old_state:
+            properties_and_values = self._order(old_state, self._get_pop_weights(old_state))
+            self._set_state(properties_and_values)
 
     def in_state(self, **state):
         """Context manager to set a number of device parameters at once using

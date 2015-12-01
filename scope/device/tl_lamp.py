@@ -24,12 +24,11 @@
 
 from ..util import property_device
 
-class TL_Lamp(property_device.PropertyDevice):
+class TL_Lamp_Base(property_device.PropertyDevice):
     def __init__(self, iotool, property_server=None, property_prefix=''):
         super().__init__(property_server, property_prefix)
         self._iotool = iotool
         self.set_enabled(False)
-        self.set_intensity(255)
 
     def set_enabled(self, enabled):
         """Turn lamp on or off.
@@ -41,6 +40,19 @@ class TL_Lamp(property_device.PropertyDevice):
     def get_enabled(self):
         return self._enabled
 
+    def _update_push_states(self, state, old_state):
+        # superclass prevents pushing a state identical to the current one.
+        # But for TL_Lamp, this is useful in case something is going to use
+        # IOTool to change the intensity behind the scenes and thus wants to
+        # push the current intensity/enabled state onto the stack.
+        pass
+
+
+class DM6000B_Lamp(TL_Lamp_Base):
+    def __init__(self, iotool, property_server=None, property_prefix=''):
+        super().__init__(iotool, property_server, property_prefix)
+        self.set_intensity(255)
+
     def set_intensity(self, value):
         """Set intensity to any value in the range [0, 255] for min to max.
         """
@@ -51,14 +63,8 @@ class TL_Lamp(property_device.PropertyDevice):
     def get_intensity(self):
         return self._intensity
 
-    def _update_push_states(self, state, old_state):
-        # superclass prevents pushing a state identical to the current one.
-        # But for TL_Lamp, this is useful in case something is going to use
-        # IOTool to change the intensity behind the scenes and thus wants to
-        # push the current intensity/enabled state onto the stack.
-        pass
 
-class DMi8_Lamp(TL_Lamp):
+class DMi8_Lamp(TL_Lamp_Base):
     def __init__(self, dmi8_tl, iotool, property_server=None, property_prefix=''):
         super().__init__(iotool, property_server, property_prefix)
         self.set_intensity = dmi8_tl.set_lamp_intensity

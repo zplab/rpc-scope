@@ -66,14 +66,12 @@ class Scope(message_device.AsyncDeviceNamespace):
             if is_dm6000:
                 il = illumination_axes.DM6000B_IL
                 tl = illumination_axes.DM6000B_TL
-                watcher = illumination_axes.DM6000B_ShutterWatcher
+                self._shutter_watcher = illumination_axes.DM6000B_ShutterWatcher(manager, property_server, property_prefix='scope.')
             else:
                 il = illumination_axes.DMi8_IL
                 tl = illumination_axes.DMi8_TL
-                watcher = illumination_axes.DMi8_ShutterWatcher
             self.il = il(manager, property_server, property_prefix='scope.il.')
             self.tl = tl(manager, property_server, property_prefix='scope.tl.')
-            self._shutter_watcher = watcher(manager, property_server, property_prefix='scope.')
             has_scope = True
         except SerialException:
             has_scope = False
@@ -102,7 +100,7 @@ class Scope(message_device.AsyncDeviceNamespace):
             if has_scope and not is_dm6000: # using DMi8, and scope is turned on
                 self.tl.lamp = tl_lamp.DMi8_Lamp(self.tl, self.iotool, property_server, property_prefix='scope.tl.lamp.')
             else:
-                self.tl.lamp = tl_lamp.TL_Lamp(self.iotool, property_server, property_prefix='scope.tl.lamp.')
+                self.tl.lamp = tl_lamp.DM6000B_Lamp(self.iotool, property_server, property_prefix='scope.tl.lamp.')
             self.footpedal = footpedal.Footpedal(self.iotool)
 
         try:

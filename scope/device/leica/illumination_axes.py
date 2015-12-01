@@ -200,6 +200,36 @@ class TL(_ShutterDeviceMixin, stand.LeicaComponent):
     _shutter_idx = 0
 
 class DMi8_TL(TL):
+    def _setup_device(self):
+        super()._setup_device()
+        self.send_message(
+            SET_SHUTTER_EVENT_SUBSCRIPTIONS,
+            0, # lamp switched on/switched off
+            1, # new lamp voltage
+            0, # lamp switched
+            0, # lamp step mode switched on/off
+            1, # TL shutter open/closed
+            0, # IL shutter open/closed
+            async=False,
+            intent="subscribe to TL shutter opened/closed and lamp intensity events"
+        )
+        self.register_event_callback(GET_SHUTTER_LAMP, self._on_shutter_event)
+        self.register_event_callback(GET_LAMP, self._on_lamp_event)
+        self._update_property('lamp.intensity', self.get_lamp_intensity())
+
+
+    def _on_shutter_event(self, response):
+        tl_open, il_open = (bool(int(c)) for c in response.response.split())
+        self._update_property('shutter_open', tl_open)
+        # no IL shutter -- reported as always open...
+
+    def _on_lamp_event(self, response):
+        intensity, lamp = (int(c) for c in response.response.split())
+        if lamp != self._shutter_idx:
+            logger.warn('Received IL lamp event from DMi8 which has no Leica-controlled IL lamp')
+        else:
+            self._update_property('lamp.intensity', intensity)
+
     def get_TTL_shutter_control_enabled(self):
         return bool(int(self.send_message(GET_SHUTTER_CTL, self._shutter_idx, async=False).response.split(' ')[0]))
 
@@ -289,31 +319,3 @@ class DM6000B_ShutterWatcher(stand.LeicaComponent):
         tl_open, il_open = (bool(int(c)) for c in response.response.split())
         self._update_property('tl.shutter_open', tl_open)
         self._update_property('il.shutter_open', il_open)
-
-class DMi8_ShutterWatcher(stand.LeicaComponent):
-    def _setup_device(self):
-        self.send_message(
-            SET_SHUTTER_EVENT_SUBSCRIPTIONS,
-            0, # lamp switched on/switched off
-            1, # new lamp voltage
-            0, # lamp switched
-            0, # lamp step mode switched on/off
-            1, # TL shutter open/closed
-            0, # IL shutter open/closed
-            async=False,
-            intent="subscribe to TL and IL shutter opened/closed events"
-        )
-        self.register_event_callback(GET_SHUTTER_LAMP, self._on_shutter_event)
-        self.register_event_callback(GET_LAMP, self._on_lamp_event)
-
-    def _on_shutter_event(self, response):
-        tl_open, il_open = (bool(int(c)) for c in response.response.split())
-        self._update_property('tl.shutter_open', tl_open)
-        # no IL shutter
-
-    def _on_lamp_event(self, response):
-        intensity, lamp = (bool(int(c)) for c in response.response.split())
-        if lamp != 1:
-            logger.warn('Received IL lamp event from DMi8 which has no Leica-controlled IL lamp')
-        else:
-            self._update_property('tl.lamp.intensity', intensity)
