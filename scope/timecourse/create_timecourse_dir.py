@@ -40,6 +40,11 @@ class Handler(timecourse_handler.BasicAcquisitionHandler):
     USE_LAST_FOCUS_POSITION = True
     INTERVAL_MODE = 'scheduled start'
     IMAGE_COMPRESSION = timecourse_handler.COMPRESSION.DEFAULT # useful options include PNG_FAST, PNG_NONE, TIFF_NONE
+    LOG_LEVEL = timecourse_handler.logging.INFO # DEBUG may be useful
+    # Set the following to have the script set the microscope apertures as desired:
+    TL_FIELD_DIAPHRAGM = None
+    TL_APERTURE_DIAPHRAGM = None
+    IL_FIELD_WHEEL = None
 
     def configure_additional_acquisition_steps(self):
         """Add more steps to the acquisition_sequencer's sequence as desired,

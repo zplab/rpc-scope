@@ -23,6 +23,8 @@
 # Authors: Erik Hvatum <ice.rikh@gmail.com>, Zach Pincus <zpincus@wustl.edu>
 
 import numpy
+import logging
+import time
 
 from . import base_handler
 from ..client_util import autofocus
@@ -87,6 +89,11 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     USE_LAST_FOCUS_POSITION = True
     INTERVAL_MODE = 'scheduled start'
     IMAGE_COMPRESSION = COMPRESSION.DEFAULT # useful options include PNG_FAST, PNG_NONE, TIFF_NONE
+    LOG_LEVEL = logging.INFO
+    # Set the following to have the script set the microscope apertures as desired:
+    TL_FIELD_DIAPHRAGM = None
+    TL_APERTURE_DIAPHRAGM = None
+    IL_FIELD_WHEEL = None
 
     def configure_additional_acquisition_steps(self):
         """Add more steps to the acquisition_sequencer's sequence as desired,
@@ -134,6 +141,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
 
     # Internal implementation functions are below. Override with care.
     def configure_timepoint(self):
+        t0 = time.time()
         self.logger.info('Configuring acquisitions')
         self.scope.async = False
         self.scope.il.shutter_open = True
@@ -142,6 +150,12 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.scope.tl.shutter_open = True
         self.scope.tl.lamp.enabled = False
         self.scope.tl.condenser_retracted = self.OBJECTIVE == 5 # only retract condenser for 5x objective
+        if self.TL_FIELD_DIAPHRAGM is not None:
+            self.scope.tl.field_diaphragm = self.TL_FIELD_DIAPHRAGM
+        if self.TL_APERTURE_DIAPHRAGM is not None:
+            self.scope.tl.aperture_diaphragm = self.TL_APERTURE_DIAPHRAGM
+        if self.IL_FIELD_WHEEL is not None:
+            self.scope.il.field_wheel = self.IL_FIELD_WHEEL
         self.scope.il.filter_cube = self.FILTER_CUBE
         self.scope.nosepiece.magnification = self.OBJECTIVE
         self.scope.camera.sensor_gain = '16-bit (low noise & high well capacity)'
@@ -153,6 +167,8 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             tl_enabled=True, tl_intensity=self.tl_intensity, lamp_off_delay=25) # delay is in microseconds
         self.image_names = ['bf.png']
         self.configure_additional_acquisition_steps()
+        t1 = time.time()
+        self.logger.debug('Configuration done ({:.1f} seconds)', t1 - t0)
 
     def configure_calibrations(self):
         self.dark_corrector = calibrate.DarkCurrentCorrector(self.scope)
@@ -230,6 +246,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         return start + interval_seconds
 
     def acquire_images(self, position_name, position_dir, position_metadata):
+        t0 = time.time()
         if self.USE_LAST_FOCUS_POSITION and position_metadata:
             z_start = position_metadata[-1]['fine_z']
         else:
@@ -240,9 +257,12 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         coarse_z, fine_z = autofocus.autofocus(self.scope, z_start, z_max,
             self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
             self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS)
-
-        self.logger.info('autofocus position: {}', fine_z)
+        t1 = time.time()
+        self.logger.debug('Autofocused ({:.1f} seconds)', t1 - t0)
+        self.logger.info('Autofocus z: {}', fine_z)
         images = self.scope.camera.acquisition_sequencer.run()
+        t2 = time.time()
+        self.logger.debug('Acquired ({:.1f} seconds)', t2 - t1)
         exposures = self.scope.camera.acquisition_sequencer.exposure_times
         images = [self.dark_corrector.correct(image, exposure) for image, exposure in zip(images, exposures)]
         timestamps = numpy.array(self.scope.camera.acquisition_sequencer.latest_timestamps)
