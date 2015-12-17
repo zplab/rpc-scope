@@ -12,15 +12,7 @@ def gui_main(host, **widget_classes):
     app = Qt.QApplication(params)
 
     scope, scope_properties = scope_client.client_main(host)
-    widgets = []
-    for name, wc in widget_classes.items():
-        if wc.can_run(scope):
-            widgets.append(wc(scope, scope_properties))
-        else:
-            print('Scope cannot currently run {}. (Hardware not turned on?)'.format(name))
-    scope.rebroadcast_properties()
-    for widget in widgets:
-        widget.show()
+    widget_namespace = make_and_show_widgets(scope, scope_properties, **widget_classes)
 
     # install a custom signal handler so that when python receives control-c, QT quits
     signal.signal(signal.SIGINT, sigint_handler)
@@ -34,3 +26,21 @@ def gui_main(host, **widget_classes):
     timer.timeout.connect(lambda: None)
 
     app.exec()
+
+class WidgetNamespace:
+    pass
+
+def make_and_show_widgets(host, scope, scope_properties, **widget_classes):
+    widget_namespace = WidgetNamespace()
+    widgets = []
+    for name, wc in widget_classes.items():
+        if wc.can_run(scope):
+            w = wc(scope, scope_properties)
+            widgets.append(w)
+            setattr(widget_namespace, name, w)
+        else:
+            print('Scope cannot currently run {}. (Hardware not turned on?)'.format(name))
+    scope.rebroadcast_properties()
+    for widget in widgets:
+        widget.show()
+    return widget_namespace
