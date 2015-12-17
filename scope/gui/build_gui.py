@@ -30,7 +30,7 @@ def gui_main(host, **widget_classes):
 class WidgetNamespace:
     pass
 
-def make_and_show_widgets(host, scope, scope_properties, **widget_classes):
+def make_and_show_widgets(scope, scope_properties, **widget_classes):
     widget_namespace = WidgetNamespace()
     widgets = []
     for name, wc in widget_classes.items():
@@ -44,3 +44,7 @@ def make_and_show_widgets(host, scope, scope_properties, **widget_classes):
     for widget in widgets:
         widget.show()
     return widget_namespace
+
+def make_and_show_all_widgets(scope, scope_properties):
+    from ..cli.scope_gui import WIDGETS
+    return make_and_show_widgets(scope, scope_properties, **WIDGETS)
