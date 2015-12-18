@@ -222,7 +222,13 @@ class RPCServer(BaseRPCServer):
                 except TypeError:
                     raise TypeError('Could not get description of callable "{}"'.format(prefixed_name))
                 argdict = {}
-                argdict['defaults'] = dict(zip(reversed(argspec.args), reversed(argspec.defaults))) if argspec.defaults else {}
+                if argspec.defaults:
+                    # if there are fewer defaults than args, the args at the end of the list get the defaults
+                    has_default = argspec.args[-len(argspec.defaults):]
+                    defaults = dict(zip(has_default, argspec.defaults))
+                else:
+                    defaults = {}
+                argdict['defaults'] = defaults
                 argdict['args'] = argspec.args[1:] if inspect.ismethod(v) else argspec.args # remove 'self'
                 argdict['varargs'] = argspec.varargs
                 argdict['varkw'] = argspec.varkw

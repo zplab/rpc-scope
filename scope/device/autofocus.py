@@ -32,10 +32,15 @@ import os.path
 
 from zplib.image import fast_fft
 from ..util import transfer_ism_buffer
+from ..util import logging
+logger = logging.get_logger(__name__)
 
 FFTW_WISDOM = os.path.expanduser('~/fftw_wisdom')
 if os.path.exists(FFTW_WISDOM):
     fast_fft.load_plan_hints(FFTW_WISDOM)
+    logger.debug('FFTW wisdom loaded')
+else:
+    logger.debug('no FFTW wisdom found!')
 
 class AutofocusMetric:
     def __init__(self, shape):
@@ -68,6 +73,7 @@ class FilteredBrenner(Brenner):
         self.filter = fast_fft.SpatialFilter(shape, self.PERIOD_RANGE, precision=32, threads=8, better_plan=True)
         if time.time() - t0 > 0.5:
             fast_fft.store_plan_hints(FFTW_WISDOM)
+            logger.debug('FFTW wisdom stored')
 
     def metric(self, image):
         filtered = self.filter.filter(image)

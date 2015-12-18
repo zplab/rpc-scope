@@ -225,7 +225,7 @@ class TimepointHandler:
         python variable definitions to pass to the class init method. (Leading
         '-' or '--' will be stripped, and internal '-'s will be converted to '_'.)
 
-        e.g. this allows the following usage: ./acquire.py --dry-run=True
+        e.g. this allows the following usage: ./acquire.py --dry-run=True --log-level=logging.DEBUG
 
         Parameters:
             timepoint_dir: location of timepoint directory. If not specified, default
@@ -241,7 +241,9 @@ class TimepointHandler:
                 while arg.startswith('-'):
                     arg = arg[1:]
                 arg = arg.replace('-', '_')
-                exec(arg, {}, cls_init_args)
+                # execute the argument in a restricted namespace containing only 'logging', and store the
+                # result in the args to pass to the class.
+                exec(arg, dict(logging=logging), cls_init_args)
             elif scheduled_start is None:
                 scheduled_start = float(arg)
             else:
