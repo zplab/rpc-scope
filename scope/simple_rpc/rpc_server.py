@@ -221,15 +221,13 @@ class RPCServer(BaseRPCServer):
                     argspec = inspect.getfullargspec(v)
                 except TypeError:
                     raise TypeError('Could not get description of callable "{}"'.format(prefixed_name))
-                argdict = argspec.__dict__
-                argdict.pop('annotations')
-                if argdict['defaults']:
-                    defaults = dict(zip(reversed(argdict['args']), reversed(argdict['defaults'])))
-                else:
-                    defaults = {}
-                argdict['defaults'] = defaults
-                if inspect.ismethod(v):
-                    argdict['args'] = argdict['args'][1:] # remove 'self'
+                argdict = {}
+                argdict['defaults'] = dict(zip(reversed(argspec.args), reversed(argspec.defaults))) if argspec.defaults else {}
+                argdict['args'] = argspec.args[1:] if inspect.ismethod(v) else argspec.args # remove 'self'
+                argdict['varargs'] = argspec.varargs
+                argdict['varkw'] = argspec.varkw
+                argdict['kwonlyargs'] = argspec.kwonlyargs
+                argdict['kwonlydefaults'] = argspec.kwonlydefaults if argspec.kwonlydefaults else {}
                 descriptions.append((prefixed_name, doc, argdict))
             else:
                 try:
