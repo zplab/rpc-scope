@@ -263,7 +263,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.logger.info('Autofocus z: {}', fine_z)
         images = self.scope.camera.acquisition_sequencer.run()
         t2 = time.time()
-        self.logger.debug('Acquired ({:.1f} seconds)', t2-t1)
+        self.logger.debug('Acquisition sequence run ({:.1f} seconds)', t2-t1)
         exposures = self.scope.camera.acquisition_sequencer.exposure_times
         images = [self.dark_corrector.correct(image, exposure) for image, exposure in zip(images, exposures)]
         timestamps = numpy.array(self.scope.camera.acquisition_sequencer.latest_timestamps)

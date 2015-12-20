@@ -28,6 +28,7 @@ import pathlib
 import json
 import logging
 import inspect
+import concurrent.futures as futures
 
 from ..util import json_encode
 from ..util import threaded_image_io
@@ -42,8 +43,9 @@ class DummyIO:
 class TimepointHandler:
     IMAGE_COMPRESSION = threaded_image_io.COMPRESSION.DEFAULT
     LOG_LEVEL = logging.INFO
+    IO_THREADS = 4
 
-    def __init__(self, data_dir, io_threads=4, log_level=None, scope_host='127.0.0.1', dry_run=False):
+    def __init__(self, data_dir, log_level=None, scope_host='127.0.0.1', dry_run=False):
         """Setup the basic code to take a single timepoint from a timecourse experiment.
 
         Parameters:
@@ -80,19 +82,21 @@ class TimepointHandler:
             log_level = getattr(logging, log_level)
         self.logger.setLevel(log_level)
         if self.write_files:
-            self.image_io = threaded_image_io.ThreadedIO(io_threads)
+            self.image_io = threaded_image_io.ThreadedIO(self.IO_THREADS)
             handler = logging.FileHandler(str(self.data_dir/'acquisitions.log'))
         else:
             self.image_io = DummyIO(self.logger)
             handler = logging.StreamHandler()
         handler.setFormatter(log_util.get_formatter())
         self.logger.addHandler(handler)
+        self._job_thread = futures.ThreadPoolExecutor(max_workers=1)
 
     def run_timepoint(self, scheduled_start):
         try:
             self.timepoint_prefix = time.strftime('%Y-%m-%dt%H%M')
             self.scheduled_start = scheduled_start
             self.start_time = time.time()
+            self._job_futures = []
             self.logger.info('Starting timepoint {} ({:.0f} minutes after scheduled)', self.timepoint_prefix,
                 (self.start_time-self.scheduled_start)/60)
             # record the timepoint prefix and timestamp for this timepoint into the
@@ -111,6 +115,15 @@ class TimepointHandler:
                 with self.experiment_metadata_path.open('w') as f:
                     json_encode.encode_legible_to_file(self.experiment_metadata, f)
             run_again = self.skip_positions != self.positions.keys() # don't run again if we're skipping all the positions
+            if self._job_futures:
+                self.logger.debug('Waiting for background jobs')
+                t0 = time.time()
+                # wait for all queued background jobs to complete.
+                futures.wait(self._job_futures)
+                # now get the result() from each future, which will raise any errors encountered
+                # during the execution.
+                [f.result() for f in self._job_futures]
+                self.logger.debug('Background jobs complete ({:.1f} seconds)', time.time()-t0)
             self.logger.info('Timepoint {} ended ({:.0f} minutes after starting)', self.timepoint_prefix,
                              (time.time()-self.start_time)/60)
             if run_again:
@@ -118,6 +131,18 @@ class TimepointHandler:
         except:
             self.logger.error('Exception in timepoint:', exc_info=True)
             raise
+
+    def add_background_job(function, *args, **kws):
+        """Add a function with parameters *args and **kws to a queue to be completed
+        asynchronously with the rest of the timepoint acquisition. This will be
+        run in a background thread, so make sure that the function acts in a
+        threadsafe manner. (NB: self.logger *is* thread-safe.)
+
+        All queued functions will be waited for completion before the timepoint
+        ends. Any exceptions will be propagated to the foreground after all
+        functions queued either finish or raise an exception.
+        """
+        self._job_futures.append(self._job_thread.submit(function, *args, **kws))
 
     def configure_timepoint(self):
         """Override this method with global configuration for the image acquisitions
@@ -177,7 +202,7 @@ class TimepointHandler:
                  json_encode.encode_legible_to_file(position_metadata, f)
         t3 = time.time()
         self.logger.debug('Images saved ({:.1f} seconds)', t3-t2)
-        self.logger.debug('Position done ({:.1f} seconds)', t3-t0)
+        self.logger.debug('Position done (total: {:.1f} seconds)', t3-t0)
 
     def acquire_images(self, position_name, position_dir, position_metadata):
         """Override this method in a subclass to define the image-acquisition sequence.
