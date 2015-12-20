@@ -162,13 +162,13 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.scope.camera.readout_rate = self.PIXEL_READOUT_RATE
         self.scope.camera.shutter_mode = 'Rolling'
         self.configure_calibrations() # sets self.bf_exposure and self.tl_intensity
-        self.scope.camera.acquisition_sequencer.new_sequence()
+        self.scope.camera.acquisition_sequencer.new_sequence(**{lamp:255 for lamp in lamps}) # set all Spectra X lamps to max. No reason to use less light!
         self.scope.camera.acquisition_sequencer.add_step(exposure_ms=self.bf_exposure,
             tl_enabled=True, tl_intensity=self.tl_intensity, lamp_off_delay=25) # delay is in microseconds
         self.image_names = ['bf.png']
         self.configure_additional_acquisition_steps()
         t1 = time.time()
-        self.logger.debug('Configuration done ({:.1f} seconds)', t1 - t0)
+        self.logger.debug('Configuration done ({:.1f} seconds)', t1-t0)
 
     def configure_calibrations(self):
         self.dark_corrector = calibrate.DarkCurrentCorrector(self.scope)
@@ -217,6 +217,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             self.image_io.write(cal_images, cal_image_paths)
         metering = self.experiment_metadata.setdefault('brightfield metering', {})
         metering[self.timepoint_prefix] = dict(exposure=self.bf_exposure, intensity=self.tl_intensity, ref_intensity=ref_intensity)
+        self.scope.camera.exposure_time = self.bf_exposure
 
     def get_next_run_time(self):
         interval_mode = self.INTERVAL_MODE
@@ -253,16 +254,16 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             z_start = self.positions[position_name][2]
         z_max = self.experiment_metadata['z_max']
         self.scope.camera.exposure_time = self.bf_exposure
-        self.scope.tl.intensity = self.tl_intensity
+        self.scope.tl.lamp.intensity = self.tl_intensity
         coarse_z, fine_z = autofocus.autofocus(self.scope, z_start, z_max,
             self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
             self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS)
         t1 = time.time()
-        self.logger.debug('Autofocused ({:.1f} seconds)', t1 - t0)
+        self.logger.debug('Autofocused ({:.1f} seconds)', t1-t0)
         self.logger.info('Autofocus z: {}', fine_z)
         images = self.scope.camera.acquisition_sequencer.run()
         t2 = time.time()
-        self.logger.debug('Acquired ({:.1f} seconds)', t2 - t1)
+        self.logger.debug('Acquired ({:.1f} seconds)', t2-t1)
         exposures = self.scope.camera.acquisition_sequencer.exposure_times
         images = [self.dark_corrector.correct(image, exposure) for image, exposure in zip(images, exposures)]
         timestamps = numpy.array(self.scope.camera.acquisition_sequencer.latest_timestamps)

@@ -40,7 +40,7 @@ class SpectraXWidget(device_widget.DeviceWidget):
         lamp_specs = scope.il.spectra_x.lamp_specs
         # sort lamp names by the values of the lamp_specs dict; to wit, the center wavelengths
         lamps = sorted(lamp_specs.keys(), key=lamp_specs.get)
-        self.lamp_controllers = [LampController(self, 'il.spectra_x.'+lamp, grid_layout, i) for i, lamp in enumerate(lamps)]
+        self.lamp_controllers = [LampController(self, self.PROPERTY_ROOT+lamp, grid_layout, i) for i, lamp in enumerate(lamps)]
 
         bottom_layout = Qt.QHBoxLayout()
         container_layout.addLayout(bottom_layout)
@@ -65,7 +65,7 @@ class TLLampWidget(device_widget.DeviceWidget):
         self.setWindowTitle('TL Lamp')
         grid_layout = Qt.QGridLayout()
         self.setLayout(grid_layout)
-        self.lamp_controller = LampController(self, 'tl.lamp', grid_layout, 0)
+        self.lamp_controller = LampController(self, self.PROPERTY_ROOT[:-1], grid_layout, 0)
 
 class LampWidget(Qt.QWidget):
     @staticmethod

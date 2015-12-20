@@ -28,11 +28,6 @@ import threading
 import json
 import pathlib
 
-from . import scope
-from . import scope_client
-from .simple_rpc import rpc_server
-from .simple_rpc import property_server
-from .util import transfer_ism_buffer
 from .util import logging
 from .util import base_daemon
 from .config import scope_configuration
@@ -82,6 +77,12 @@ class ScopeServer(base_daemon.Runner):
 
     # overrides from base_daemon.Runner to implement server behavior
     def initialize_daemon(self):
+        # do scope imports here so any at-import debug logging gets properly recorded
+        from . import scope
+        from .simple_rpc import rpc_server
+        from .simple_rpc import property_server
+        from .util import transfer_ism_buffer
+
         addresses = scope_configuration.get_addresses(self.host)
         self.context = zmq.Context()
 
@@ -116,6 +117,7 @@ class ScopeClientTester(threading.Thread):
         self.start()
 
     def run(self):
+        from . import scope_client
         scope_client.client_main()
         self.connected = True
 

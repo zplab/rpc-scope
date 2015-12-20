@@ -161,11 +161,11 @@ class TimepointHandler:
         if self.scope is not None:
             self.scope.stage.position = position_coords
         t1 = time.time()
-        self.logger.debug('Stage Positioned ({:.1f} seconds)', t0 - t1)
+        self.logger.debug('Stage Positioned ({:.1f} seconds)', t1-t0)
         images, image_names, new_metadata = self.acquire_images(position_name, position_dir,
             position_metadata)
         t2 = time.time()
-        self.logger.debug('{} Images Acquired ({:.1f} seconds)', len(images), t1 - t2)
+        self.logger.debug('{} Images Acquired ({:.1f} seconds)', len(images), t2-t1)
         image_paths = [position_dir / (self.timepoint_prefix + ' ' + name) for name in image_names]
         if new_metadata is None:
             new_metadata = {}
@@ -176,8 +176,8 @@ class TimepointHandler:
             with metadata_path.open('w') as f:
                  json_encode.encode_legible_to_file(position_metadata, f)
         t3 = time.time()
-        self.logger.debug('Images saved ({:.1f} seconds)', t3 - t2)
-        self.logger.debug('Position done ({:.1f} seconds)', t3 - t0)
+        self.logger.debug('Images saved ({:.1f} seconds)', t3-t2)
+        self.logger.debug('Position done ({:.1f} seconds)', t3-t0)
 
     def acquire_images(self, position_name, position_dir, position_metadata):
         """Override this method in a subclass to define the image-acquisition sequence.
