@@ -44,6 +44,9 @@ else:
 
 class AutofocusMetric:
     def __init__(self, shape):
+        self.reset()
+
+    def reset(self):
         self.focus_scores = []
 
     def evaluate_image(self, image):
@@ -70,7 +73,7 @@ class FilteredBrenner(Brenner):
     def __init__(self, shape):
         super().__init__(shape)
         t0 = time.time()
-        self.filter = fast_fft.SpatialFilter(shape, self.PERIOD_RANGE, precision=32, threads=8, better_plan=True)
+        self.filter = fast_fft.SpatialFilter(shape, self.PERIOD_RANGE, precision=32, threads=6, better_plan=True)
         if time.time() - t0 > 0.5:
             fast_fft.store_plan_hints(FFTW_WISDOM)
             logger.debug('FFTW wisdom stored')
@@ -110,8 +113,13 @@ METRICS = {
 }
 
 @functools.lru_cache(maxsize=16)
-def get_metric(metric, shape):
+def _get_metric(metric, shape):
     return METRICS[metric](shape)
+
+def get_metric(metric, shape):
+    metric = _get_metric(metric, shape) # return a possibly-cached version
+    metric.reset() # make sure the metric state is reset so we don't get a partially-used metric.
+    return metric
 
 class Autofocus:
     _CAMERA_MODE = dict(readout_rate='280 MHz', shutter_mode='Rolling')
@@ -217,7 +225,8 @@ class Autofocus:
 class MetricRunner(threading.Thread):
     def __init__(self, camera, frame_rate, frame_count, metric, retain_images):
         self.camera = camera
-        self.read_timeout_ms = 3 * 1/min(camera.get_max_interface_fps(), frame_rate) * 1000
+        # need extra-long timeout because thread/CPU contention with autofocus eval somehow can slow down image retrieval (not a GIL issue!)
+        self.read_timeout_ms = max(5000, 1/min(camera.get_max_interface_fps(), frame_rate) * 1000)
         self.frames_left = frame_count
         self.metric = metric
         self.camera_timestamps = []
@@ -232,22 +241,29 @@ class MetricRunner(threading.Thread):
 
     def join(self):
         super().join()
+        if self.exception:
+            raise self.exception
         for future in self.futures:
             future.result() # make sure all metric evals are done, and raise errors if any of them did
         return self.image_names, self.camera_timestamps
 
     def run(self):
-        while self.frames_left > 0:
-            name = self.camera.next_image(self.read_timeout_ms)
-            self.camera_timestamps.append(self.camera.get_latest_timestamp())
-            if self.retain_images:
-                self.image_names.append(name)
-                array = transfer_ism_buffer._borrow_array(name)
-            else:
-                array = transfer_ism_buffer._release_array(name)
-            self.futures.append(self.threadpool.submit(self.metric.evaluate_image, array))
-            self.frames_left -= 1
-
+        try:
+            self.exception = None
+            while self.frames_left > 0:
+                name = self.camera.next_image(self.read_timeout_ms)
+                self.camera_timestamps.append(self.camera.get_latest_timestamp())
+                if self.retain_images:
+                    self.image_names.append(name)
+                    array = transfer_ism_buffer._borrow_array(name)
+                else:
+                    array = transfer_ism_buffer._release_array(name)
+                self.futures.append(self.threadpool.submit(self.metric.evaluate_image, array))
+                self.frames_left -= 1
+        except Exception as e:
+            self.exception = e
+            
+            
 class ZRecorder(threading.Thread):
     def __init__(self, camera, stage, sleep_time=0.01):
         super().__init__()

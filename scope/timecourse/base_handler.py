@@ -132,7 +132,7 @@ class TimepointHandler:
             self.logger.error('Exception in timepoint:', exc_info=True)
             raise
 
-    def add_background_job(function, *args, **kws):
+    def add_background_job(self, function, *args, **kws):
         """Add a function with parameters *args and **kws to a queue to be completed
         asynchronously with the rest of the timepoint acquisition. This will be
         run in a background thread, so make sure that the function acts in a

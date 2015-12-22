@@ -189,11 +189,11 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             exposure_ratio = self.bf_exposure / exposure
             bf_avg = calibrate.get_averaged_images(self.scope, ref_positions,
                 self.dark_corrector, frames_to_average=2)
-        vignette_mask = calibrate.get_vignette_mask(bf_avg)
-        bf_flatfield, ref_intensity = calibrate.get_flat_field(bf_avg, vignette_mask)
+        self.vignette_mask = calibrate.get_vignette_mask(bf_avg)
+        bf_flatfield, ref_intensity = calibrate.get_flat_field(bf_avg, self.vignette_mask)
         ref_intensity *= exposure_ratio
         cal_image_names = ['vignette_mask.png', 'bf_flatfield.tiff']
-        cal_images = [vignette_mask.astype(numpy.uint8)*255, bf_flatfield]
+        cal_images = [self.vignette_mask.astype(numpy.uint8)*255, bf_flatfield]
 
         # calculate a fluorescent flatfield if requested
         if self.FLUORESCENCE_FLATFIELD_LAMP:
@@ -204,7 +204,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
                     min_intensity_fraction=0.1)
                 fl_avg = calibrate.get_averaged_images(self.scope, ref_positions,
                     self.dark_corrector, frames_to_average=5)
-            fl_flatfield, fl_intensity = calibrate.get_flat_field(fl_avg, vignette_mask)
+            fl_flatfield, fl_intensity = calibrate.get_flat_field(fl_avg, self.vignette_mask)
             cal_image_names.append('fl_flatfield.tiff')
             cal_images.append(fl_flatfield)
 
