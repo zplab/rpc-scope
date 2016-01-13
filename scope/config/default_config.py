@@ -49,10 +49,10 @@ scope_configuration = dict(
         ),
 
         SPECTRA_X_TIMING = dict(
-            on_latency_ms = 0, # Time from trigger signal to start of rise
-            rise_ms = 0, # Time from start of rise to end of rise
+            on_latency_ms = .130, # Time from trigger signal to start of rise
+            rise_ms = .020, # Time from start of rise to end of rise
             off_latency_ms = 0, # Time from end of trigger to start of fall
-            fall_ms = 0 # Time from start of fall to end of fall
+            fall_ms = .010 # Time from start of fall to end of fall
         ),
 
         FOOTPEDAL_PIN = 'B4',
