@@ -72,11 +72,14 @@ class Brenner(AutofocusMetric):
 class FilteredBrenner(Brenner):
     def __init__(self, shape):
         super().__init__(shape)
-        t0 = time.time()
+        timer = threading.Timer(1, logger.warning, 'Slow construction of FFTW filter detected, presumably because no cached plan could be found. May take >30 minutes!')
+        timer.start()
         self.filter = fast_fft.SpatialFilter(shape, self.PERIOD_RANGE, precision=32, threads=6, better_plan=True)
-        if time.time() - t0 > 0.5:
+        if timer.is_alive():
+            timer.cancel()
+        else: # timer went off and warning was issued...
+            logger.info('FFT filter constructed. Caching plan wisdom for next time.')
             fast_fft.store_plan_hints(FFTW_WISDOM)
-            logger.debug('FFTW wisdom stored')
 
     def metric(self, image):
         filtered = self.filter.filter(image)
@@ -262,8 +265,8 @@ class MetricRunner(threading.Thread):
                 self.frames_left -= 1
         except Exception as e:
             self.exception = e
-            
-            
+
+
 class ZRecorder(threading.Thread):
     def __init__(self, camera, stage, sleep_time=0.01):
         super().__init__()

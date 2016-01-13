@@ -212,4 +212,4 @@ class LeicaMessageManager(SerialMessageManager):
             logger.debug('received UNEXPECTED notification from Leica device: {} with response key: {}', response, response_key)
         else:
             # Unprompted command responses are an ominous sign and are of general interest
-            logger.warn('received UNPROMPTED COMMAND RESPONSE from Leica device: {} with response key: {}', response, response_key)
+             logger.warning('received UNPROMPTED COMMAND RESPONSE from Leica device: {} with response key: {}', response, response_key)

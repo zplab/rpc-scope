@@ -41,6 +41,20 @@ scope_configuration = dict(
         TL_PWM_PIN = 'D7',
         TL_PWM_MAX = 255,
 
+        TL_TIMING = dict(
+            on_latency_ms = 0, # Time from trigger signal to start of rise
+            rise_ms = 0 # Time from start of rise to end of rise
+            off_latency_ms = 0, # Time from end of trigger to start of fall
+            fall_ms = 0, # Time from start of fall to end of fall
+        )
+
+        SPECTRA_X_TIMING = dict(
+            on_latency_ms = 0, # Time from trigger signal to start of rise
+            rise_ms = 0 # Time from start of rise to end of rise
+            off_latency_ms = 0, # Time from end of trigger to start of fall
+            fall_ms = 0, # Time from start of fall to end of fall
+        )
+
         FOOTPEDAL_PIN = 'B4',
         FOOTPEDAL_CLOSED_TTL_STATE = False,
         FOOTPEDAL_BOUNCE_DELAY_MS = 100

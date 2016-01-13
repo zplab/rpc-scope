@@ -102,7 +102,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         this as follows:
             def configure_additional_acquisition_steps(self):
                 self.scope.camera.acquisition_sequencer.add_step(exposure_ms=200,
-                    tl_enabled=False, cyan=True)
+                    tl_enabled=False, fl_enabled='cyan')
                 self.image_names.append('gfp.png')
         """
         pass
@@ -145,8 +145,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.logger.info('Configuring acquisitions')
         self.scope.async = False
         self.scope.il.shutter_open = True
-        lamps = self.scope.il.spectra_x.lamp_specs.keys()
-        self.scope.il.spectra_x.lamps(**{lamp+'_enabled':False for lamp in lamps})
+        self.scope.il.spectra_x.lamps(**{lamp+'_enabled':False for lamp in self.scope.il.spectra_x.lamp_specs})
         self.scope.tl.shutter_open = True
         self.scope.tl.lamp.enabled = False
         self.scope.tl.condenser_retracted = self.OBJECTIVE == 5 # only retract condenser for 5x objective
@@ -162,9 +161,9 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.scope.camera.readout_rate = self.PIXEL_READOUT_RATE
         self.scope.camera.shutter_mode = 'Rolling'
         self.configure_calibrations() # sets self.bf_exposure and self.tl_intensity
-        self.scope.camera.acquisition_sequencer.new_sequence(**{lamp:255 for lamp in lamps}) # set all Spectra X lamps to max. No reason to use less light!
+        self.scope.camera.acquisition_sequencer.new_sequence() # internally sets all spectra x intensities to 255, unless specified here
         self.scope.camera.acquisition_sequencer.add_step(exposure_ms=self.bf_exposure,
-            tl_enabled=True, tl_intensity=self.tl_intensity, lamp_off_delay=25) # delay is in microseconds
+            tl_enabled=True, tl_intensity=self.tl_intensity)
         self.image_names = ['bf.png']
         self.configure_additional_acquisition_steps()
         t1 = time.time()
@@ -255,9 +254,10 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         z_max = self.experiment_metadata['z_max']
         self.scope.camera.exposure_time = self.bf_exposure
         self.scope.tl.lamp.intensity = self.tl_intensity
-        coarse_z, fine_z = autofocus.autofocus(self.scope, z_start, z_max,
-            self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
-            self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS)
+        with scope.tl.lamp.in_state(enabled=True), scope.stage.in_state(z_speed=1):
+            coarse_z, fine_z = autofocus.coarse_fine_autofocus(self.scope, z_start, z_max,
+                self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
+                self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS)
         t1 = time.time()
         self.logger.debug('Autofocused ({:.1f} seconds)', t1-t0)
         self.logger.info('Autofocus z: {}', fine_z)

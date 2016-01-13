@@ -38,7 +38,7 @@ logger = logging.get_logger(__name__)
 
 def sigterm_handler(signal_number, stack_frame):
     """Signal handler for end-process signals."""
-    logger.warn('Caught termination signal {}. Terminating.', signal_number)
+     logger.warning('Caught termination signal {}. Terminating.', signal_number)
     raise SystemExit('Terminating on signal {}'.format(signal_number))
 
 DEFAULT_SIGNAL_MAP = {
