@@ -22,6 +22,7 @@
 #
 # Authors: Zach Pincus
 
+import time
 import collections
 from ..config import scope_configuration
 
@@ -81,7 +82,7 @@ class AcquisitionSequencer:
         self._latest_timestamps = None
 
     def _add_delay(self, delay_ms):
-        if delay == 0:
+        if delay_ms == 0:
             return []
         assert 0.004 <= delay_ms <= 2**15-1
         delay_us = int(delay_ms * 1000)
@@ -222,6 +223,10 @@ class AcquisitionSequencer:
             overlap_enabled=True, auxiliary_out_source='FireAll', selected_io_pin_inverted=False)
         try:
             with self._spectra_x.in_state(**self._starting_fl_lamp_state), self._tl_lamp.in_state(enabled=False, intensity=self._tl_lamp.get_intensity()):
+                # wait for lamps to turn off
+                io_config = self._config.IOTool
+                time.sleep(max(io_config.TL_TIMING.off_latency + io_config.TL_TIMING.fall_time,
+                               io_config.SPECTRA_X_TIMING.off_latency + io_config.SPECTRA_X_TIMING.fall_time))
                 readout_ms = self._camera.get_readout_time() # get this after setting the relevant camera modes above
                 self._exposures = [exp + readout_ms for exp in self._fire_all_time]
                 self._iotool.start_program()

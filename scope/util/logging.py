@@ -45,7 +45,7 @@ def detach_console_handler():
 
 def log_exception(logger, preamble):
     exc_info = sys.exc_info()
-     logger.warning('{} {}', preamble, exc_info[1]) # print out the basic exception message
+    logger.warning('{} {}', preamble, exc_info[1]) # print out the basic exception message
     logger.debug('Detailed information', exc_info=exc_info) # log traceback at debug level
 
 # default logging initialization
