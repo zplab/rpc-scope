@@ -118,7 +118,6 @@
                 <F N="scope/device/__init__.py"/>
                 <F N="scope/device/acquisition_sequencer.py"/>
                 <F N="scope/device/autofocus.py"/>
-                <F N="scope/device/eh_footpedals.py"/>
                 <F N="scope/device/footpedal.py"/>
                 <F N="scope/device/peltier.py"/>
                 <F N="scope/device/spectra_x.py"/>
