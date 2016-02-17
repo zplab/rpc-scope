@@ -27,6 +27,8 @@ import numpy
 from scipy import ndimage
 from zplib.scalar_stats import mcd
 
+def image_order_statistic(image, k):
+    return numpy.partition(image, k, axis=None)[k]
 
 class DarkCurrentCorrector:
     """Class that acquires dark-current images and corrects newly-acquired images
@@ -121,8 +123,8 @@ def meter_exposure_and_intensity(scope, lamp, max_exposure=200, max_intensity=25
             exposure time could be returned that yields images which fall below
             this minimum.
         max_intensity_fraction: brightest value (in terms of maximum image
-            intensity) allowed for the image to count as 'properly exposed', as
-            a fraction of the camera bit depth.
+            intensity, allowing for 11 hot pixels) allowed for the image to
+            count as 'properly exposed', as a fraction of the camera bit depth.
 
     Returns: exposure_time, lamp_intensity
     """
@@ -133,12 +135,12 @@ def meter_exposure_and_intensity(scope, lamp, max_exposure=200, max_intensity=25
         bit_depth = int(scope.camera.sensor_gain[:2])
         max_good_value = max_intensity_fraction * (2**bit_depth-1)
         good_intensity = None
-        scope.camera.exposure_time = 3 # find a good intensity for a short exposure time (not the shortest! Leave some room for good_exposure to start out underexposed...)
+        scope.camera.exposure_time = 5 # find a good intensity for a short exposure time (not the shortest! Leave some room for good_exposure to start out underexposed...)
         for intensity in intensities:
             lamp.intensity = intensity
             scope.camera.send_software_trigger()
             image = scope.camera.next_image(1000)
-            if image.max() < max_good_value:
+            if image_order_statistic(image, -12) < max_good_value:
                 good_intensity = intensity
                 break
         if good_intensity is None:
@@ -198,14 +200,17 @@ def meter_exposure(scope, lamp, max_exposure=200, min_intensity_fraction=0.3,
             scope.camera.exposure_time = exposure
             scope.camera.send_software_trigger()
             image = scope.camera.next_image(max(1000, 2*exposure))
-            if image.max() < max_good_value:
+            image_max = image_order_statistic(image, -12)
+            image_min = image_order_statistic(image, int(image.size * 0.95))
+            if image_max < max_good_value:
                 good_exposure = exposure
             else:
                 break
-            if numpy.percentile(image, 95) > min_good_value:
+            if image_min > min_good_value:
                 break
     if good_exposure is None:
-        raise RuntimeError('Could not find a valid exposure time')
+        raise RuntimeError('Could not find a valid exposure time: intensity {}, exposure {}, image max {}, image min {}, max good {}, min good {}'.format(
+            lamp.intensity, exposure, image_max, image_min, max_good_value, min_good_value))
     scope.camera.end_image_sequence_acquisition()
     scope.camera.exposure_time = good_exposure
     return good_exposure
