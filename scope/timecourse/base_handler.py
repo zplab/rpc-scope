@@ -112,8 +112,7 @@ class TimepointHandler:
             self.end_time = time.time()
             self.experiment_metadata.setdefault('durations', []).append(self.end_time - self.start_time)
             if self.write_files:
-                with self.experiment_metadata_path.open('w') as f:
-                    json_encode.encode_legible_to_file(self.experiment_metadata, f)
+                self._write_atomic_json(self.experiment_metadata_path, self.experiment_metadata)
             run_again = self.skip_positions != self.positions.keys() # don't run again if we're skipping all the positions
             if self._job_futures:
                 self.logger.debug('Waiting for background jobs')
@@ -195,14 +194,21 @@ class TimepointHandler:
         if new_metadata is None:
             new_metadata = {}
         new_metadata['timestamp'] = timestamp
+        new_metadata['timepoint'] = self.timepoint_prefix
         position_metadata.append(new_metadata)
         if self.write_files:
             self.image_io.write(images, image_paths, self.IMAGE_COMPRESSION)
-            with metadata_path.open('w') as f:
-                 json_encode.encode_legible_to_file(position_metadata, f)
+            self._write_atomic_json(metadata_path, position_metadata)
         t3 = time.time()
         self.logger.debug('Images saved ({:.1f} seconds)', t3-t2)
         self.logger.debug('Position done (total: {:.1f} seconds)', t3-t0)
+
+    def _write_atomic_json(self, out_path, data):
+        out_path = pathlib.Path(out_path)
+        tmp_path = out_path.parent / (out_path.name + '-' +self.timepoint_prefix)
+        with tmp_path.open('w') as f:
+             json_encode.encode_legible_to_file(position_metadata, f)
+        os.replace(str(tmp_path), str(out_path))
 
     def acquire_images(self, position_name, position_dir, position_metadata):
         """Override this method in a subclass to define the image-acquisition sequence.

@@ -144,6 +144,11 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         t0 = time.time()
         self.logger.info('Configuring acquisitions')
         self.scope.async = False
+        # in 'TL BF' mode, condenser auto-retracts for 5x objective, and field/aperture get set appropriately
+        # on objective switch. That gives a sane-ish default. Then allow specific customization of
+        # these values later.
+        self.scope.stand.active_microscopy_method = 'TL BF'
+        self.scope.nosepiece.magnification = self.OBJECTIVE
         self.scope.il.shutter_open = True
         self.scope.il.spectra_x.lamps(**{lamp+'_enabled':False for lamp in self.scope.il.spectra_x.lamp_specs})
         self.scope.tl.shutter_open = True
@@ -156,7 +161,6 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         if self.IL_FIELD_WHEEL is not None:
             self.scope.il.field_wheel = self.IL_FIELD_WHEEL
         self.scope.il.filter_cube = self.FILTER_CUBE
-        self.scope.nosepiece.magnification = self.OBJECTIVE
         self.scope.camera.sensor_gain = '16-bit (low noise & high well capacity)'
         self.scope.camera.readout_rate = self.PIXEL_READOUT_RATE
         self.scope.camera.shutter_mode = 'Rolling'
