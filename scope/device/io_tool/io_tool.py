@@ -62,7 +62,7 @@ class IOTool:
         echo_reply = self._wait_for_ready_prompt()
         assert echo_reply == _ECHO_OFF + b'\r\n' # read back echo of above (no further echoes will come)
         self._assert_empty_buffer()
-        self._serial_port.setTimeout(None) # change to infinite time-out once initialized and in known-good state,
+        self._serial_port.timeout = None # change to infinite time-out once initialized and in known-good state,
         # so that waiting for IOTool replies won't cause timeouts
 
     def execute(self, *commands):

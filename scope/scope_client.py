@@ -96,6 +96,10 @@ def _make_rpc_client(rpc_addr, interrupt_addr, async_addr, context=None):
     scope._rpc_client = client
     scope._async_client = async_client
     if hasattr(scope, 'camera'):
+        # use a special RPC channel (the "async" connection) devoted to just getting
+        # the latest image name from the server. This allows us to grab the latest
+        # image from the camera, even when the main connection to the scope server
+        # is tied up with a synchronous call (like autofocus).
         def latest_image():
             return async_get_data(async_client('latest_image'))
         latest_image.__doc__ = scope.camera.latest_image.__doc__
@@ -118,7 +122,7 @@ def client_main(host='127.0.0.1', context=None, subscribe_all=False):
     return scope, scope_properties
 
 class LiveStreamer:
-    def __init__(self, scope, scope_properties, image_ready_callback):
+    def __init__(self, scope, scope_properties, image_ready_callback=None):
         self.scope = scope
         self.image_ready_callback = image_ready_callback
         self.image_received = threading.Event()
@@ -163,10 +167,11 @@ class LiveStreamer:
         # updates.
         if frame_number is -1:
             return
+        self.frame_number = frame_number
         if not self.image_received.is_set():
-            self.frame_number = frame_number
             self.image_received.set()
-            self.image_ready_callback()
+            if self.image_ready_callback is not None:
+                self.image_ready_callback()
 
     def _depth_update(self, depth):
         self.bit_depth = depth
