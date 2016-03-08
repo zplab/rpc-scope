@@ -38,7 +38,7 @@ class DummyIO:
     def __init__(self, logger):
         self.logger = logger
     def write(*args, **kws):
-        self. logger.warning('Trying to write files, but file writing was disabled!')
+        self.logger.warning('Trying to write files, but file writing was disabled!')
 
 class TimepointHandler:
     IMAGE_COMPRESSION = threaded_image_io.COMPRESSION.DEFAULT
