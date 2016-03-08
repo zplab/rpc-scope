@@ -96,6 +96,8 @@ class IOTool:
     def start_program(self, *commands, iters=1):
         """Run a program a given number of times. If no commands are given here,
         a program should have been stored previously with store_program().
+
+        After start_program is called, wait_until_done() must subsequently be called.
         """
         if commands:
             self.store_program(*commands)

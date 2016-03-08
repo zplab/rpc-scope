@@ -26,21 +26,21 @@ import numpy
 import time
 from concurrent import futures
 import threading
-import queue
 import functools
-import os.path
 
 from zplib.image import fast_fft
 from ..util import transfer_ism_buffer
 from ..util import logging
+from ..config import scope_configuration
+
 logger = logging.get_logger(__name__)
 
-FFTW_WISDOM = os.path.expanduser('~/fftw_wisdom')
-if os.path.exists(FFTW_WISDOM):
-    fast_fft.load_plan_hints(FFTW_WISDOM)
+FFTW_WISDOM = scope_configuration.CONFIG_DIR / 'fftw_wisdom'
+if FFTW_WISDOM.exists():
+    fast_fft.load_plan_hints(str(FFTW_WISDOM))
     logger.debug('FFTW wisdom loaded')
 else:
-    logger.debug('no FFTW wisdom found!')
+    logger.warning('no FFTW wisdom found!')
 
 class AutofocusMetric:
     def __init__(self, shape):
@@ -72,14 +72,14 @@ class Brenner(AutofocusMetric):
 class FilteredBrenner(Brenner):
     def __init__(self, shape):
         super().__init__(shape)
-        timer = threading.Timer(1, logger.warning, 'Slow construction of FFTW filter detected, presumably because no cached plan could be found. May take >30 minutes!')
+        timer = threading.Timer(1, logger.warning, ['Slow construction of FFTW filter detected, presumably because no cached plan could be found. May take >30 minutes!'])
         timer.start()
         self.filter = fast_fft.SpatialFilter(shape, self.PERIOD_RANGE, precision=32, threads=6, better_plan=True)
         if timer.is_alive():
             timer.cancel()
         else: # timer went off and warning was issued...
             logger.info('FFT filter constructed. Caching plan wisdom for next time.')
-            fast_fft.store_plan_hints(FFTW_WISDOM)
+            fast_fft.store_plan_hints(str(FFTW_WISDOM))
 
     def metric(self, image):
         filtered = self.filter.filter(image)

@@ -22,6 +22,7 @@
 #
 # Authors: Zach Pincus
 
+import time
 import collections
 from ..config import scope_configuration
 
@@ -34,10 +35,11 @@ class AcquisitionSequencer:
         self._spectra_x = scope.il.spectra_x
         self._tl_lamp = scope.tl.lamp
         self._config = scope_configuration.get_config()
-        self._latest_timestamps = None
         self._exposures = None
-        self._compiled = False
-        self._num_acquisitions = 0
+        self._output = None
+        self._iotool_program = None
+        self._latest_timestamps = None
+        self.new_sequence()
 
     def new_sequence(self, **fl_intensities):
         """Create a new acquisition sequence of camera exposures with different
@@ -69,7 +71,6 @@ class AcquisitionSequencer:
             set to full intensity.
         """
         self._steps = []
-        self._exposures = None
         self._compiled = False
         # starting state is with all the spectra x lamps off
         lamp_names = self._spectra_x.get_lamp_specs() # returns a dict
@@ -78,32 +79,6 @@ class AcquisitionSequencer:
         for lamp in lamp_names:
             intensity = fl_intensities.get(lamp, 255)
             self._starting_fl_lamp_state[lamp+'_intensity'] = intensity
-        self._latest_timestamps = None
-
-    def _add_delay(self, delay_ms):
-        if delay == 0:
-            return []
-        assert 0.004 <= delay_ms <= 2**15-1
-        delay_us = int(delay_ms * 1000)
-        steps = []
-        if delay_us < 2**15: # the most the microsecond counter can count to is 2**15-1 (32767)
-            us = delay_us
-            ms = 0
-        else:
-            us = delay_us % 1000
-            ms = delay_us // 1000
-            # delay_ms command takes 15 microseconds to run. Subtract this off.
-            # The easiest thing to do is just to lop off 1 full ms and add that back
-            # as an additional 985 us delay, plus the 15 to do the time to run delay_ms.
-            # This way, we also know that us is always > 4, so that we won't have a problem
-            # with the fact that delay_us takes 4 us to run...
-            ms -= 1
-            us += 985
-            steps.append(self._iotool.commands.delay_ms(ms))
-        # Note: there will always be a us delay, and that we know it will be >= 4
-        # delay_us takes 4 us to run. Subtract that off.
-        steps.append(self._iotool.commands.delay_us(us-4))
-        return steps
 
     def add_step(self, exposure_ms, tl_enabled=False, tl_intensity=None, fl_enabled=False, delay_after_ms=0):
         """Add an image acquisition step to the existing sequence.
@@ -199,6 +174,31 @@ class AcquisitionSequencer:
         self._compiled = True
         self._iotool_program = iotool_steps
 
+    def _add_delay(self, delay_ms):
+        if delay_ms == 0:
+            return []
+        assert 0.004 <= delay_ms <= 2**15-1
+        delay_us = int(delay_ms * 1000)
+        steps = []
+        if delay_us < 2**15: # the most the microsecond counter can count to is 2**15-1 (32767)
+            us = delay_us
+            ms = 0
+        else:
+            us = delay_us % 1000
+            ms = delay_us // 1000
+            # delay_ms command takes 15 microseconds to run. Subtract this off.
+            # The easiest thing to do is just to lop off 1 full ms and add that back
+            # as an additional 985 us delay, plus the 15 to do the time to run delay_ms.
+            # This way, we also know that us is always > 4, so that we won't have a problem
+            # with the fact that delay_us takes 4 us to run...
+            ms -= 1
+            us += 985
+            steps.append(self._iotool.commands.delay_ms(ms))
+        # Note: there will always be a us delay, and that we know it will be >= 4
+        # delay_us takes 4 us to run. Subtract that off.
+        steps.append(self._iotool.commands.delay_us(us-4))
+        return steps
+
     def get_iotool_program(self):
         self._compile()
         return self._iotool_program
@@ -222,6 +222,10 @@ class AcquisitionSequencer:
             overlap_enabled=True, auxiliary_out_source='FireAll', selected_io_pin_inverted=False)
         try:
             with self._spectra_x.in_state(**self._starting_fl_lamp_state), self._tl_lamp.in_state(enabled=False, intensity=self._tl_lamp.get_intensity()):
+                # wait for lamps to turn off
+                io_config = self._config.IOTool
+                time.sleep(max(io_config.TL_TIMING.off_latency_ms + io_config.TL_TIMING.fall_ms,
+                               io_config.SPECTRA_X_TIMING.off_latency_ms + io_config.SPECTRA_X_TIMING.fall_ms) / 1000)
                 readout_ms = self._camera.get_readout_time() # get this after setting the relevant camera modes above
                 self._exposures = [exp + readout_ms for exp in self._fire_all_time]
                 self._iotool.start_program()
