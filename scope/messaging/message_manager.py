@@ -55,6 +55,7 @@ class MessageManager(threading.Thread):
         self.pending_grouped_responses = collections.defaultdict(list)
         self.pending_standalone_responses = collections.defaultdict(list)
         self.pending_persistent_responses = collections.defaultdict(list)
+        self.latest_callback = None
         super().__init__(name=self.thread_name, daemon=daemon)
         self.start()
 
@@ -143,6 +144,7 @@ class MessageManager(threading.Thread):
         if response_key is not None and response_callback is not None:
             response_dict = self.pending_grouped_responses if coalesce else self.pending_standalone_responses
             response_dict[response_key].append(response_callback)
+            self.latest_callback = response_callback
         self._send_message(message)
 
     def _send_message(self, message):
@@ -210,6 +212,15 @@ class LeicaMessageManager(SerialMessageManager):
             # Windows software since last power cycled, they may be overwhelming in number. Therefore, these are appropriately
             # debug messages.
             logger.debug('received UNEXPECTED notification from Leica device: {} with response key: {}', response, response_key)
+        elif response[2:4] == '99':
+            # Error responses in the xx99x class  won't map back to a given response key properly, so we hackishly assume they 
+            # pertain to the most recent command sent.
+            if response[2:5] == '998':
+                logger.error('Leica function unit {} not available.', response[:2])
+            else:
+                logger.error('Leica error: {}.', response)
+            if self.latest_callback is not None:
+                self._run_callback_safely(self.latest_callback, response)
         else:
             # Unprompted command responses are an ominous sign and are of general interest
             logger.warn('received UNPROMPTED COMMAND RESPONSE from Leica device: {} with response key: {}', response, response_key)

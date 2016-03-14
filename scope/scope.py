@@ -58,8 +58,10 @@ class Scope(message_device.AsyncDeviceNamespace):
             logger.info('Looking for microscope.')
             manager = message_manager.LeicaMessageManager(config.Stand.SERIAL_PORT, config.Stand.SERIAL_BAUD)
             self.stand = stand.Stand(manager, property_server, property_prefix='scope.stand.')
-            is_dm6000 = all(FU in self.stand.get_available_function_unit_IDs() for FU in [81, 83, 84, 94])
-
+            function_units = self.stand.get_available_function_unit_IDs()
+            is_dm6000 = all(FU in function_units for FU in [81, 83, 84, 94])
+            has_leica_LED = not is_dm6000 and 77 in function_units
+            
             has_obj_safe_mode = is_dm6000
             self.nosepiece = objective_turret.ObjectiveTurret(has_obj_safe_mode, manager, property_server, property_prefix='scope.nosepiece.')
             self.stage = stage.Stage(manager, property_server, property_prefix='scope.stage.')
@@ -69,7 +71,10 @@ class Scope(message_device.AsyncDeviceNamespace):
                 self._shutter_watcher = illumination_axes.DM6000B_ShutterWatcher(manager, property_server, property_prefix='scope.')
             else:
                 il = illumination_axes.DMi8_IL
-                tl = illumination_axes.DMi8_TL
+                if has_leica_LED:
+                    tl = illumination_axes.DMi8_LeicaLED_TL
+                else:
+                    tl = illumination_axes.DMi8_TL
             self.il = il(manager, property_server, property_prefix='scope.il.')
             self.tl = tl(manager, property_server, property_prefix='scope.tl.')
             has_scope = True
@@ -97,10 +102,10 @@ class Scope(message_device.AsyncDeviceNamespace):
             except SerialException:
                 has_spectra_x = False
                 logger.log_exception('Could not connect to Spectra X:')
-            if has_scope and not is_dm6000: # using DMi8, and scope is turned on
-                self.tl.lamp = tl_lamp.DMi8_Lamp(self.tl, self.iotool, property_server, property_prefix='scope.tl.lamp.')
+            if has_leica_LED: # using DMi8, and scope is turned on
+                self.tl.lamp = tl_lamp.LeicaLED_Lamp(self.tl, self.iotool, property_server, property_prefix='scope.tl.lamp.')
             else:
-                self.tl.lamp = tl_lamp.DM6000B_Lamp(self.iotool, property_server, property_prefix='scope.tl.lamp.')
+                self.tl.lamp = tl_lamp.SutterLED_Lamp(self.iotool, property_server, property_prefix='scope.tl.lamp.')
             self.footpedal = footpedal.Footpedal(self.iotool)
 
         try:

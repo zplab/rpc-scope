@@ -48,7 +48,7 @@ class TL_Lamp_Base(property_device.PropertyDevice):
         pass
 
 
-class DM6000B_Lamp(TL_Lamp_Base):
+class SutterLED_Lamp(TL_Lamp_Base):
     def __init__(self, iotool, property_server=None, property_prefix=''):
         super().__init__(iotool, property_server, property_prefix)
         self.set_intensity(255)
@@ -64,7 +64,7 @@ class DM6000B_Lamp(TL_Lamp_Base):
         return self._intensity
 
 
-class DMi8_Lamp(TL_Lamp_Base):
+class LeicaLED_Lamp(TL_Lamp_Base):
     def __init__(self, dmi8_tl, iotool, property_server=None, property_prefix=''):
         super().__init__(iotool, property_server, property_prefix)
         self.set_intensity = dmi8_tl.set_lamp_intensity
