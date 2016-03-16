@@ -26,7 +26,7 @@ import time
 import collections
 from ..config import scope_configuration
 
-ExposureStep = collections.namedtuple('ExposureStep', ['exposure_ms', 'tl_enabled', 'tl_intensity', 'fl_enabled', 'delay_after_ms', 'on_delay_ms', 'off_delay_ms'])
+ExposureStep = collections.namedtuple('ExposureStep', ['exposure_ms', 'lamp', 'tl_intensity', 'delay_after_ms', 'on_delay_ms', 'off_delay_ms'])
 
 class AcquisitionSequencer:
     def __init__(self, scope):
@@ -78,35 +78,35 @@ class AcquisitionSequencer:
         """
         self._steps = []
         self._compiled = False
-        assert self._lamp_names.issuperset(fl_intensities.keys())
+        if not self._lamp_names.issuperset(fl_intensities.keys()):
+            raise ValueError('Unrecognized spectra x lamp name. Valid names are: {}'.format(', '.join(sorted(self._lamp_names))))
         self._starting_fl_lamp_state = dict(self._default_fl_lamp_state)
         for lamp, intensity in fl_intensities.items():
             self._starting_fl_lamp_state[lamp+'_intensity'] = intensity
         self._fl_intensities = fl_intensities
 
-    def add_step(self, exposure_ms, tl_enabled=False, tl_intensity=None, fl_enabled=False, delay_after_ms=0):
+    def add_step(self, exposure_ms, lamp, tl_intensity=None, delay_after_ms=0):
         """Add an image acquisition step to the existing sequence.
 
         Parameters
         exposure_ms: exposure time in ms for the image.
-        tl_enabled: True/False for whether the transmitted lamp should be enabled.
+        lamp: 'TL' for transmitted light, or name of a spectra X lamp for
+          fluorescence (or a list of one or moer spectra x lamp names).
         tl_intensity: intensity of the transmitted lamp, should it be enabled.
           If none, then do not change intensity setting from current value.
-        fl_enabled: list of spectra x lamps to enable, or string for a single lamp.
-          NB: Either tl_enabled must be True or fl_enabled must be non-empty/non-False
         delay_after_ms: time to delay after turning off the lamps but before triggering
           the next acquisition.
         """
         self._compiled = False
-        if tl_enabled and fl_enabled:
-            raise ValueError('Only the TL lamp OR one or more Spectra X lamps can be enabled, not both.')
-        if not (tl_enabled or fl_enabled):
-            raise ValueError('Either the TL lamp OR one or more Spectra X lamps must be enabled.')
-        if tl_enabled:
+        if lamp == 'TL':
             lamp_timing = self._config.IOTool.TL_TIMING
         else:
-            if isinstance(fl_enabled, str):
-                fl_enabled = [fl_enabled]
+            if tl_intensity is not None:
+                raise ValueError('Cannot control TL intensity when the requested lamp is not TL.')
+            if isinstance(lamp, str):
+                lamp = [lamp]
+            if not self._lamp_names.issuperset(lamp):
+            raise ValueError('Unrecognized spectra x lamp name. Valid names are: {}'.format(', '.join(sorted(self._lamp_names))))
             lamp_timing = self._config.IOTool.SPECTRA_X_TIMING
         # Now, calculate the exposure timing: how long to delay after turning the lamp on, and
         # how long to delay after turning the lamp off.
@@ -134,7 +134,7 @@ class AcquisitionSequencer:
         full_on_time = exposure_ms - half_rise_fall
         on_delay_ms = lamp_timing.on_latency_ms + lamp_timing.rise_ms + full_on_time - lamp_timing.off_latency_ms
         off_delay_ms = lamp_timing.off_latency_ms + lamp_timing.fall_ms
-        self._steps.append(ExposureStep(exposure_ms, tl_enabled, tl_intensity, fl_enabled, delay_after_ms, on_delay_ms, off_delay_ms))
+        self._steps.append(ExposureStep(exposure_ms, lamp, tl_intensity, delay_after_ms, on_delay_ms, off_delay_ms))
 
     def _compile(self):
         """Send the acquisition sequence to the IOTool box"""
@@ -156,17 +156,17 @@ class AcquisitionSequencer:
             iotool_steps += self._add_delay(0.05)
             iotool_steps.append(commands.wait_high(io_config.CAMERA_PINS.aux_out1)) # AuxOut1 is set to 'FireAll'
             # Now turn on the required lamp (either TL or Spectra X)
-            if step.tl_enabled:
+            if step.lamp == 'TL':
                 iotool_steps.extend(commands.transmitted_lamp(enabled=True, intensity=step.tl_intensity))
             else:
-                iotool_steps.extend(commands.spectra_x_lamps(**{lamp:True for lamp in step.fl_enabled}))
+                iotool_steps.extend(commands.spectra_x_lamps(**{lamp:True for lamp in step.lamp}))
             # wait the required amount of time for the lamp to turn on and expose the image (as calculated in add_step)
             iotool_steps += self._add_delay(step.on_delay_ms)
             # Now turn off the lamp.
-            if step.tl_enabled:
+            if step.lamp == 'TL':
                 iotool_steps.extend(commands.transmitted_lamp(enabled=False))
             else:
-                iotool_steps.extend(commands.spectra_x_lamps(**{lamp:False for lamp in step.fl_enabled}))
+                iotool_steps.extend(commands.spectra_x_lamps(**{lamp:False for lamp in step.lamp}))
             # Now wait for the lamp to go off, plus any extra requested delay.
             total_off_delay = step.off_delay_ms + step.delay_after_ms
             iotool_steps += self._add_delay(total_off_delay)
@@ -211,7 +211,7 @@ class AcquisitionSequencer:
     def get_steps(self):
         steps = []
         for step in self._steps:
-            add_step_args = {arg: getattr(step, arg) for arg in ['exposure_ms', 'tl_enabled', 'tl_intensity', 'fl_enabled', 'delay_after_ms']}
+            add_step_args = {arg: getattr(step, arg) for arg in ['exposure_ms', 'lamp', 'tl_intensity', 'delay_after_ms']}
             steps.append(add_step_args)
         return dict(custom_intensities=self._fl_intensities, steps=steps)
 

@@ -48,11 +48,25 @@ scope_configuration = dict(
             fall_ms = 0 # Time from start of fall to end of fall
         ),
 
+        # SPX timings: always about 105 ms total time from trigger to full-on.
+        # Some lamps have different rise times vs. latencies.
+        # All lamps have ~6 us off latency and 22-30 us fall.
+        #
+        # Lamp    On-Latency  Rise    Off-Latency  Fall
+        # Red     90 us       16 us   6 us         30 us
+        # Green   83          23      10           28
+        # Cyan    96          11      6            25
+        # UV      98          11      6            22
+        # **NB: fall times here may be inflated. They were measured with a
+        # photodiode bridged by a 22 kOhm resistor. Perhaps with a lower-valued
+        # resistor, faster fall times would be measurable.
+        #
+        # Plug in sort-of average values below:
         SPECTRA_X_TIMING = dict(
-            on_latency_ms = .130, # Time from trigger signal to start of rise
-            rise_ms = .020, # Time from start of rise to end of rise
-            off_latency_ms = 0, # Time from end of trigger to start of fall
-            fall_ms = .010 # Time from start of fall to end of fall
+            on_latency_ms = .090, # Time from trigger signal to start of rise
+            rise_ms = .015, # Time from start of rise to end of rise
+            off_latency_ms = 0.08, # Time from end of trigger to start of fall
+            fall_ms = .025 # Time from start of fall to end of fall
         ),
 
         FOOTPEDAL_PIN = 'B4',

@@ -53,7 +53,7 @@ class Handler(timecourse_handler.BasicAcquisitionHandler):
         this as follows:
             def configure_additional_acquisition_steps(self):
                 self.scope.camera.acquisition_sequencer.add_step(exposure_ms=200,
-                    tl_enabled=False, cyan=True)
+                    lamp='cyan')
                 self.image_names.append('gfp.png')
         """
         pass

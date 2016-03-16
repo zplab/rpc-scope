@@ -101,8 +101,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         For example, to add a 200 ms GFP acquisition, a subclass may override
         this as follows:
             def configure_additional_acquisition_steps(self):
-                self.scope.camera.acquisition_sequencer.add_step(exposure_ms=200,
-                    tl_enabled=False, fl_enabled='cyan')
+                self.scope.camera.acquisition_sequencer.add_step(exposure_ms=200, lamp='cyan')
                 self.image_names.append('gfp.png')
         """
         pass
@@ -167,7 +166,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.configure_calibrations() # sets self.bf_exposure and self.tl_intensity
         self.scope.camera.acquisition_sequencer.new_sequence() # internally sets all spectra x intensities to 255, unless specified here
         self.scope.camera.acquisition_sequencer.add_step(exposure_ms=self.bf_exposure,
-            tl_enabled=True, tl_intensity=self.tl_intensity)
+            lamp='TL', tl_intensity=self.tl_intensity)
         self.image_names = ['bf.png']
         self.configure_additional_acquisition_steps()
         t1 = time.time()
