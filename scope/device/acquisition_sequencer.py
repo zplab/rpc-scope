@@ -133,7 +133,7 @@ class AcquisitionSequencer:
             raise ValueError('Minimum exposure time given lamp timing data is {}'.format(min_exp))
         full_on_time = exposure_ms - half_rise_fall
         on_delay_ms = lamp_timing.on_latency_ms + lamp_timing.rise_ms + full_on_time - lamp_timing.off_latency_ms
-        off_delay_ms = lamp_timing.off_latency_ms + lamp_timing.fall_ms + delay_after_ms
+        off_delay_ms = lamp_timing.off_latency_ms + lamp_timing.fall_ms
         self._steps.append(ExposureStep(exposure_ms, tl_enabled, tl_intensity, fl_enabled, delay_after_ms, on_delay_ms, off_delay_ms))
 
     def _compile(self):
@@ -168,8 +168,9 @@ class AcquisitionSequencer:
             else:
                 iotool_steps.extend(commands.spectra_x_lamps(**{lamp:False for lamp in step.fl_enabled}))
             # Now wait for the lamp to go off, plus any extra requested delay.
-            iotool_steps += self._add_delay(step.off_delay_ms)
-            self._fire_all_time.append(step.on_delay_ms + step.off_delay_ms)
+            total_off_delay = step.off_delay_ms + step.delay_after_ms
+            iotool_steps += self._add_delay(total_off_delay)
+            self._fire_all_time.append(step.on_delay_ms + total_off_delay)
 
         # send one last trigger to end the final acquisition
         iotool_steps.append(commands.set_high(io_config.CAMERA_PINS.trigger))
