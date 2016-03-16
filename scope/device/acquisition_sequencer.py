@@ -106,7 +106,7 @@ class AcquisitionSequencer:
             if isinstance(lamp, str):
                 lamp = [lamp]
             if not self._lamp_names.issuperset(lamp):
-            raise ValueError('Unrecognized spectra x lamp name. Valid names are: {}'.format(', '.join(sorted(self._lamp_names))))
+                raise ValueError('Unrecognized spectra x lamp name. Valid names are: {}'.format(', '.join(sorted(self._lamp_names))))
             lamp_timing = self._config.IOTool.SPECTRA_X_TIMING
         # Now, calculate the exposure timing: how long to delay after turning the lamp on, and
         # how long to delay after turning the lamp off.
@@ -263,6 +263,7 @@ class AcquisitionSequencer:
         exposure times also include the camera read time and any additional delays
         added in the middle of the acquisition.
         """
+        self._compile()
         return self._exposures
 
     def get_program_output(self):
