@@ -39,6 +39,12 @@ class AcquisitionSequencer:
         self._output = None
         self._iotool_program = None
         self._latest_timestamps = None
+        self._lamp_names = set(self._spectra_x.get_lamp_specs())
+        # starting state is with all the spectra x lamps off
+        self._default_fl_lamp_state = {}
+        for lamp in self._lamp_names:
+            self._default_fl_lamp_state[lamp+'_enabled'] = False
+            self._default_fl_lamp_state[lamp+'_intensity'] = 255
         self.new_sequence()
 
     def new_sequence(self, **fl_intensities):
@@ -72,13 +78,11 @@ class AcquisitionSequencer:
         """
         self._steps = []
         self._compiled = False
-        # starting state is with all the spectra x lamps off
-        lamp_names = self._spectra_x.get_lamp_specs() # returns a dict
-        self._starting_fl_lamp_state = {lamp+'_enabled': False for lamp in lamp_names}
-        # set lamps to the requested intensity, or 255 for lamps not specified
-        for lamp in lamp_names:
-            intensity = fl_intensities.get(lamp, 255)
+        assert self._lamp_names.issuperset(fl_intensities.keys())
+        self._starting_fl_lamp_state = dict(self._default_fl_lamp_state)
+        for lamp, intensity in fl_intensities.items():
             self._starting_fl_lamp_state[lamp+'_intensity'] = intensity
+        self._fl_intensities = fl_intensities
 
     def add_step(self, exposure_ms, tl_enabled=False, tl_intensity=None, fl_enabled=False, delay_after_ms=0):
         """Add an image acquisition step to the existing sequence.
@@ -204,7 +208,17 @@ class AcquisitionSequencer:
         return self._iotool_program
 
     def get_steps(self):
-        return self._steps
+        steps = []
+        for step in self._steps:
+            add_step_args = {arg: getattr(step, arg) for arg in ['exposure_ms', 'tl_enabled', 'tl_intensity', 'fl_enabled', 'delay_after_ms']}
+            steps.append(add_step_args)
+        return dict(custom_intensities=self._fl_intensities, steps=steps)
+
+    def set_steps(self, step_dict):
+        self.new_sequence(**step_dict.get('custom_intensities', {}))
+        for add_step_args in step_dict['steps']:
+            self.add_step(**add_step_args)
+        self._compile()
 
     def run(self):
         """Run the assembled acquisition steps and return the images obtained."""
@@ -217,6 +231,7 @@ class AcquisitionSequencer:
         safe_images = self._camera.get_safe_image_count_to_queue()
         if num_images > safe_images:
             raise RuntimeError('Camera cannot queue more than {} images in its current state, {} acquisition steps requested.'.format(safe_images, num_images))
+
         self._camera.set_io_selector('Aux Out 1')
         self._camera.start_image_sequence_acquisition(num_images, trigger_mode='External Exposure',
             overlap_enabled=True, auxiliary_out_source='FireAll', selected_io_pin_inverted=False)
@@ -246,8 +261,6 @@ class AcquisitionSequencer:
         This is DIFFERENT than the 'exposure_ms' parameter to add_step. These
         exposure times also include the camera read time and any additional delays
         added in the middle of the acquisition.
-
-        Exposures can only be retrieved AFTER the acquisition sequence is run.
         """
         return self._exposures
 
