@@ -53,7 +53,8 @@ class Scope(message_device.AsyncDeviceNamespace):
 
         if property_server:
             self.rebroadcast_properties = property_server.rebroadcast_properties
-
+        
+        has_leica_LED = False
         try:
             logger.info('Looking for microscope.')
             manager = message_manager.LeicaMessageManager(config.Stand.SERIAL_PORT, config.Stand.SERIAL_BAUD)
