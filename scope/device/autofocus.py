@@ -40,7 +40,7 @@ if FFTW_WISDOM.exists():
     fast_fft.load_plan_hints(str(FFTW_WISDOM))
     logger.debug('FFTW wisdom loaded')
 else:
-    logger.warning('no FFTW wisdom found!')
+    logger.warning('No FFTW wisdom found!')
 
 class AutofocusMetric:
     def __init__(self, shape):
