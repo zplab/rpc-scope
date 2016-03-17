@@ -6,7 +6,7 @@ scope_configuration = dict(
         RPC_PORT = '6000',
         RPC_INTERRUPT_PORT = '6001',
         PROPERTY_PORT = '6002',
-        ASYNC_RPC_PORT = '6003'
+        IMAGE_TRANSFER_RPC_PORT = '6003'
     ),
 
     Stand = dict(

@@ -44,7 +44,7 @@ def get_addresses(host=None):
         rpc=_make_tcp_host(host, config.Server.RPC_PORT),
         interrupt=_make_tcp_host(host, config.Server.RPC_INTERRUPT_PORT),
         property=_make_tcp_host(host, config.Server.PROPERTY_PORT),
-        async_rpc=_make_tcp_host(host, config.Server.ASYNC_RPC_PORT)
+        image_transfer_rpc=_make_tcp_host(host, config.Server.IMAGE_TRANSFER_RPC_PORT)
      )
 
 _CONFIG = None

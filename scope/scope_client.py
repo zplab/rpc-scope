@@ -55,11 +55,10 @@ def _replace_in_state(client, scope):
 
         obj.in_state = _make_in_state_func(obj)
 
-def _make_rpc_client(rpc_addr, interrupt_addr, async_addr, context=None):
+def _make_rpc_client(rpc_addr, interrupt_addr, image_transfer_addr, context=None):
     client = rpc_client.ZMQClient(rpc_addr, interrupt_addr, context)
-    async_client = rpc_client.BaseZMQClient(async_addr, context)
-    is_local, get_data = transfer_ism_buffer.client_get_data_getter(client)
-    is_local, async_get_data = transfer_ism_buffer.client_get_data_getter(async_client)
+    image_transfer_client = rpc_client.BaseZMQClient(image_transfer_addr, context)
+    is_local, get_data = transfer_ism_buffer.client_get_data_getter(image_transfer_client)
 
     # define additional client wrapper functions
     def get_many_data(data_list):
@@ -80,7 +79,6 @@ def _make_rpc_client(rpc_addr, interrupt_addr, async_addr, context=None):
     client_wrappers = {
         'get_configuration': get_config,
         'camera.acquire_image': get_data,
-        'camera.latest_image': get_data,
         'camera.next_image': get_data,
         'camera.stream_acquire': get_stream_data,
         'camera.acquisition_sequencer.run': get_many_data,
@@ -88,23 +86,23 @@ def _make_rpc_client(rpc_addr, interrupt_addr, async_addr, context=None):
         'camera.autofocus.autofocus_continuous_move': get_autofocus_data
     }
     scope = client.proxy_namespace(client_wrappers)
+    if hasattr(scope, 'camera'):
+        # use a special RPC channel (the "image transfer" connection) devoted to just
+        # getting image names and images from the server. This allows us to grab the
+        # latest image from the camera, even when the main connection to the scope
+        # is tied up with a blocking call (like autofocus).
+        def latest_image():
+            return get_data(image_transfer_client('latest_image'))
+        latest_image.__doc__ = scope.camera.latest_image.__doc__
+        scope.camera.latest_image = latest_image
+
     _replace_in_state(client, scope)
     scope._get_data = get_data
     scope._is_local = is_local
     if not is_local:
         scope.camera.set_network_compression = get_data.set_network_compression
     scope._rpc_client = client
-    scope._async_client = async_client
-    if hasattr(scope, 'camera'):
-        # use a special RPC channel (the "async" connection) devoted to just getting
-        # the latest image name from the server. This allows us to grab the latest
-        # image from the camera, even when the main connection to the scope server
-        # is tied up with a synchronous call (like autofocus).
-        def latest_image():
-            return async_get_data(async_client('latest_image'))
-        latest_image.__doc__ = scope.camera.latest_image.__doc__
-        scope.camera._synchronous_latest_image = scope.camera.latest_image
-        scope.camera.latest_image = latest_image
+    scope._image_transfer_client = image_transfer_client
     scope._lock_attrs() # prevent unwary users from setting new attributes that won't get communicated to the server
     return scope
 
@@ -112,7 +110,7 @@ def client_main(host='127.0.0.1', context=None, subscribe_all=False):
     if context is None:
         context = zmq.Context()
     addresses = scope_configuration.get_addresses(host)
-    scope = _make_rpc_client(addresses['rpc'], addresses['interrupt'], addresses['async_rpc'], context)
+    scope = _make_rpc_client(addresses['rpc'], addresses['interrupt'], addresses['image_transfer_rpc'], context)
     scope_properties = property_client.ZMQClient(addresses['property'], context)
     if subscribe_all:
         # have the property client subscribe to all properties. Even with a no-op callback,
