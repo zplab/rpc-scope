@@ -75,6 +75,7 @@ class ScopeViewer(ris_widget.RisWidget):
     COPY_REFS = ris_widget.RisWidget.COPY_REFS + [
         #'something'
     ]
+    QT_OBJECT_CLASS = ScopeViewerQtObject
 
     @staticmethod
     def can_run(scope):
@@ -91,7 +92,6 @@ class ScopeViewer(ris_widget.RisWidget):
             show=True,
             layers = tuple(),
             layer_selection_model=None,
-            ScopeViewerQtObjectClass=ScopeViewerQtObject,
             **kw):
         super().__init__(
             window_title=window_title,
@@ -101,7 +101,6 @@ class ScopeViewer(ris_widget.RisWidget):
             show=show,
             layers=layers,
             layer_selection_model=layer_selection_model,
-            RisWidgetQtObjectClass=ScopeViewerQtObjectClass,
             scope=scope,
             scope_properties=scope_properties,
             **kw)
