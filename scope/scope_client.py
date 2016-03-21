@@ -92,7 +92,8 @@ def _make_rpc_client(rpc_addr, interrupt_addr, image_transfer_addr, context=None
         # latest image from the camera, even when the main connection to the scope
         # is tied up with a blocking call (like autofocus).
         def latest_image():
-            return get_data(image_transfer_client('latest_image'))
+            name, timestamp, frame_number = image_transfer_client('latest_image')
+            return get_data(name), timestamp, frame_number
         latest_image.__doc__ = scope.camera.latest_image.__doc__
         scope.camera.latest_image = latest_image
 
@@ -136,16 +137,13 @@ class LiveStreamer:
         self.image_received.wait()
         # get image before re-enabling image-receiving because if this is over the network, it could take a while
         try:
-            image = self.scope.camera.latest_image()
+            image, timestamp, frame_number = self.scope.camera.latest_image()
             t = time.time()
             self.latest_intervals.append(t - self._last_time)
             self._last_time = t
-            # stash our latest frame number, as self.frame_number could change if further updates occur
-            # after we clear the image_received Event...
-            frame_number = self.frame_number
         finally:
             self.image_received.clear()
-        return image, frame_number
+        return image, timestamp, frame_number
 
     def get_fps(self):
         if not self.latest_intervals:
@@ -165,7 +163,6 @@ class LiveStreamer:
         # updates.
         if frame_number is -1:
             return
-        self.frame_number = frame_number
         if not self.image_received.is_set():
             self.image_received.set()
             if self.image_ready_callback is not None:

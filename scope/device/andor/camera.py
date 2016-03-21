@@ -534,7 +534,11 @@ class Camera(property_device.PropertyDevice):
         self._update_property('live_mode', enabled)
 
     def latest_image(self):
-        """Get the latest image that the camera retrieved."""
+        """Get the latest image that the camera retrieved, its timestamp, and
+        its frame number. These latter two values are accessible as camera
+        attributes, but that form of access is subject to race conditions --
+        so in the rare circumstances where it matters, these returned values are
+        guaranteed to be correct."""
         # Return the name of the shared memory buffer that the latest live image
         # was stored in. The scope_client code will transparently retrieve the
         # image bytes based on this name, either via the ISM_Buffer mechanism if
@@ -542,9 +546,14 @@ class Camera(property_device.PropertyDevice):
         with self._latest_image_lock:
             if self._latest_data is None:
                 raise RuntimeError('No image has been acquired.')
+            # note: only set _latest_timestamp when we're pulling an image for
+            # transfer to a client. _frame_number can be set every time a new
+            # frame comes in (in _update_image_data),  but we need to guarantee
+            # that get_latest_timestamp() will always return the timestamp
+            # associated with the most recent latest_image() call...
             name, array, self._latest_timestamp = self._latest_data
             transfer_ism_buffer.server_register_array_for_transfer(name, array)
-            return name
+            return name, self._latest_timestamp, self._frame_number
 
     def _update_image_data(self, name, array, timestamp):
         """Update information about the latest image, and broadcast to the world
@@ -686,7 +695,7 @@ class Camera(property_device.PropertyDevice):
         self._buffer_maker.queue_if_needed()
         lowlevel.WaitBuffer(int(round(read_timeout_ms)))
         self._update_image_data(*self._buffer_maker.convert_buffer())
-        return self.latest_image()
+        return self.latest_image()[0] # return just the ism_buffer name
 
     def get_latest_timestamp(self):
         """Return the timestamp of the most recent image acquired."""
