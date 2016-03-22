@@ -60,7 +60,7 @@ class ScopeViewerQtObject(ris_widget.RisWidgetQtObject):
     def event(self, e):
         # This is called by the main QT event loop to service the event posted in post_live_update().
         if e.type() == self.RW_LIVE_STREAM_BINDING_LIVE_UPDATE_EVENT:
-            image_data, frame_no = self.live_streamer.get_image()
+            image_data, timestamp, frame_no = self.live_streamer.get_image()
             self.image = ris_widget_image.Image(image_data, is_twelve_bit=self.live_streamer.bit_depth=='12 Bit')
             return True
         return super().event(e)

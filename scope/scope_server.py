@@ -88,16 +88,15 @@ class ScopeServer(base_daemon.Runner):
 
         property_update_server = property_server.ZMQServer(addresses['property'], context=self.context)
         scope_controller = scope.Scope(property_update_server)
-        async_namespace = Namespace()
+        image_transfer_namespace = Namespace()
 
         # add transfer_ism_buffer as hidden elements of the namespace, which RPC clients can use for seamless buffer sharing
-        scope_controller._transfer_ism_buffer = transfer_ism_buffer
-        async_namespace._transfer_ism_buffer = transfer_ism_buffer
+        image_transfer_namespace._transfer_ism_buffer = transfer_ism_buffer
         if hasattr(scope_controller, 'camera'):
-            async_namespace.latest_image=scope_controller.camera.latest_image
+            image_transfer_namespace.latest_image=scope_controller.camera.latest_image
 
-        async_server = rpc_server.BackgroundBaseZMQServer(async_namespace,
-            addresses['async_rpc'], context=self.context)
+        image_transfer_server = rpc_server.BackgroundBaseZMQServer(image_transfer_namespace,
+            addresses['image_transfer_rpc'], context=self.context)
         interrupter = rpc_server.ZMQInterrupter(addresses['interrupt'], context=self.context)
         self.scope_server = rpc_server.ZMQServer(scope_controller, interrupter,
             addresses['rpc'], context=self.context)

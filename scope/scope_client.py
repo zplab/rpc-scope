@@ -55,11 +55,10 @@ def _replace_in_state(client, scope):
 
         obj.in_state = _make_in_state_func(obj)
 
-def _make_rpc_client(rpc_addr, interrupt_addr, async_addr, context=None):
+def _make_rpc_client(rpc_addr, interrupt_addr, image_transfer_addr, context=None):
     client = rpc_client.ZMQClient(rpc_addr, interrupt_addr, context)
-    async_client = rpc_client.BaseZMQClient(async_addr, context)
-    is_local, get_data = transfer_ism_buffer.client_get_data_getter(client)
-    is_local, async_get_data = transfer_ism_buffer.client_get_data_getter(async_client)
+    image_transfer_client = rpc_client.BaseZMQClient(image_transfer_addr, context)
+    is_local, get_data = transfer_ism_buffer.client_get_data_getter(image_transfer_client)
 
     # define additional client wrapper functions
     def get_many_data(data_list):
@@ -80,7 +79,6 @@ def _make_rpc_client(rpc_addr, interrupt_addr, async_addr, context=None):
     client_wrappers = {
         'get_configuration': get_config,
         'camera.acquire_image': get_data,
-        'camera.latest_image': get_data,
         'camera.next_image': get_data,
         'camera.stream_acquire': get_stream_data,
         'camera.acquisition_sequencer.run': get_many_data,
@@ -88,23 +86,24 @@ def _make_rpc_client(rpc_addr, interrupt_addr, async_addr, context=None):
         'camera.autofocus.autofocus_continuous_move': get_autofocus_data
     }
     scope = client.proxy_namespace(client_wrappers)
+    if hasattr(scope, 'camera'):
+        # use a special RPC channel (the "image transfer" connection) devoted to just
+        # getting image names and images from the server. This allows us to grab the
+        # latest image from the camera, even when the main connection to the scope
+        # is tied up with a blocking call (like autofocus).
+        def latest_image():
+            name, timestamp, frame_number = image_transfer_client('latest_image')
+            return get_data(name), timestamp, frame_number
+        latest_image.__doc__ = scope.camera.latest_image.__doc__
+        scope.camera.latest_image = latest_image
+
     _replace_in_state(client, scope)
     scope._get_data = get_data
     scope._is_local = is_local
     if not is_local:
         scope.camera.set_network_compression = get_data.set_network_compression
     scope._rpc_client = client
-    scope._async_client = async_client
-    if hasattr(scope, 'camera'):
-        # use a special RPC channel (the "async" connection) devoted to just getting
-        # the latest image name from the server. This allows us to grab the latest
-        # image from the camera, even when the main connection to the scope server
-        # is tied up with a synchronous call (like autofocus).
-        def latest_image():
-            return async_get_data(async_client('latest_image'))
-        latest_image.__doc__ = scope.camera.latest_image.__doc__
-        scope.camera._synchronous_latest_image = scope.camera.latest_image
-        scope.camera.latest_image = latest_image
+    scope._image_transfer_client = image_transfer_client
     scope._lock_attrs() # prevent unwary users from setting new attributes that won't get communicated to the server
     return scope
 
@@ -112,7 +111,7 @@ def client_main(host='127.0.0.1', context=None, subscribe_all=False):
     if context is None:
         context = zmq.Context()
     addresses = scope_configuration.get_addresses(host)
-    scope = _make_rpc_client(addresses['rpc'], addresses['interrupt'], addresses['async_rpc'], context)
+    scope = _make_rpc_client(addresses['rpc'], addresses['interrupt'], addresses['image_transfer_rpc'], context)
     scope_properties = property_client.ZMQClient(addresses['property'], context)
     if subscribe_all:
         # have the property client subscribe to all properties. Even with a no-op callback,
@@ -123,6 +122,32 @@ def client_main(host='127.0.0.1', context=None, subscribe_all=False):
 
 class LiveStreamer:
     def __init__(self, scope, scope_properties, image_ready_callback=None):
+        """Class to help manage retrieving images from a camera in live mode.
+
+        Parameters:
+          scope, scope_properties: microscope client object and property client
+              as returned by client_main()
+          image_ready_callback: function to call in a background thread when an
+              image from the camera is ready. This function MAY NOT call any
+              functions on the scope (e.g. retrieving an image) and MAY NOT call
+              the get_image() function of this class. It should be used solely
+              to signal the main thread to retrieve the image in some way.
+
+        Useful properties:
+          live: is the camera in live mode?
+          bit_depth: is the camera in 12 vs. 16 bit mode?
+
+        Simple usage example: the following will pull down ten frames from the
+        live image stream; streamer.get_image() will block until an image is
+        ready.
+
+        scope, scope_properties = client_main()
+        streamer = LiveStreamer(scope, scope_properties)
+        images = []
+        for i in range(10):
+            image, timestamp, frame_number = streamer.get_image()
+            images.append(image)
+        """
         self.scope = scope
         self.image_ready_callback = image_ready_callback
         self.image_received = threading.Event()
@@ -135,21 +160,31 @@ class LiveStreamer:
         scope_properties.subscribe('scope.camera.bit_depth', self._depth_update, valueonly=True)
 
     def get_image(self):
+        """Return the latest image retrieved from the camera, along with a
+        timestamp (in camera timestamp units; use camera.timestamp_hz to convert
+        to seconds) and the frame sequence number. If no new image has arrived
+        since the previous call to get_image(), the function blocks until a
+        new image has arrived.
+
+        To determine whether an image is ready, use image_ready()"""
         self.image_received.wait()
         # get image before re-enabling image-receiving because if this is over the network, it could take a while
         try:
-            image = self.scope.camera.latest_image()
+            image, timestamp, frame_number = self.scope.camera.latest_image()
             t = time.time()
             self.latest_intervals.append(t - self._last_time)
             self._last_time = t
-            # stash our latest frame number, as self.frame_number could change if further updates occur
-            # after we clear the image_received Event...
-            frame_number = self.frame_number
         finally:
             self.image_received.clear()
-        return image, frame_number
+        return image, timestamp, frame_number
+
+    def image_ready(self):
+        """Return whether an image is ready to be retrieved. If False, a
+        call to get_image() will block until an image is ready."""
+        return self.image_received.is_set()
 
     def get_fps(self):
+        """Return the recent FPS obtained from the live stream."""
         if not self.latest_intervals:
             return 0
         return 1/numpy.mean(self.latest_intervals)
@@ -167,7 +202,6 @@ class LiveStreamer:
         # updates.
         if frame_number is -1:
             return
-        self.frame_number = frame_number
         if not self.image_received.is_set():
             self.image_received.set()
             if self.image_ready_callback is not None:
