@@ -122,6 +122,32 @@ def client_main(host='127.0.0.1', context=None, subscribe_all=False):
 
 class LiveStreamer:
     def __init__(self, scope, scope_properties, image_ready_callback=None):
+        """Class to help manage retrieving images from a camera in live mode.
+
+        Parameters:
+          scope, scope_properties: microscope client object and property client
+              as returned by client_main()
+          image_ready_callback: function to call in a background thread when an
+              image from the camera is ready. This function MAY NOT call any
+              functions on the scope (e.g. retrieving an image) and MAY NOT call
+              the get_image() function of this class. It should be used solely
+              to signal the main thread to retrieve the image in some way.
+
+        Useful properties:
+          live: is the camera in live mode?
+          bit_depth: is the camera in 12 vs. 16 bit mode?
+
+        Simple usage example: the following will pull down ten frames from the
+        live image stream; streamer.get_image() will block until an image is
+        ready.
+
+        scope, scope_properties = client_main()
+        streamer = LiveStreamer(scope, scope_properties)
+        images = []
+        for i in range(10):
+            image, timestamp, frame_number = streamer.get_image()
+            images.append(image)
+        """
         self.scope = scope
         self.image_ready_callback = image_ready_callback
         self.image_received = threading.Event()
@@ -134,6 +160,13 @@ class LiveStreamer:
         scope_properties.subscribe('scope.camera.bit_depth', self._depth_update, valueonly=True)
 
     def get_image(self):
+        """Return the latest image retrieved from the camera, along with a
+        timestamp (in camera timestamp units; use camera.timestamp_hz to convert
+        to seconds) and the frame sequence number. If no new image has arrived
+        since the previous call to get_image(), the function blocks until a
+        new image has arrived.
+
+        To determine whether an image is ready, use image_ready()"""
         self.image_received.wait()
         # get image before re-enabling image-receiving because if this is over the network, it could take a while
         try:
@@ -145,7 +178,13 @@ class LiveStreamer:
             self.image_received.clear()
         return image, timestamp, frame_number
 
+    def image_ready(self):
+        """Return whether an image is ready to be retrieved. If False, a
+        call to get_image() will block until an image is ready."""
+        return self.image_received.is_set()
+
     def get_fps(self):
+        """Return the recent FPS obtained from the live stream."""
         if not self.latest_intervals:
             return 0
         return 1/numpy.mean(self.latest_intervals)
