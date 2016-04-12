@@ -91,11 +91,11 @@ class AcquisitionSequencer:
         Parameters
         exposure_ms: exposure time in ms for the image.
         lamp: 'TL' for transmitted light, or name of a spectra X lamp for
-          fluorescence (or a list of one or moer spectra x lamp names).
+            fluorescence (or a list of one or more spectra x lamp names).
         tl_intensity: intensity of the transmitted lamp, should it be enabled.
-          If none, then do not change intensity setting from current value.
+            If None, then do not change intensity setting from current value.
         delay_after_ms: time to delay after turning off the lamps but before triggering
-          the next acquisition.
+            the next acquisition.
         """
         self._compiled = False
         if lamp == 'TL':

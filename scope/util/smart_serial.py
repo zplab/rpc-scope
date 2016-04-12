@@ -75,7 +75,7 @@ class Serial(serialposix.Serial):
                 raise k
         while len(self.read_buffer) < size:
             try:
-                ready,_,_ = select.select([self.fd],[],[], self._timeout)
+                ready,_,_ = select.select([self.fd],[],[], self.timeout)
                 # If select was used with a timeout, and the timeout occurs, it
                 # returns with empty lists -> thus abort read operation.
                 # For timeout == 0 (non-blocking operation) also abort when there
