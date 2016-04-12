@@ -894,6 +894,8 @@ class LiveModeThread(threading.Thread):
         # to this thread object will stay around until interpreter exit, and thus
         # any resources held by the thread (i.e. ISM_Buffer-backed arrays) won't
         # be automatically released.
+        except:
+            logger.log_exception('Camera live mode thread crashed:')
         finally:
             atexit.unregister(self.stop)
 
@@ -943,7 +945,7 @@ class LiveReader(LiveModeThread):
         self.ready.wait() # don't return from init until a buffer is queued
 
     def set_timeout(self, trigger_interval):
-        self.timeout = int(1000 * trigger_interval) * 3 # convert to ms and triple for safety margin
+        self.timeout = 250 + int(1000 * trigger_interval) * 3 # convert to ms and triple plus add 250 ms for safety margin
 
     def loop(self):
         t = time.time()
@@ -962,7 +964,7 @@ class LiveReader(LiveModeThread):
             # camera RAM fills up without being emptied by QueueBuffer/WaitBuffer fast enough,
             # though the reader/trigger threads take efforts to avoid that case.
             # Thus, we error out if several timeouts happen in a row.
-            if e.args[0] == 'TIMEDOUT':
+            if e.args[0].startswith('TIMEDOUT'):
                 self.timeout_count += 1
                 if self.timeout_count > 10:
                     raise AndorError('Live image retrieval timing out.')
