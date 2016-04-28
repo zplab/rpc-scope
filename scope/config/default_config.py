@@ -32,12 +32,11 @@ scope_configuration = dict(
         CAMERA_PINS = dict(
             trigger = 'B0',
             arm = 'B1',
-            fire = 'B2',
-            aux_out1 = 'B3'
+            aux_out1 = 'B2'
         ),
 
         TL_ENABLE_PIN = 'E6',
-        TL_PWM_PIN = 'D7',
+        TL_PWM_PIN = 'D0',
         TL_PWM_MAX = 255,
 
         TL_TIMING = dict(
@@ -47,7 +46,7 @@ scope_configuration = dict(
             fall_ms = 0.013 # Time from start of fall to end of fall
         ),
 
-        # SPX timings: depends *strongly* on how recently the last time the 
+        # SPX timings: depends *strongly* on how recently the last time the
         # lamp was turned on was. 100 ms ago vs. 10 sec ago changes the on-latency
         # by as much as 100 us.
         # Some lamps have different rise times vs. latencies.
@@ -59,8 +58,8 @@ scope_configuration = dict(
         # Cyan    96          11      6            9
         # UV      98          11      6            11
         #
-        # With 5 sec delay, cyan and green on-latency goes to 123 usec. 
-        # With 20 sec delay, it is at 130 us. 
+        # With 5 sec delay, cyan and green on-latency goes to 123 usec.
+        # With 20 sec delay, it is at 130 us.
         # Plug in sort-of average values below, assuming 5 sec delay:
         SPECTRA_X_TIMING = dict(
             on_latency_ms = .120, # Time from trigger signal to start of rise
