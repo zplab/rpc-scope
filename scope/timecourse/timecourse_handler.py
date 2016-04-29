@@ -94,6 +94,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     TL_FIELD_DIAPHRAGM = None
     TL_APERTURE_DIAPHRAGM = None
     IL_FIELD_WHEEL = None
+    VIGNETTE_PERCENT = 5 # 5 is a good number when using a 1x optocoupler. If 0.7x, use 35.
 
     def configure_additional_acquisition_steps(self):
         """Add more steps to the acquisition_sequencer's sequence as desired,
@@ -191,7 +192,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             exposure_ratio = self.bf_exposure / exposure
             bf_avg = calibrate.get_averaged_images(self.scope, ref_positions,
                 self.dark_corrector, frames_to_average=2)
-        self.vignette_mask = calibrate.get_vignette_mask(bf_avg)
+        self.vignette_mask = calibrate.get_vignette_mask(bf_avg, VIGNETTE_PERCENT)
         bf_flatfield, ref_intensity = calibrate.get_flat_field(bf_avg, self.vignette_mask)
         ref_intensity *= exposure_ratio
         cal_image_names = ['vignette_mask.png', 'bf_flatfield.tiff']

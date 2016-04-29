@@ -45,6 +45,7 @@ class Handler(timecourse_handler.BasicAcquisitionHandler):
     TL_FIELD_DIAPHRAGM = None
     TL_APERTURE_DIAPHRAGM = None
     IL_FIELD_WHEEL = None
+    VIGNETTE_PERCENT = 5 # 5 is a good number when using a 1x optocoupler. If 0.7x, use 35.
 
     def configure_additional_acquisition_steps(self):
         """Add more steps to the acquisition_sequencer's sequence as desired,
