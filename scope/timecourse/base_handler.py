@@ -30,6 +30,8 @@ import logging
 import inspect
 import concurrent.futures as futures
 
+import os
+
 from ..util import json_encode
 from ..util import threaded_image_io
 from ..util import log_util
@@ -203,11 +205,11 @@ class TimepointHandler:
         self.logger.debug('Images saved ({:.1f} seconds)', t3-t2)
         self.logger.debug('Position done (total: {:.1f} seconds)', t3-t0)
 
-    def _write_atomic_json(self, out_path, data):
+    def _write_atomic_json(self, out_path, data):  
         out_path = pathlib.Path(out_path)
         tmp_path = out_path.parent / (out_path.name + '-' +self.timepoint_prefix)
         with tmp_path.open('w') as f:
-             json_encode.encode_legible_to_file(position_metadata, f)
+             json_encode.encode_legible_to_file(data, f)
         os.replace(str(tmp_path), str(out_path))
 
     def acquire_images(self, position_name, position_dir, position_metadata):
