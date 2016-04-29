@@ -128,7 +128,7 @@ def meter_exposure_and_intensity(scope, lamp, max_exposure=200, max_intensity=25
 
     Returns: exposure_time, lamp_intensity
     """
-    intensities = numpy.array([255, 224, 192, 160, 128,  96,  64,  32])
+    intensities = numpy.linspace(255, 32, 16, dtype=numpy.uint8)
     intensities = intensities[intensities <= max_intensity]
     with lamp.in_state(enabled=True):
         scope.camera.start_image_sequence_acquisition(frame_count=len(intensities), trigger_mode='Software')
@@ -215,18 +215,23 @@ def meter_exposure(scope, lamp, max_exposure=200, min_intensity_fraction=0.3,
     scope.camera.exposure_time = good_exposure
     return good_exposure
 
-def get_vignette_mask(image):
+def get_vignette_mask(image, percent_vignetted=4):
     """Convert a well-exposed image (ideally a brightfield image with ~uniform
     intensity) into a mask delimiting the image region from the dark,
     vignetted borders of the image.
 
-    Returns: vignette_mask, which is True in the image regions.
+    percent_vignetted: percentage of pixels (from 0-100) that are likely to be
+        in the vignetted region. 40% is a good estimate for images with a full
+        circular vignette (e.g. 0.7x optocoupler); 4% is reasonable for
+        images with only small vignetted areas (e.g. 1x optocoupler).
 
+    Returns: vignette_mask, which is True in the image regions.
     """
     likely_vignette_pixels = image[image < numpy.percentile(image, 40)]
     mean, std = mcd.robust_mean_std(likely_vignette_pixels, 0.5)
     vignette_threshold = mean + 150 * std
     vignette_mask = image > vignette_threshold
+    vignette_mask = ndimage.binary_opening(vignette_mask, iterations=15)
     vignette_mask = ndimage.binary_fill_holes(vignette_mask)
     return vignette_mask
 
