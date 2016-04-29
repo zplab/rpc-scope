@@ -192,7 +192,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             exposure_ratio = self.bf_exposure / exposure
             bf_avg = calibrate.get_averaged_images(self.scope, ref_positions,
                 self.dark_corrector, frames_to_average=2)
-        self.vignette_mask = calibrate.get_vignette_mask(bf_avg, VIGNETTE_PERCENT)
+        self.vignette_mask = calibrate.get_vignette_mask(bf_avg, self.VIGNETTE_PERCENT)
         bf_flatfield, ref_intensity = calibrate.get_flat_field(bf_avg, self.vignette_mask)
         ref_intensity *= exposure_ratio
         cal_image_names = ['vignette_mask.png', 'bf_flatfield.tiff']
