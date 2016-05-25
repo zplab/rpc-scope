@@ -60,6 +60,9 @@ class ScopeViewerQtObject(ris_widget.ris_widget.RisWidgetQtObject):
             layers,
             layer_selection_model,
             **kw)
+        hh = self.layer_table_view.horizontalHeader()
+        col = ris_widget.qwidgets.layer_table.LayerTableModel.PROPERTIES.index('name')
+        hh.resizeSection(col, hh.sectionSize(col) * 1.5)
         self.scope = scope
         self.scope_toolbar = self.addToolBar('Scope')
         self.live_streamer = scope_client.LiveStreamer(scope, scope_properties, self.post_live_update)
