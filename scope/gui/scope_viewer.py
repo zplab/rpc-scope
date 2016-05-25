@@ -70,17 +70,10 @@ class ScopeViewerQtObject(ris_widget.ris_widget.RisWidgetQtObject):
         if e.type() == self.RW_LIVE_STREAM_BINDING_LIVE_UPDATE_EVENT:
             image_data, timestamp, frame_no = self.live_streamer.get_image()
             target_layer = self.get_live_target_layer()
-            is_twelve_bit = self.live_streamer.bit_depth == '12 Bit'
-            if target_layer.image is None:
-                target_layer.image = ris_widget.image.Image(
-                    image_data,
-                    mask=self.layer_stack.imposed_image_mask,
-                    is_twelve_bit=is_twelve_bit)
-            else:
-                target_layer.image.set(
-                    image_data,
-                    mask=self.layer_stack.imposed_image_mask,
-                    is_twelve_bit=is_twelve_bit)
+            target_layer.image = ris_widget.image.Image(
+                image_data,
+                mask=self.layer_stack.imposed_image_mask,
+                is_twelve_bit=self.live_streamer.bit_depth == '12 Bit')
             return True
         return super().event(e)
 
