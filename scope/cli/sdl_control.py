@@ -210,7 +210,10 @@ def dump_input(input_device_index=0, input_device_name=None):
             # If there is no event for an entire second, we iterate, giving CPython an opportunity to
             # raise KeyboardInterrupt.
             if sdl2.SDL_WaitEventTimeout(ctypes.byref(event), 1000):
-                s = '{}, {}'.format(event.generic.timestamp, SDL_EVENT_NAMES.get(event.type, "UNKNOWN"))
+                if hasattr(event, 'generic'):
+                    s = '{}, {}'.format(event.generic.timestamp, SDL_EVENT_NAMES.get(event.type, "UNKNOWN"))
+                else:
+                    s = '{}, {}'.format(event.common.timestamp, SDL_EVENT_NAMES.get(event.type, "UNKNOWN"))
                 try:
                     s += ', {}'.format(event_handlers[event.type](event))
                 except KeyError:
