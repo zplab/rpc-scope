@@ -1,6 +1,6 @@
 # The MIT License (MIT)
 #
-# Copyright (c) 2015 WUSTL ZPLAB
+# Copyright (c) 2015-2016 WUSTL ZPLAB
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -27,30 +27,12 @@ import ctypes
 import sdl2
 import sys
 import threading
-from scope.simple_rpc import rpc_client
 from scope import scope_client
 
 SDL_SUBSYSTEMS = sdl2.SDL_INIT_JOYSTICK | sdl2.SDL_INIT_GAMECONTROLLER | sdl2.SDL_INIT_TIMER
 SDL_INITED = False
 SDL_EVENT_LOOP_IS_RUNNING = False
 SDL_TIMER_CALLBACK_TYPE = ctypes.CFUNCTYPE(ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p)
-DEFAULT_MAX_AXIS_COMMAND_WALLCLOCK_TIME_PORTION = 0.3333
-DEFAULT_MAX_AXIS_COMMAND_COOL_OFF = 500
-# AXES_THROTTLE_DELAY_EXPIRED_EVENT: Sent by the timer thread to wake up the main
-# SDL thread and cause it to update the scope state in response to any axis position changes
-# that have occurred since last updating the scope for an axis position change.
-AXES_THROTTLE_DELAY_EXPIRED_EVENT = sdl2.SDL_RegisterEvents(1)
-COARSE_DEMAND_FACTOR = 20
-FINE_DEMAND_FACTOR = 1
-Z_DEMAND_FACTOR = 0.5
-AXES_MAP = {
-    sdl2.SDL_CONTROLLER_AXIS_LEFTX : lambda self, demand: self.scope.stage.move_along_x(-demand * COARSE_DEMAND_FACTOR),
-    sdl2.SDL_CONTROLLER_AXIS_LEFTY : lambda self, demand: self.scope.stage.move_along_y(demand * COARSE_DEMAND_FACTOR),
-    sdl2.SDL_CONTROLLER_AXIS_RIGHTX : lambda self, demand: self.scope.stage.move_along_x(-demand * FINE_DEMAND_FACTOR),
-    sdl2.SDL_CONTROLLER_AXIS_RIGHTY : lambda self, demand: self.scope.stage.move_along_y(demand * FINE_DEMAND_FACTOR),
-    sdl2.SDL_CONTROLLER_AXIS_TRIGGERLEFT : lambda self, demand: self.scope.stage.move_along_z(-demand * Z_DEMAND_FACTOR),
-    sdl2.SDL_CONTROLLER_AXIS_TRIGGERRIGHT : lambda self, demand: self.scope.stage.move_along_z(demand * Z_DEMAND_FACTOR)
-}
 
 def init_sdl():
     global SDL_INITED
@@ -220,13 +202,13 @@ def dump_input(input_device_index=0, input_device_name=None):
                     pass
                 print(s)
                 if event.type == sdl2.SDL_QUIT:
-                    print('# SDL_QUIT received.  Exiting...')
+                    print('# SDL_QUIT received.  Exiting dump_input(..) ...')
                     break
                 if event.type == sdl2.SDL_JOYDEVICEREMOVED and event.jdevice.which == device_id:
-                    print('# Our SDL input device has been disconnected.  Exiting...')
+                    print('# Our SDL input device has been disconnected.  Exiting dump_input(..) ...')
                     break
     except KeyboardInterrupt:
-        print('\n# ctrl-c received.  Exiting...')
+        print('\n# ctrl-c received.  Exiting dump_input(..) ...')
 
 def only_for_our_device(handler):
     def f(self, event):
@@ -239,6 +221,26 @@ def only_for_our_device(handler):
     return f
 
 class SDLControl:
+    DEFAULT_MAX_AXIS_COMMAND_WALLCLOCK_TIME_PORTION = 0.3333
+    DEFAULT_MAX_AXIS_COMMAND_COOL_OFF = 500
+    # AXES_THROTTLE_DELAY_EXPIRED_EVENT: Sent by the timer thread to wake up the main
+    # SDL thread and cause it to update the scope state in response to any axis position changes
+    # that have occurred since last updating the scope for an axis position change.
+    AXES_THROTTLE_DELAY_EXPIRED_EVENT = sdl2.SDL_RegisterEvents(1)
+    COARSE_DEMAND_FACTOR = 20
+    FINE_DEMAND_FACTOR = 1
+    Z_DEMAND_FACTOR = 0.5
+    AXIS_MOVEMENT_HANDLERS = {
+        sdl2.SDL_CONTROLLER_AXIS_LEFTX: lambda self, demand: self.scope.stage.move_along_x(-demand * self.COARSE_DEMAND_FACTOR),
+        sdl2.SDL_CONTROLLER_AXIS_LEFTY: lambda self, demand: self.scope.stage.move_along_y(demand * self.COARSE_DEMAND_FACTOR),
+        sdl2.SDL_CONTROLLER_AXIS_RIGHTX: lambda self, demand: self.scope.stage.move_along_x(-demand * self.FINE_DEMAND_FACTOR),
+        sdl2.SDL_CONTROLLER_AXIS_RIGHTY: lambda self, demand: self.scope.stage.move_along_y(demand * self.FINE_DEMAND_FACTOR),
+        sdl2.SDL_CONTROLLER_AXIS_TRIGGERLEFT: lambda self, demand: self.scope.stage.move_along_z(-demand * self.Z_DEMAND_FACTOR),
+        sdl2.SDL_CONTROLLER_AXIS_TRIGGERRIGHT: lambda self, demand: self.scope.stage.move_along_z(demand * self.Z_DEMAND_FACTOR)
+    }
+    AXIS_DEAD_ZONES = {
+    }
+
     def __init__(
             self,
             input_device_index=0,
@@ -247,18 +249,20 @@ class SDLControl:
             zmq_context=None,
             maximum_portion_of_wallclock_time_allowed_for_axis_commands=DEFAULT_MAX_AXIS_COMMAND_WALLCLOCK_TIME_PORTION,
             maximum_axis_command_cool_off=DEFAULT_MAX_AXIS_COMMAND_COOL_OFF):
-        '''* input_device_index: The argument passed to SDL_JoystickOpen(index) or SDL_GameControllerOpen(index).
+        """* input_device_index: The argument passed to SDL_JoystickOpen(index) or SDL_GameControllerOpen(index).
         Ignored if the value of input_device_name is not None.
-        * input_device_name: If specified, input_device_name should be the exact string or UTF8-encoded bytearray
-        by which SDL identifies the controller you wish to use, as reported by SDL_JoystickName(..).  For USB devices,
+        * input_device_name: If specified, input_device_name should be the exact string or UTF8-encoded bytearray by
+        which SDL identifies the controller you wish to use, as reported by SDL_JoystickName(..).  For USB devices,
         this is USB iManufacturer + ' ' + iProduct.  (See example below.)
         * scope_server_host: IP address or hostname of scope server.
         * zmq_context: If None, one is created.
-        * maximum_portion_of_wallclock_time_allowed_for_axis_commands: Limit the rate at which commands are sent to the scope
-        in response to controller axis motion such that the scope such that the scope is busy processing those commands no more
+        * maximum_portion_of_wallclock_time_allowed_for_axis_commands: Limit the rate at which commands are sent to
+        the scope in response to controller axis motion such that the scope such that the scope is busy processing
+        those commands no more
         than this fraction of the time.
-        * maximum_axis_command_cool_off: The maximum number of milliseconds to defer issuance of scope commands in response
-        to controller axis motion (in order to enforce maximum_portion_of_wallclock_time_allowed_for_axis_commands).
+        * maximum_axis_command_cool_off: The maximum number of milliseconds to defer issuance of scope commands in
+        response to controller axis motion (in order to enforce
+        maximum_portion_of_wallclock_time_allowed_for_axis_commands).
 
         For example, a Sony PS4 controller with the following lsusb -v output would be known to SDL as 'Sony Computer
         Entertainment Wireless Controller':
@@ -295,7 +299,7 @@ class SDLControl:
         ]
         You will therefore want to specify input_device_index=4 or
         input_device_name='Logilech SixThousandAxis KiloButtonPad With Haptic Feedback Explosion'
-        '''
+        """
         assert 0 < maximum_portion_of_wallclock_time_allowed_for_axis_commands <= 1
         init_sdl()
         self.device, self.device_is_game_controller = open_device(input_device_index, input_device_name)
@@ -319,24 +323,24 @@ class SDLControl:
         self._axes_throttle_delay_lock = threading.Lock()
         self._c_on_axes_throttle_delay_expired_timer_callback = SDL_TIMER_CALLBACK_TYPE(self._on_axes_throttle_delay_expired_timer_callback)
 
-    def _init_handlers(self):
+    def init_handlers(self):
         self._event_handlers = {
-            sdl2.SDL_QUIT : self._on_quit,
-            AXES_THROTTLE_DELAY_EXPIRED_EVENT : self._on_axes_throttle_delay_expired_event
+            sdl2.SDL_QUIT : self._on_quit_event,
+            self.AXES_THROTTLE_DELAY_EXPIRED_EVENT : self._on_axes_throttle_delay_expired_event
         }
         if self.device_is_game_controller:
             self._event_handlers.update({
-                sdl2.SDL_CONTROLLERDEVICEREMOVED : self._on_device_removed,
-                sdl2.SDL_CONTROLLERAXISMOTION : self._on_axis_motion,
-                sdl2.SDL_CONTROLLERBUTTONDOWN : self._on_button,
-                sdl2.SDL_CONTROLLERBUTTONUP : self._on_button
+                sdl2.SDL_CONTROLLERDEVICEREMOVED : self._on_device_removed_event,
+                sdl2.SDL_CONTROLLERAXISMOTION : self._on_axis_motion_event,
+                sdl2.SDL_CONTROLLERBUTTONDOWN : self._on_button_event,
+                sdl2.SDL_CONTROLLERBUTTONUP : self._on_button_event
             })
         else:
             self._event_handlers.update({
-                sdl2.SDL_JOYDEVICEREMOVED : self._on_device_removed,
-                sdl2.SDL_JOYAXISMOTION : self._on_axis_motion,
-                sdl2.SDL_JOYBUTTONDOWN : self._on_button,
-                sdl2.SDL_JOYBUTTONUP : self._on_button
+                sdl2.SDL_JOYDEVICEREMOVED : self._on_device_removed_event,
+                sdl2.SDL_JOYAXISMOTION : self._on_axis_motion_event,
+                sdl2.SDL_JOYBUTTONDOWN : self._on_button_event,
+                sdl2.SDL_JOYBUTTONUP : self._on_button_event
             })
 
     def event_loop(self):
@@ -344,7 +348,7 @@ class SDLControl:
         assert not SDL_EVENT_LOOP_IS_RUNNING
         self._next_axes_tick = 0
         self._axes_throttle_delay_timer_set = False
-        self._last_axes_positions = {axis_idx : None for axis_idx in AXES_MAP.keys()}
+        self._last_axes_positions = {axis_idx : None for axis_idx in self.AXIS_MOVEMENT_HANDLERS.keys()}
         self._get_axis_pos = sdl2.SDL_GameControllerGetAxis if self.device_is_game_controller else sdl2.SDL_JoystickGetAxis
         SDL_EVENT_LOOP_IS_RUNNING = True
         def on_loop_end():
@@ -354,7 +358,7 @@ class SDLControl:
             estack.callback(on_loop_end)
             assert SDL_INITED
             assert self.device
-            self._init_handlers()
+            self.init_handlers()
             try:
                 while not self.quit_event_posted:
                     event = sdl2.SDL_Event()
@@ -373,7 +377,7 @@ class SDLControl:
         event.type = sdl2.SDL_QUIT
         sdl2.SDL_PushEvent(ctypes.byref(event))
 
-    def _on_quit(self, event):
+    def _on_quit_event(self, event):
         self.quit_event_posted = True
 
     def _on_unhandled_event(self, event):
@@ -381,26 +385,32 @@ class SDLControl:
             print('Received unhandled SDL event: ' + SDL_EVENT_NAMES.get(event.type, "UNKNOWN"), file=sys.stderr)
 
     @only_for_our_device
-    def _on_device_removed(self, event):
+    def _on_device_removed_event(self, event):
+        self.handle_device_removed()
+
+    def handle_device_removed(self):
         print('Our SDL input device has been disconnected.  Exiting event loop...', sys.stderr)
         self.exit_event_loop()
 
     @only_for_our_device
-    def _on_button(self, event):
+    def _on_button_event(self, event):
         if self.device_is_game_controller:
             idx = event.cbutton.button
             state = bool(event.cbutton.state)
         else:
             idx = event.jbutton.button
             state = bool(event.jbutton.state)
+        self.handle_button(idx, state)
+
+    def handle_button(self, idx, pressed):
         if idx == sdl2.SDL_CONTROLLER_BUTTON_A:
-            # Hardcode ps4 X button to stop all stage movement
+            # Stop all stage movement when what is typically the gamepad X button is pressed or released
             self.scope.stage.stop_x()
             self.scope.stage.stop_y()
             self.scope.stage.stop_z()
 
     @only_for_our_device
-    def _on_axis_motion(self, event):
+    def _on_axis_motion_event(self, event):
         # A subtle point: we need to set the axes throttle delay timer only when cooldown has not expired and
         # no timer is set.  That is, if the joystick moves, SDL tells us about it.  When SDL tells us, if we
         # have too recently handled an axis move event, we defer handling the event by setting a timer that wakes
@@ -408,7 +418,7 @@ class SDLControl:
         # in response to timer expiration.
         curr_ticks = sdl2.SDL_GetTicks()
         if curr_ticks >= self._next_axes_tick:
-            self._handle_axes_motion()
+            self._on_axis_motion()
         else:
             with self._axes_throttle_delay_lock:
                 if not self._axes_throttle_delay_timer_set:
@@ -430,7 +440,7 @@ class SDLControl:
                     print('Axes throttling delay expiration callback pre-empted.', sys.stderr)
                 return 0
         event = sdl2.SDL_Event()
-        event.type = AXES_THROTTLE_DELAY_EXPIRED_EVENT
+        event.type = self.AXES_THROTTLE_DELAY_EXPIRED_EVENT
         sdl2.SDL_PushEvent(event)
         # Returning 0 tells SDL to not recycle this timer.  _handle_axes_motion, in the main SDL thread, will
         # ultimately be caused to set a new timer by the event we just pushed.
@@ -441,12 +451,20 @@ class SDLControl:
             if self.warnings_enabled:
                 print('Axes throttling delay expiration event pre-empted.', sys.stderr)
             return
-        self._handle_axes_motion()
+        self._on_axis_motion()
 
-    def _handle_axes_motion(self):
+    def _on_axis_motion(self):
         command_ticks = 0
-        for axis, cmd in AXES_MAP.items():
+        for axis, cmd in self.AXIS_MOVEMENT_HANDLERS.items():
             pos = self._get_axis_pos(self.device, axis)
+            dead_zone = self.AXIS_DEAD_ZONES.get(axis)
+            if dead_zone is not None:
+                if dead_zone[0] <= pos <= dead_zone[1]:
+                    pos = 0
+                elif pos < dead_zone[0]:
+                    pos -= dead_zone[0]
+                elif pos > dead_zone[1]:
+                    pos -= dead_zone[1]
             if pos != self._last_axes_positions[axis]:
                 demand = pos / (32768 if pos <= 0 else 32767)
                 t0 = sdl2.SDL_GetTicks()
