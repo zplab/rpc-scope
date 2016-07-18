@@ -46,19 +46,18 @@ class ScopeViewerQtObject(ris_widget.ris_widget.RisWidgetQtObject):
             window_flags,
             msaa_sample_count,
             layers,
-            layer_selection_model,
             scope,
             scope_properties,
             **kw):
+        
         super().__init__(
-            app_prefs_name,
-            app_prefs_version,
-            window_title,
-            parent,
-            window_flags,
-            msaa_sample_count,
-            layers,
-            layer_selection_model,
+            app_prefs_name=app_prefs_name,
+            app_prefs_version=app_prefs_version,
+            window_title=window_title,
+            parent=parent,
+            window_flags=window_flags,
+            msaa_sample_count=msaa_sample_count,
+            layers=layers,
             **kw)
         hh = self.layer_table_view.horizontalHeader()
         col = ris_widget.qwidgets.layer_table.LayerTableModel.PROPERTIES.index('name')
@@ -66,6 +65,8 @@ class ScopeViewerQtObject(ris_widget.ris_widget.RisWidgetQtObject):
         self.scope = scope
         self.scope_toolbar = self.addToolBar('Scope')
         self.live_streamer = scope_client.LiveStreamer(scope, scope_properties, self.post_live_update)
+        # import freeimage
+        # self.layer_stack.imposed_image_mask = freeimage.read('/home/zplab/vignette_mask.png')
         self.get_live_target_layer()
 
     def event(self, e):
@@ -76,7 +77,8 @@ class ScopeViewerQtObject(ris_widget.ris_widget.RisWidgetQtObject):
             target_layer.image = ris_widget.image.Image(
                 image_data,
                 mask=self.layer_stack.imposed_image_mask,
-                is_twelve_bit=self.live_streamer.bit_depth == '12 Bit')
+                is_twelve_bit=self.live_streamer.bit_depth == '12 Bit',
+                use_open_mp=True)
             return True
         return super().event(e)
 
@@ -119,7 +121,6 @@ class ScopeViewer(ris_widget.ris_widget.RisWidget):
             msaa_sample_count=2,
             show=True,
             layers = tuple(),
-            layer_selection_model=None,
             **kw):
         super().__init__(
             window_title=window_title,
@@ -128,7 +129,6 @@ class ScopeViewer(ris_widget.ris_widget.RisWidget):
             msaa_sample_count=msaa_sample_count,
             show=show,
             layers=layers,
-            layer_selection_model=layer_selection_model,
             scope=scope,
             scope_properties=scope_properties,
             **kw)

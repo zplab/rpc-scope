@@ -35,7 +35,7 @@ def make_and_show_widgets(scope, scope_properties, **widget_classes):
     widgets = []
     for name, wc in widget_classes.items():
         if wc.can_run(scope):
-            w = wc(scope, scope_properties)
+            w = wc(scope=scope, scope_properties=scope_properties)
             widgets.append(w)
             setattr(widget_namespace, name, w)
         else:
