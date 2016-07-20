@@ -12,13 +12,14 @@ def sigint_handler(*args):
 
 def gui_main(host, **widget_classes):
     params = []
+    Qt.QApplication.setAttribute(Qt.Qt.AA_ShareOpenGLContexts)
     app = Qt.QApplication(params)
 
     scope, scope_properties = scope_client.client_main(host)
     widget_namespace = make_and_show_widgets(scope, scope_properties, **widget_classes)
 
     if sdl_input.enumerate_devices():
-        sdl_input_instance = sdl_input.SDLInput()
+        sdl_input_instance = sdl_input.SDLInput(scope_server_host=host)
         sdl_input_thread = threading.Thread(target=sdl_input_instance.event_loop)
         sdl_input_thread.start()
         app.aboutToQuit.connect(sdl_input_instance.exit_event_loop)
