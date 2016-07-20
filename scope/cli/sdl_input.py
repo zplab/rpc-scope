@@ -220,7 +220,7 @@ def only_for_our_device(handler):
             return handler(self, event)
     return f
 
-class SDLControl:
+class SDLInput:
     DEFAULT_MAX_AXIS_COMMAND_WALLCLOCK_TIME_PORTION = 0.3333
     DEFAULT_MAX_AXIS_COMMAND_COOL_OFF = 500
     # AXES_THROTTLE_DELAY_EXPIRED_EVENT: Sent by the timer thread to wake up the main
@@ -315,9 +315,9 @@ class SDLControl:
         self.num_axes = sdl2.SDL_JoystickNumAxes(self.jdevice)
         self.num_buttons = sdl2.SDL_JoystickNumButtons(self.jdevice)
         self.num_hats = sdl2.SDL_JoystickNumHats(self.jdevice)
-        print('SDLControl is connecting to scope server...', file=sys.stderr)
+        print('SDLInput is connecting to scope server...', file=sys.stderr)
         self.scope, self.scope_properties = scope_client.client_main(scope_server_host, zmq_context)
-        print('SDLControl successfully connected to scope server.', file=sys.stderr)
+        print('SDLInput successfully connected to scope server.', file=sys.stderr)
         self.event_loop_is_running = False
         self.warnings_enabled = False
         self.quit_event_posted = False
@@ -607,8 +607,8 @@ if __name__ == '__main__':
             dump_input(input_device_name=args.dump_sdl_input)
     else:
         if args.device.isdigit():
-            sdlc = SDLControl(input_device_index=int(args.device), scope_server_host=args.scope)
+            sdlc = SDLInput(input_device_index=int(args.device), scope_server_host=args.scope)
         else:
-            sdlc = SDLControl(input_device_name=args.device, scope_server_host=args.scope)
+            sdlc = SDLInput(input_device_name=args.device, scope_server_host=args.scope)
         sdlc.warnings_enabled = args.enable_warnings
         sdlc.event_loop()

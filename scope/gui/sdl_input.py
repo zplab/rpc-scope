@@ -23,4 +23,4 @@
 # Authors: Erik Hvatum <ice.rikh@gmail.com>
 
 from PyQt5 import Qt
-from scope.cli.sdl_control import SDLControl
+from scope.cli.sdl_input import SDLInput

@@ -1,2 +1,0 @@
-#!/bin/bash
-python -m scope.cli.sdl_control 'Sony Computer Entertainment Wireless Controller'
