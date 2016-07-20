@@ -1,7 +1,10 @@
 import signal
+
 from PyQt5 import Qt
+import threading
 
 from .. import scope_client
+from .. util import sdl_input
 
 def sigint_handler(*args):
     """Handler for the SIGINT signal."""
@@ -13,6 +16,12 @@ def gui_main(host, **widget_classes):
 
     scope, scope_properties = scope_client.client_main(host)
     widget_namespace = make_and_show_widgets(scope, scope_properties, **widget_classes)
+
+    if sdl_input.enumerate_devices():
+        sdl_input_instance = sdl_input.SDLInput()
+        sdl_input_thread = threading.Thread(target=sdl_input_instance.event_loop)
+        sdl_input_thread.start()
+        app.aboutToQuit.connect(sdl_input_instance.exit_event_loop)
 
     # install a custom signal handler so that when python receives control-c, QT quits
     signal.signal(signal.SIGINT, sigint_handler)
