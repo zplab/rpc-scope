@@ -31,7 +31,6 @@ from scope import scope_client
 
 SDL_SUBSYSTEMS = sdl2.SDL_INIT_JOYSTICK | sdl2.SDL_INIT_GAMECONTROLLER | sdl2.SDL_INIT_TIMER
 SDL_INITED = False
-SDL_EVENT_LOOP_IS_RUNNING = False
 SDL_TIMER_CALLBACK_TYPE = ctypes.CFUNCTYPE(ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p)
 
 def init_sdl():
@@ -348,18 +347,13 @@ class SDLInput:
             })
 
     def event_loop(self):
-        global SDL_EVENT_LOOP_IS_RUNNING
-        assert not SDL_EVENT_LOOP_IS_RUNNING
+        assert not self.event_loop_is_running
         self._next_axes_tick = 0
         self._axes_throttle_delay_timer_set = False
         self._last_axes_positions = {axis_idx: None for axis_idx in self.AXIS_MOVEMENT_HANDLERS.keys()}
         self._get_axis_pos = sdl2.SDL_GameControllerGetAxis if self.device_is_game_controller else sdl2.SDL_JoystickGetAxis
-        SDL_EVENT_LOOP_IS_RUNNING = True
-        def on_loop_end():
-            global SDL_EVENT_LOOP_IS_RUNNING
-            SDL_EVENT_LOOP_IS_RUNNING = False
-        with contextlib.ExitStack() as estack:
-            estack.callback(on_loop_end)
+        self.event_loop_is_running = True
+        try:
             assert SDL_INITED
             assert self.device
             self.init_handlers()
@@ -372,6 +366,8 @@ class SDLInput:
                         self._event_handlers.get(event.type, self._on_unhandled_event)(event)
             except KeyboardInterrupt:
                 pass
+        finally:
+            self.event_loop_is_running = False
 
     def exit_event_loop(self):
         '''The exit_event_loop method is thread safe and is safe to call even if the event loop is not running.
@@ -422,7 +418,7 @@ class SDLInput:
         # in response to timer expiration.
         curr_ticks = sdl2.SDL_GetTicks()
         if curr_ticks >= self._next_axes_tick:
-            self._on_axis_motion()
+            self._on_axes_motion()
         else:
             with self._axes_throttle_delay_lock:
                 if not self._axes_throttle_delay_timer_set:
@@ -435,7 +431,7 @@ class SDLInput:
 
     def _on_axes_throttle_delay_expired_timer_callback(self, interval, _):
         # NB: SDL timer callbacks execute on a special thread that is not the main thread
-        if not SDL_EVENT_LOOP_IS_RUNNING:
+        if not self.event_loop_is_running:
             return
         with self._axes_throttle_delay_lock:
             self._axes_throttle_delay_timer_set = False
@@ -455,9 +451,9 @@ class SDLInput:
             if self.warnings_enabled:
                 print('Axes throttling delay expiration event pre-empted.', sys.stderr)
             return
-        self._on_axis_motion()
+        self._on_axes_motion()
 
-    def _on_axis_motion(self):
+    def _on_axes_motion(self):
         command_ticks = 0
         for axis, cmd in self.AXIS_MOVEMENT_HANDLERS.items():
             pos = self._get_axis_pos(self.device, axis)
