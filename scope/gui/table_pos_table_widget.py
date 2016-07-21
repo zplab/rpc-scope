@@ -37,7 +37,7 @@ class TablePosTableWidget(Qt.QWidget):
 
     def __init__(
             self,
-            scope, scope_properties,
+            host, scope, scope_properties,
             positions=(),
             window_title='Stage Position Table',
             parent=None):

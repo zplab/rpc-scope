@@ -4,7 +4,6 @@ import threading
 from PyQt5 import Qt
 
 from .. import scope_client
-from ..client_util import sdl_input
 
 def sigint_handler(*args):
     """Handler for the SIGINT signal."""
@@ -16,13 +15,7 @@ def gui_main(host, **widget_classes):
     app = Qt.QApplication(params)
 
     scope, scope_properties = scope_client.client_main(host)
-    widget_namespace = make_and_show_widgets(scope, scope_properties, **widget_classes)
-
-    if sdl_input.enumerate_devices():
-        sdl_input_instance = sdl_input.SDLInput(scope_server_host=host)
-        sdl_input_thread = threading.Thread(target=sdl_input_instance.event_loop)
-        sdl_input_thread.start()
-        app.aboutToQuit.connect(sdl_input_instance.exit_event_loop)
+    widget_namespace = make_and_show_widgets(host, scope, scope_properties, **widget_classes)
 
     # install a custom signal handler so that when python receives control-c, QT quits
     signal.signal(signal.SIGINT, sigint_handler)
@@ -40,12 +33,12 @@ def gui_main(host, **widget_classes):
 class WidgetNamespace:
     pass
 
-def make_and_show_widgets(scope, scope_properties, **widget_classes):
+def make_and_show_widgets(host, scope, scope_properties, **widget_classes):
     widget_namespace = WidgetNamespace()
     widgets = []
     for name, wc in widget_classes.items():
         if wc.can_run(scope):
-            w = wc(scope=scope, scope_properties=scope_properties)
+            w = wc(host=host, scope=scope, scope_properties=scope_properties)
             widgets.append(w)
             setattr(widget_namespace, name, w)
         else:

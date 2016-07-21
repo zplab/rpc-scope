@@ -25,12 +25,11 @@
 from . import device_widget
 from PyQt5 import Qt
 
-
 class SpectraXWidget(device_widget.DeviceWidget):
     PROPERTY_ROOT = 'scope.il.spectra_x.'
 
-    def __init__(self, scope, scope_properties, parent=None):
-        super().__init__(scope, scope_properties, parent)
+    def __init__(self, host, scope, scope_properties, parent=None):
+        super().__init__(host, scope, scope_properties, parent)
         self.setWindowTitle('Spectra X')
         container_layout = Qt.QVBoxLayout()
         self.setLayout(container_layout)
@@ -56,12 +55,11 @@ class SpectraXWidget(device_widget.DeviceWidget):
         for lamp_controller in self.lamp_controllers:
             lamp_controller.toggle.setChecked(False)
 
-
 class TLLampWidget(device_widget.DeviceWidget):
     PROPERTY_ROOT = 'scope.tl.lamp.'
 
-    def __init__(self, scope, scope_properties, parent=None):
-        super().__init__(scope, scope_properties, parent)
+    def __init__(self, host, scope, scope_properties, parent=None):
+        super().__init__(host, scope, scope_properties, parent)
         self.setWindowTitle('TL Lamp')
         grid_layout = Qt.QGridLayout()
         self.setLayout(grid_layout)
@@ -72,16 +70,16 @@ class LampWidget(Qt.QWidget):
     def can_run(scope):
         return SpectraXWidget.can_run(scope) or TLLampWidget.can_run(scope)
 
-    def __init__(self, scope, scope_properties, parent=None):
+    def __init__(self, host, scope, scope_properties, parent=None):
         super().__init__(parent)
         self.setWindowTitle('Lamp Controller')
         container_layout = Qt.QVBoxLayout()
         self.setLayout(container_layout)
         if TLLampWidget.can_run(scope):
-            tl = TLLampWidget(scope, scope_properties, self)
+            tl = TLLampWidget(host, scope, scope_properties, self)
             container_layout.addWidget(tl)
         if SpectraXWidget.can_run(scope):
-            spx = SpectraXWidget(scope, scope_properties, self)
+            spx = SpectraXWidget(host, scope, scope_properties, self)
             container_layout.addWidget(spx)
 
 class LampController:

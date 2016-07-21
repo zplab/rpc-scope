@@ -113,6 +113,7 @@ class ScopeViewerWidget(ris_widget.ris_widget.RisWidget):
 
     def __init__(
             self,
+            host,
             scope,
             scope_properties,
             window_title='Scope Viewer',
