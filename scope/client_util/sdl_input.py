@@ -240,7 +240,7 @@ class SDLInput:
     # These dead zones are appropriate for the Logitech f310 gamepad in Xinput mode.  The f310, in Xinput mode,
     # does not reliably report axis displacements less than ~2000 units in magnitude.  In legacy mode, the f310
     # does not exhibit this issue.  Unfortunately, legacy mode does not offer trigger Z-axis, making it much less
-    # useful for our purposes.  So, we use the f310 in Xinput mode and use a dead zone.
+    # useful for our purposes.  So, we use the f310 in Xinput mode with an adequate dead zone.
     AXIS_DEAD_ZONES = {
         sdl2.SDL_CONTROLLER_AXIS_LEFTX: (-2000, 2000),
         sdl2.SDL_CONTROLLER_AXIS_LEFTY: (-2000, 2000),
