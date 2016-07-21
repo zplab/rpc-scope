@@ -1,10 +1,11 @@
 import signal
-
-from PyQt5 import Qt
 import threading
 
+from PyQt5 import Qt
+
+from ..client_util import sdl_input
 from .. import scope_client
-from .. util import sdl_input
+
 
 def sigint_handler(*args):
     """Handler for the SIGINT signal."""
