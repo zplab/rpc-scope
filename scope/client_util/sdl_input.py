@@ -333,7 +333,8 @@ class SDLInput:
     def init_handlers(self):
         self._event_handlers = {
             sdl2.SDL_QUIT: self._on_quit_event,
-            self.AXES_THROTTLE_DELAY_EXPIRED_EVENT: self._on_axes_throttle_delay_expired_event
+            self.AXES_THROTTLE_DELAY_EXPIRED_EVENT: self._on_axes_throttle_delay_expired_event,
+            sdl2.SDL_JOYHATMOTION: self._on_joyhatmotion_event
         }
         if self.device_is_game_controller:
             self._event_handlers.update({
@@ -406,12 +407,19 @@ class SDLInput:
             state = bool(event.jbutton.state)
         self.handle_button(idx, state)
 
-    def handle_button(self, idx, pressed):
-        if idx == sdl2.SDL_CONTROLLER_BUTTON_A:
+    def handle_button(self, button_idx, pressed):
+        if button_idx == sdl2.SDL_CONTROLLER_BUTTON_A:
             # Stop all stage movement when what is typically the gamepad X button is pressed or released
             self.scope.stage.stop_x()
             self.scope.stage.stop_y()
             self.scope.stage.stop_z()
+
+    @only_for_our_device
+    def _on_joyhatmotion_event(self, event):
+        self.handle_joyhatmotion(event.jhat.hat, event.jhat.value)
+
+    def handle_joyhatmotion(self, hat_idx, pos):
+        print(hat_idx, pos)
 
     @only_for_our_device
     def _on_axis_motion_event(self, event):

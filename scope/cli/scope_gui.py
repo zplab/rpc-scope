@@ -2,17 +2,19 @@ import argparse
 
 from ..gui import andor_camera_widget
 from ..gui import lamp_widget
-from ..gui import scope_viewer
+from ..gui import scope_viewer_widget
 from ..gui import microscope_widget
-from ..gui import table_pos_table
+from ..gui import table_pos_table_widget
+from ..gui import sdl_input_widget
 from ..gui import build_gui
 
 WIDGETS = {
     'camera': andor_camera_widget.AndorCameraWidget,
     'lamps': lamp_widget.LampWidget,
-    'viewer': scope_viewer.ScopeViewer,
+    'viewer': scope_viewer_widget.ScopeViewerWidget,
     'microscope': microscope_widget.MicroscopeWidget,
-    'table_pos_table': table_pos_table.TablePosTable
+    'table_pos_table': table_pos_table_widget.TablePosTableWidget,
+    'sdl_input': sdl_input_widget.SDLInputWidget
 }
 
 def main(argv):

@@ -97,7 +97,7 @@ class PropertyClient(threading.Thread):
         Multiple callbacks can be registered for a single property_prefix.
         """
         if property_prefix not in self.prefix_callbacks:
-            self.prefix_callbacks[property_prefix] = set
+            self.prefix_callbacks[property_prefix] = set()
         self.prefix_callbacks[property_prefix].add((callback, False))
 
     def unsubscribe_prefix(self, property_prefix, callback):

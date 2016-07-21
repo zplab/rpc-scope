@@ -34,7 +34,7 @@ from .. import scope_client
 ris_widget.qwidgets.layer_table.LayerTableModel.PROPERTIES.insert(
     ris_widget.qwidgets.layer_table.LayerTableModel.PROPERTIES.index('opacity') + 1, 'name')
 
-class ScopeViewerQtObject(ris_widget.ris_widget.RisWidgetQtObject):
+class ScopeViewerWidgetQtObject(ris_widget.ris_widget.RisWidgetQtObject):
     RW_LIVE_STREAM_BINDING_LIVE_UPDATE_EVENT = Qt.QEvent.registerEventType()
 
     def __init__(
@@ -100,12 +100,12 @@ class ScopeViewerQtObject(ris_widget.ris_widget.RisWidgetQtObject):
         self.layers.insert(0, t)
         return t
 
-class ScopeViewer(ris_widget.ris_widget.RisWidget):
-    APP_PREFS_NAME = "ScopeViewer"
+class ScopeViewerWidget(ris_widget.ris_widget.RisWidget):
+    APP_PREFS_NAME = "ScopeViewerWidget"
     COPY_REFS = ris_widget.ris_widget.RisWidget.COPY_REFS + [
         #'something'
     ]
-    QT_OBJECT_CLASS = ScopeViewerQtObject
+    QT_OBJECT_CLASS = ScopeViewerWidgetQtObject
 
     @staticmethod
     def can_run(scope):
@@ -132,4 +132,4 @@ class ScopeViewer(ris_widget.ris_widget.RisWidget):
             scope=scope,
             scope_properties=scope_properties,
             **kw)
-    #fooprop = ProxyProperty('fooprop', 'qt_object', ScopeViewerQtObject)
+    #fooprop = ProxyProperty('fooprop', 'qt_object', ScopeViewerWidgetQtObject)

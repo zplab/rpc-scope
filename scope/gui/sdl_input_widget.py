@@ -22,3 +22,17 @@
 #
 # Authors: Erik Hvatum <ice.rikh@gmail.com>
 
+from PyQt5 import Qt
+from ..client_util import sdl_input
+
+class SDLInputWidget(Qt.QWidget, sdl_input.SDLInput):
+    button_signal = Qt.pyqtSignal(int, bool)
+    hat_signal = Qt.pyqtSignal(int, int)
+
+    @staticmethod
+    def can_run(scope):
+        return True
+
+    def __init__(self, scope, scope_properties, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle('SDL Input')
