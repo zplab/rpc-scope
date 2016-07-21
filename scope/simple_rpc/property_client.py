@@ -107,12 +107,12 @@ class PropertyClient(threading.Thread):
         if property_prefix is None:
             raise ValueError('property_prefix parameter must not be None.')
         try:
-            callbacks = self.callbacks[property_name]
+            callbacks = self.prefix_callbacks[property_prefix]
             callbacks.remove((callback, False))
         except KeyError:
-            raise KeyError('No matching subscription found for property name "{}".'.format(property_name))
+            raise KeyError('No matching subscription found for property name "{}".'.format(property_prefix))
         if not callbacks:
-            del self.callbacks[property_name]
+            del self.prefix_callbacks[property_prefix]
 
     def _receive_update(self):
         """Receive an update from the server"""
