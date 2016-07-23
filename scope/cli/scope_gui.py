@@ -5,7 +5,7 @@ from ..gui import lamp_widget
 from ..gui import scope_viewer_widget
 from ..gui import microscope_widget
 from ..gui import table_pos_table_widget
-from ..gui import sdl_input_widget
+from ..gui import joypad_input_widget
 from ..gui import build_gui
 
 WIDGETS = {
@@ -14,7 +14,7 @@ WIDGETS = {
     'viewer': scope_viewer_widget.ScopeViewerWidget,
     'microscope': microscope_widget.MicroscopeWidget,
     'table_pos_table': table_pos_table_widget.TablePosTableWidget,
-    'sdl_input': sdl_input_widget.SDLInputWidget
+    'joypad_input': joypad_input_widget.JoypadInputWidget
 }
 
 def main(argv):

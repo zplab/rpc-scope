@@ -24,9 +24,9 @@
 
 from PyQt5 import Qt
 import sdl2
-from ..client_util import sdl_input
+from ..client_util import joypad_input
 
-class _SDLInputEventLoopThread(Qt.QThread):
+class _SDLEventLoopThread(Qt.QThread):
     def __init__(self, sdl_input, parent=None):
         super().__init__(parent)
         self.sdl_input = sdl_input
@@ -34,7 +34,7 @@ class _SDLInputEventLoopThread(Qt.QThread):
     def run(self):
         self.sdl_input.event_loop()
 
-class _SDLInput(sdl_input.SDLInput):
+class _JoypadInput(joypad_input.JoypadInput):
     def __init__(
             self,
             sdl_input_widget,
@@ -42,8 +42,8 @@ class _SDLInput(sdl_input.SDLInput):
             input_device_name=None,
             scope_server_host='127.0.0.1',
             zmq_context=None,
-            maximum_portion_of_wallclock_time_allowed_for_axis_commands=sdl_input.SDLInput.DEFAULT_MAX_AXIS_COMMAND_WALLCLOCK_TIME_PORTION,
-            maximum_axis_command_cool_off=sdl_input.SDLInput.DEFAULT_MAX_AXIS_COMMAND_COOL_OFF):
+            maximum_portion_of_wallclock_time_allowed_for_axis_commands=joypad_input.JoypadInput.DEFAULT_MAX_AXIS_COMMAND_WALLCLOCK_TIME_PORTION,
+            maximum_axis_command_cool_off=joypad_input.JoypadInput.DEFAULT_MAX_AXIS_COMMAND_COOL_OFF):
         super().__init__(
             input_device_index=input_device_index,
             input_device_name=input_device_name,
@@ -61,7 +61,7 @@ class _SDLInput(sdl_input.SDLInput):
     def handle_joyhatmotion(self, hat_idx, pos):
         self.sdl_input_widget.hat_signal.emit(hat_idx, pos)
 
-class SDLInputWidget(Qt.QWidget):
+class JoypadInputWidget(Qt.QWidget):
     button_signal = Qt.pyqtSignal(int, bool)
     hat_signal = Qt.pyqtSignal(int, int)
 
@@ -73,11 +73,11 @@ class SDLInputWidget(Qt.QWidget):
         super().__init__(parent)
         self.scope = scope
         self.scope_properties = scope_properties
-        self.sdl_input = _SDLInput(self, scope_server_host=host)
-        self.setWindowTitle('SDL Input')
-        self.sdl_input_event_loop_thread = _SDLInputEventLoopThread(self.sdl_input)
+        self.joypad_input = _JoypadInput(self, scope_server_host=host)
+        self.setWindowTitle('Joypad Input')
+        self.sdl_input_event_loop_thread = _SDLEventLoopThread(self.joypad_input)
         self.sdl_input_event_loop_thread.start()
-        Qt.QApplication.instance().aboutToQuit.connect(self.sdl_input.exit_event_loop)
+        Qt.QApplication.instance().aboutToQuit.connect(self.joypad_input.exit_event_loop)
         self.button_signal.connect(self.on_button_signal)
 
     def on_button_signal(self, button_idx, pressed):
