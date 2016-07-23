@@ -23,6 +23,7 @@
 # Authors: Erik Hvatum <ice.rikh@gmail.com>
 
 from PyQt5 import Qt
+import sdl2
 from ..client_util import sdl_input
 
 class _SDLInputEventLoopThread(Qt.QThread):
@@ -51,8 +52,10 @@ class _SDLInput(sdl_input.SDLInput):
             maximum_portion_of_wallclock_time_allowed_for_axis_commands=maximum_portion_of_wallclock_time_allowed_for_axis_commands,
             maximum_axis_command_cool_off=maximum_axis_command_cool_off)
         self.sdl_input_widget = sdl_input_widget
+        self.handle_button_callback = self._handle_button_callback
 
-    def handle_button(self, button_idx, pressed):
+    @staticmethod
+    def _handle_button_callback(self, button_idx, pressed):
         self.sdl_input_widget.button_signal.emit(button_idx, pressed)
 
     def handle_joyhatmotion(self, hat_idx, pos):
@@ -68,11 +71,21 @@ class SDLInputWidget(Qt.QWidget):
 
     def __init__(self, host, scope, scope_properties, parent=None):
         super().__init__(parent)
+        self.scope = scope
+        self.scope_properties = scope_properties
         self.sdl_input = _SDLInput(self, scope_server_host=host)
         self.setWindowTitle('SDL Input')
         self.sdl_input_event_loop_thread = _SDLInputEventLoopThread(self.sdl_input)
         self.sdl_input_event_loop_thread.start()
         Qt.QApplication.instance().aboutToQuit.connect(self.sdl_input.exit_event_loop)
+        self.button_signal.connect(self.on_button_signal)
+
+    def on_button_signal(self, button_idx, pressed):
+        if button_idx == sdl2.SDL_CONTROLLER_BUTTON_A:
+            # Stop all stage movement when what is typically the gamepad X button is pressed or released
+            self.scope.stage.stop_x()
+            self.scope.stage.stop_y()
+            self.scope.stage.stop_z()
 
     # TODO: add button for connecting/disconnecting.  show error when "connect" is clicked and no sdl inputs are
     # available.  connect to the only available sdl input if there is only one.  display a dialog with a list

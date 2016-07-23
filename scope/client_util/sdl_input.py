@@ -329,6 +329,7 @@ class SDLInput:
         self.maximum_axis_command_cool_off = maximum_axis_command_cool_off
         self._axes_throttle_delay_lock = threading.Lock()
         self._c_on_axes_throttle_delay_expired_timer_callback = SDL_TIMER_CALLBACK_TYPE(self._on_axes_throttle_delay_expired_timer_callback)
+        self.handle_button_callback = self.default_handle_button_callback
 
     def init_handlers(self):
         self._event_handlers = {
@@ -374,6 +375,12 @@ class SDLInput:
         finally:
             self.event_loop_is_running = False
 
+    def make_and_start_event_loop_thread(self):
+        assert not self.event_loop_is_running
+        thread = threading.Thread(target=self.event_loop)
+        thread.start()
+        return thread
+
     def exit_event_loop(self):
         '''The exit_event_loop method is thread safe and is safe to call even if the event loop is not running.
         Calling exit_event_loop pushes a quit request onto the SDL event queue, causing self.event_loop() to
@@ -407,12 +414,17 @@ class SDLInput:
             state = bool(event.jbutton.state)
         self.handle_button(idx, state)
 
-    def handle_button(self, button_idx, pressed):
+    @staticmethod
+    def default_handle_button_callback(self, button_idx, pressed):
         if button_idx == sdl2.SDL_CONTROLLER_BUTTON_A:
             # Stop all stage movement when what is typically the gamepad X button is pressed or released
             self.scope.stage.stop_x()
             self.scope.stage.stop_y()
             self.scope.stage.stop_z()
+
+    def handle_button(self, button_idx, pressed):
+        if self.handle_button_callback is not None:
+            self.handle_button_callback(self, button_idx, pressed)
 
     @only_for_our_device
     def _on_joyhatmotion_event(self, event):
