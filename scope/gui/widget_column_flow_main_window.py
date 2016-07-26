@@ -33,28 +33,39 @@ class WidgetColumnFlowMainWindow(Qt.QMainWindow):
         self.setCentralWidget(self._w)
         self.widgets_to_containers = {}
         self.containers_to_widgets = {}
+        self.visibility_toolbar = self.addToolBar('Visibility')
 
     def add_widget(self, widget):
         assert widget not in self.widgets
-        container = FloatableWidgetContainer(widget)
+        container = FloatableHideableWidgetContainer(widget)
         self.widgets_to_containers[widget] = container
         self.containers_to_widgets[container] = widget
         self.widgets.append(widget)
         self._w.layout().addWidget(container)
+        container.pop_request_signal.connect(self.on_pop_request)
+        self.visibility_toolbar.addAction(container.visibility_change_action)
 
     def remove_widget(self, widget):
         assert widget in self.widgets
         container = self.widgets_to_containers[widget]
+        container.pop_request_signal.disconnect(self.on_pop_request)
+        if container.is_visible and not container.is_floating:
+            self._w.layout().removeWidget(container)
+        container.deleteLater()
         del self.widgets_to_containers[widget]
         del self.containers_to_widgets[container]
         del self.widgets[self.widgets.index(widget)]
-        self._w.layout().removeWidget(container)
+        self.visibility_toolbar.removeAction(container.visibility_change_action)
 
     def reflow(self):
         pass
 
-class FloatableWidgetContainer(Qt.QWidget):
+    def on_pop_request(self, widget, out):
+        pass
+
+class FloatableHideableWidgetContainer(Qt.QWidget):
     pop_request_signal = Qt.pyqtSignal(Qt.QWidget, bool)
+    visibility_change_signal = Qt.pyqtSignal(Qt.QWidget, bool)
 
     def __init__(self, contained_widget):
         super().__init__()
@@ -74,6 +85,22 @@ class FloatableWidgetContainer(Qt.QWidget):
         ll.addWidget(self.pop_button)
         l.addWidget(contained_widget)
         l.addSpacerItem(Qt.QSpacerItem(0, 0, Qt.QSizePolicy.Expanding, Qt.QSizePolicy.Expanding))
+        self.visibility_change_action = Qt.QAction(contained_widget.windowTitle(), self)
+        self.visibility_change_action.setCheckable(True)
+        self.visibility_change_action.setChecked(True)
+        self.visibility_change_action.triggered.connect(self.on_visibility_change_action_triggered)
+        contained_widget.windowTitleChanged.connect(self.visibility_change_action.setText)
 
     def on_popout_button_clicked(self, out):
-        self.pop_request_signal.emit(self, out)
+        self.pop_request_signal.emit(self.contained_widget, out)
+
+    def on_visibility_change_action_triggered(self, visible):
+        self.visibility_change_signal.emit(self.contained_widget, visible)
+
+    @property
+    def is_floating(self):
+        return self.pop_button.isChecked()
+
+    @property
+    def is_visible(self):
+        return self.visibility_change_action.isChecked()
