@@ -32,36 +32,47 @@ class WidgetColumnFlowMainWindow(Qt.QMainWindow):
         self._w.setLayout(Qt.QHBoxLayout())
         self.setCentralWidget(self._w)
         self.widgets_to_containers = {}
-        self.containers_to_widgets = {}
         self.visibility_toolbar = self.addToolBar('Visibility')
 
     def add_widget(self, widget):
         assert widget not in self.widgets
         container = FloatableHideableWidgetContainer(widget)
         self.widgets_to_containers[widget] = container
-        self.containers_to_widgets[container] = widget
         self.widgets.append(widget)
         self._w.layout().addWidget(container)
         container.pop_request_signal.connect(self.on_pop_request)
+        container.visibility_change_signal.connect(self.on_visibility_change_signal)
         self.visibility_toolbar.addAction(container.visibility_change_action)
 
     def remove_widget(self, widget):
         assert widget in self.widgets
         container = self.widgets_to_containers[widget]
         container.pop_request_signal.disconnect(self.on_pop_request)
+        container.visibility_change_signal.disconnect(self.on_visibility_change_signal)
         if container.is_visible and not container.is_floating:
             self._w.layout().removeWidget(container)
         container.deleteLater()
         del self.widgets_to_containers[widget]
-        del self.containers_to_widgets[container]
         del self.widgets[self.widgets.index(widget)]
         self.visibility_toolbar.removeAction(container.visibility_change_action)
 
     def reflow(self):
         pass
 
-    def on_pop_request(self, widget, out):
-        pass
+    def on_pop_request(self, container, out):
+        if out:
+            container.setParent(None)
+            container.show()
+        else:
+            self._w.layout().addWidget(container)
+
+    def on_visibility_change_signal(self, container, visible):
+        container.setVisible(visible)
+
+    def closeEvent(self, e):
+        for container in self.widgets_to_containers.values():
+            if container.is_floating:
+                container.close()
 
 class FloatableHideableWidgetContainer(Qt.QWidget):
     pop_request_signal = Qt.pyqtSignal(Qt.QWidget, bool)
@@ -72,30 +83,44 @@ class FloatableHideableWidgetContainer(Qt.QWidget):
         self.contained_widget = contained_widget
         l = Qt.QVBoxLayout()
         self.setLayout(l)
-        self.pop_groupbox = Qt.QGroupBox()
-        l.addWidget(self.pop_groupbox)
-        ll = Qt.QHBoxLayout()
-        ll.setContentsMargins(0,0,0,0)
-        self.pop_groupbox.setLayout(ll)
-        ll.addSpacerItem(Qt.QSpacerItem(0, 0, Qt.QSizePolicy.Expanding))
         self.pop_button = Qt.QPushButton('\N{NORTH EAST ARROW}')
         self.pop_button.setCheckable(True)
         self.pop_button.setChecked(False)
         self.pop_button.clicked.connect(self.on_popout_button_clicked)
-        ll.addWidget(self.pop_button)
-        l.addWidget(contained_widget)
-        l.addSpacerItem(Qt.QSpacerItem(0, 0, Qt.QSizePolicy.Expanding, Qt.QSizePolicy.Expanding))
+        if hasattr(contained_widget, 'embed_widget_flow_pop_button'):
+            contained_widget.embed_widget_flow_pop_button(self.pop_button)
+            l.addWidget(contained_widget)
+        else:
+            self.pop_groupbox = Qt.QGroupBox()
+            l.addWidget(self.pop_groupbox)
+            ll = Qt.QHBoxLayout()
+            ll.setContentsMargins(0,0,0,0)
+            self.pop_groupbox.setLayout(ll)
+            ll.addSpacerItem(Qt.QSpacerItem(0, 0, Qt.QSizePolicy.Expanding))
+            ll.addWidget(self.pop_button)
+            l.addWidget(contained_widget)
+            l.addSpacerItem(Qt.QSpacerItem(0, 0, Qt.QSizePolicy.Expanding, Qt.QSizePolicy.Expanding))
         self.visibility_change_action = Qt.QAction(contained_widget.windowTitle(), self)
         self.visibility_change_action.setCheckable(True)
         self.visibility_change_action.setChecked(True)
-        self.visibility_change_action.triggered.connect(self.on_visibility_change_action_triggered)
+        self.visibility_change_action.toggled.connect(self.on_visibility_change_action_toggled)
         contained_widget.windowTitleChanged.connect(self.visibility_change_action.setText)
 
     def on_popout_button_clicked(self, out):
-        self.pop_request_signal.emit(self.contained_widget, out)
+        self.pop_request_signal.emit(self, out)
 
-    def on_visibility_change_action_triggered(self, visible):
-        self.visibility_change_signal.emit(self.contained_widget, visible)
+    def on_visibility_change_action_toggled(self, visible):
+        self.visibility_change_signal.emit(self, visible)
+
+    def closeEvent(self, e):
+        super().closeEvent(e)
+        if e.isAccepted():
+            self.visibility_change_action.setChecked(False)
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        if e.isAccepted():
+            self.visibility_change_action.setChecked(True)
 
     @property
     def is_floating(self):

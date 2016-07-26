@@ -100,6 +100,9 @@ class ScopeViewerWidgetQtObject(ris_widget.ris_widget.RisWidgetQtObject):
         self.layers.insert(0, t)
         return t
 
+    def embed_widget_flow_pop_button(self, pop_button):
+        self.scope_toolbar.addWidget(pop_button)
+
 class ScopeViewerWidget(ris_widget.ris_widget.RisWidget):
     APP_PREFS_NAME = "ScopeViewerWidget"
     COPY_REFS = ris_widget.ris_widget.RisWidget.COPY_REFS + [
