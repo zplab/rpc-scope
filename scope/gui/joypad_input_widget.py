@@ -79,6 +79,14 @@ class JoypadInputWidget(Qt.QWidget):
         self.sdl_input_event_loop_thread.start()
         Qt.QApplication.instance().aboutToQuit.connect(self.joypad_input.exit_event_loop)
         self.button_signal.connect(self.on_button_signal)
+        self.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(Qt.QHBoxLayout())
+        self.pushbutton_widget = Qt.QPushButton('Connect to joypad')
+        self.pushbutton_widget.setFocusPolicy(Qt.Qt.NoFocus)
+        self.pushbutton_widget.setAutoDefault(False)
+        self.pushbutton_widget.setCheckable(True)
+        self.pushbutton_widget.setChecked(False)
+        self.layout().addWidget(self.pushbutton_widget)
 
     def on_button_signal(self, button_idx, pressed):
         if button_idx == sdl2.SDL_CONTROLLER_BUTTON_A:

@@ -23,7 +23,79 @@
 # Authors: Erik Hvatum <ice.rikh@gmail.com>
 
 from PyQt5 import Qt
+from . import widget_column_flow_main_window
 
-class ScopeWidgets(Qt.QMainWindow):
-    pass
-    # TODO: bring in widget column reflow stacker test code, polishing as we go
+from . import andor_camera_widget
+from . import lamp_widget
+from . import scope_viewer_widget
+from . import microscope_widget
+from . import table_pos_table_widget
+from . import joypad_input_widget
+
+WIDGETS = {
+    'camera': andor_camera_widget.AndorCameraWidget,
+    'lamps': lamp_widget.LampWidget,
+    'viewer': scope_viewer_widget.ScopeViewerWidget,
+    'microscope': microscope_widget.MicroscopeWidget,
+    'table_pos_table': table_pos_table_widget.TablePosTableWidget,
+    'joypad_input': joypad_input_widget.JoypadInputWidget
+}
+
+class WidgetWindow(widget_column_flow_main_window.WidgetColumnFlowMainWindow):
+    def __init__(
+            self,
+            host, scope, scope_properties,
+            names_of_desired_widgets=('all',), show_cant_run_warning=True,
+            window_title='Scope Widgets', parent=None):
+        """Arguments:
+        * host: Hostname or IP address of scope server.
+        * scope: scope.scope.Scope object instance - the first element of the tuple returned by
+        scope.scope_client.client_main(..).
+        * scope_properties: scope.simple_rpc.property_client.ZMQClient - the second element of the tuple returned by
+        scope.scope_client.client_main(..).
+        * names_of_desired_widgets: Either 'all' or an iterable of any subset of list(scope.gui.scope_widgets.WIDGETS.keys()).
+        For example, desired_widgets=('camera', 'viewer').
+        * show_cant_run_warning: If True (the default), display a warning dialog with the names any of the desired widgets
+        reporting that they can not run (IE, their .can_run(..) static/class method returns False).
+        * window_title: defaults to 'Scope Widgets'.
+        * parent: defaults to None, which is what you want if WidgetWindow is a top level window."""
+        super().__init__(parent)
+        self.setWindowTitle(window_title)
+        self.names_to_widgets = {}
+        self.widgets_to_names = {}
+        if 'all' in names_of_desired_widgets:
+            wncs = WIDGETS
+        else:
+            wncs = {name: WIDGETS[name] for name in names_of_desired_widgets}
+        desired_but_cant_run = []
+        for wn, wc in wncs.items():
+            if wc.can_run(scope):
+                self.add_widget(wc(host=host, scope=scope, scope_properties=scope_properties), wn)
+            else:
+                desired_but_cant_run.append(wn)
+        scope.rebroadcast_properties()
+        if show_cant_run_warning and desired_but_cant_run:
+            Qt.QMessageBox.warning(self, 'WidgetWindow Warning', 'Scope can not currently run {}.  (Hardware not turned on?)'.format(
+                desired_but_cant_run if len(desired_but_cant_run) == 1 else ', '.join(desired_but_cant_run[:-1]) + ', or ' + desired_but_cant_run[-1]
+            ))
+
+    def add_widget(self, widget, name):
+        assert not hasattr(self, name)
+        assert name not in self.names_to_widgets
+        assert widget not in self.widgets_to_names
+        super().add_widget(widget.qt_object if hasattr(widget, 'qt_object') else widget)
+        setattr(self, name, widget)
+        self.names_to_widgets[name] = widget
+        self.widgets_to_names[widget] = name
+
+    def remove_widget(self, widget_or_name):
+        if isinstance(widget_or_name, str):
+            name = widget_or_name
+            widget = self.names_to_widgets[widget_or_name]
+        else:
+            name = self.widgets_to_names[widget_or_name]
+            widget = widget_or_name
+        super().remove_widget(widget.qt_object if hasattr(widget, 'qt_object') else widget)
+        delattr(self, name)
+        del self.widgets_to_names[widget]
+        del self.names_to_widgets[name]
