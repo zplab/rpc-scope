@@ -68,7 +68,8 @@ class WidgetWindow(widget_column_flow_main_window.WidgetColumnFlowMainWindow):
         else:
             wncs = {name: WIDGETS[name] for name in names_of_desired_widgets}
         desired_but_cant_run = []
-        for wn, wc in wncs.items():
+        for wn in sorted(wncs.keys()):
+            wc = wncs[wn]
             if wc.can_run(scope):
                 self.add_widget(wc(host=host, scope=scope, scope_properties=scope_properties), wn)
             else:
