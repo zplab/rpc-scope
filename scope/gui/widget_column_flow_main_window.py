@@ -34,12 +34,17 @@ class WidgetColumnFlowMainWindow(Qt.QMainWindow):
         self.widgets_to_containers = {}
         self.visibility_toolbar = self.addToolBar('Visibility')
 
-    def add_widget(self, widget):
+    def add_widget(self, widget, floating=False):
         assert widget not in self.widgets
         container = FloatableHideableWidgetContainer(widget)
         self.widgets_to_containers[widget] = container
         self.widgets.append(widget)
-        self._w.layout().addWidget(container)
+        if floating:
+            container.pop_button.setChecked(True)
+            container.setParent(None)
+            container.show()
+        else:
+            self._w.layout().addWidget(container)
         container.pop_request_signal.connect(self.on_pop_request)
         container.visibility_change_signal.connect(self.on_visibility_change_signal)
         self.visibility_toolbar.addAction(container.visibility_change_action)
@@ -82,6 +87,9 @@ class FloatableHideableWidgetContainer(Qt.QWidget):
         super().__init__()
         self.contained_widget = contained_widget
         l = Qt.QVBoxLayout()
+        margins = list(l.getContentsMargins())
+        margins[1] = 0
+        l.setContentsMargins(*margins)
         self.setLayout(l)
         self.pop_button = Qt.QPushButton('\N{NORTH EAST ARROW}')
         self.pop_button.setCheckable(True)
@@ -91,11 +99,21 @@ class FloatableHideableWidgetContainer(Qt.QWidget):
             contained_widget.embed_widget_flow_pop_button(self.pop_button)
             l.addWidget(contained_widget)
         else:
-            self.pop_groupbox = Qt.QGroupBox()
-            l.addWidget(self.pop_groupbox)
+            self.pop_frame = Qt.QFrame()
+            self.pop_frame.setFrameStyle(Qt.QFrame.StyledPanel | Qt.QFrame.Plain)
+            self.pop_frame.setBackgroundRole(Qt.QPalette.Shadow)
+            self.pop_frame.setAutoFillBackground(True)
+            self.pop_frame_title_label = Qt.QLabel()
+            f = self.pop_frame_title_label.font()
+            f.setPointSizeF(f.pointSize() * 1.5)
+            f.setBold(True)
+            self.pop_frame_title_label.setAlignment(Qt.Qt.AlignLeft | Qt.Qt.AlignVCenter)
+            self.pop_frame_title_label.setFont(f)
+            l.addWidget(self.pop_frame)
             ll = Qt.QHBoxLayout()
-            ll.setContentsMargins(0,0,0,0)
-            self.pop_groupbox.setLayout(ll)
+            ll.setContentsMargins(1,1,1,1)
+            self.pop_frame.setLayout(ll)
+            ll.addWidget(self.pop_frame_title_label)
             ll.addSpacerItem(Qt.QSpacerItem(0, 0, Qt.QSizePolicy.Expanding))
             ll.addWidget(self.pop_button)
             l.addWidget(contained_widget)
@@ -104,13 +122,23 @@ class FloatableHideableWidgetContainer(Qt.QWidget):
         self.visibility_change_action.setCheckable(True)
         self.visibility_change_action.setChecked(True)
         self.visibility_change_action.toggled.connect(self.on_visibility_change_action_toggled)
-        contained_widget.windowTitleChanged.connect(self.visibility_change_action.setText)
+        contained_widget.windowTitleChanged.connect(self.on_contained_widget_window_title_changed)
+        self.on_contained_widget_window_title_changed(contained_widget.windowTitle())
 
     def on_popout_button_clicked(self, out):
+        # Uncomment to hide popout-area title when floating
+        # if hasattr(self, 'pop_frame_title_label'):
+        #     self.pop_frame_title_label.setVisible(not out)
         self.pop_request_signal.emit(self, out)
 
     def on_visibility_change_action_toggled(self, visible):
         self.visibility_change_signal.emit(self, visible)
+
+    def on_contained_widget_window_title_changed(self, t):
+        self.visibility_change_action.setText(t)
+        self.setWindowTitle(t)
+        if hasattr(self, 'pop_frame_title_label'):
+            self.pop_frame_title_label.setText("<font color='white'>{}</font>".format(t))
 
     def closeEvent(self, e):
         super().closeEvent(e)

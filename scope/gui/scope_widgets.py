@@ -71,7 +71,7 @@ class WidgetWindow(widget_column_flow_main_window.WidgetColumnFlowMainWindow):
         for wn in sorted(wncs.keys()):
             wc = wncs[wn]
             if wc.can_run(scope):
-                self.add_widget(wc(host=host, scope=scope, scope_properties=scope_properties), wn)
+                self.add_widget(wn, wc(host=host, scope=scope, scope_properties=scope_properties), wn=='viewer')
             else:
                 desired_but_cant_run.append(wn)
         scope.rebroadcast_properties()
@@ -80,11 +80,11 @@ class WidgetWindow(widget_column_flow_main_window.WidgetColumnFlowMainWindow):
                 desired_but_cant_run if len(desired_but_cant_run) == 1 else ', '.join(desired_but_cant_run[:-1]) + ', or ' + desired_but_cant_run[-1]
             ))
 
-    def add_widget(self, widget, name):
+    def add_widget(self, name, widget, floating=False):
         assert not hasattr(self, name)
         assert name not in self.names_to_widgets
         assert widget not in self.widgets_to_names
-        super().add_widget(widget.qt_object if hasattr(widget, 'qt_object') else widget)
+        super().add_widget(widget.qt_object if hasattr(widget, 'qt_object') else widget, floating)
         setattr(self, name, widget)
         self.names_to_widgets[name] = widget
         self.widgets_to_names[widget] = name
