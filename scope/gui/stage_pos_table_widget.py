@@ -51,6 +51,7 @@ class StagePosTableWidget(Qt.QWidget):
             positions if isinstance(positions, om.SignalingList) else om.SignalingList(Pos(*e) for e in positions),
             self)
         self.view = PosTableView(self.model, self)
+        self.view.setSizePolicy(Qt.QSizePolicy.Expanding, Qt.QSizePolicy.Expanding)
         self.setLayout(Qt.QVBoxLayout())
         self.layout().addWidget(self.view)
         self.store_current_stage_position_button = Qt.QPushButton('Store Current Stage Position')

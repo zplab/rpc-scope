@@ -33,6 +33,7 @@ class SpectraXWidget(device_widget.DeviceWidget):
         self.setWindowTitle('Spectra X')
         container_layout = Qt.QVBoxLayout()
         self.setLayout(container_layout)
+        
         grid_layout = Qt.QGridLayout()
         container_layout.addLayout(grid_layout)
 
@@ -50,6 +51,8 @@ class SpectraXWidget(device_widget.DeviceWidget):
         bottom_layout.addWidget(temperature_label)
         self.subscribe(self.PROPERTY_ROOT + 'temperature',
            callback=lambda temp: temperature_label.setText('Temperature: {}°C'.format(temp)))
+
+        container_layout.addStretch()
 
     def disable_all(self):
         for lamp_controller in self.lamp_controllers:
@@ -96,12 +99,15 @@ class LampController:
         slider.setSingleStep(1)
         slider.setPageStep(5)
         slider.setValue(0)
+        slider.setMinimumWidth(255)
+        slider.setMaximumWidth(255)
 
         spinbox = Qt.QSpinBox()
         layout.addWidget(spinbox, row, 2)
         spinbox.setRange(0, 255)
         spinbox.setSingleStep(1)
         spinbox.setValue(0)
+        spinbox.setSizePolicy(Qt.QSizePolicy.Fixed, Qt.QSizePolicy.Fixed)
         self.spinbox = spinbox
 
         self.update_spx = widget.subscribe(name + '.intensity', callback=slider.setValue)

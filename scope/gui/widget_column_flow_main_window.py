@@ -117,13 +117,14 @@ class FloatableHideableWidgetContainer(Qt.QWidget):
             ll.addSpacerItem(Qt.QSpacerItem(0, 0, Qt.QSizePolicy.Expanding))
             ll.addWidget(self.pop_button)
             l.addWidget(contained_widget)
-            l.addSpacerItem(Qt.QSpacerItem(0, 0, Qt.QSizePolicy.Expanding, Qt.QSizePolicy.Expanding))
         self.visibility_change_action = Qt.QAction(contained_widget.windowTitle(), self)
         self.visibility_change_action.setCheckable(True)
         self.visibility_change_action.setChecked(True)
         self.visibility_change_action.toggled.connect(self.on_visibility_change_action_toggled)
         contained_widget.windowTitleChanged.connect(self.on_contained_widget_window_title_changed)
         self.on_contained_widget_window_title_changed(contained_widget.windowTitle())
+        if not hasattr(contained_widget, 'embed_widget_flow_pop_button'):
+            self.pop_frame.setSizePolicy(Qt.QSizePolicy.Expanding, Qt.QSizePolicy.Fixed)
 
     def on_popout_button_clicked(self, out):
         # Uncomment to hide popout-area title when floating
