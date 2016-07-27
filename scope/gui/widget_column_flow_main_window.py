@@ -198,12 +198,11 @@ class FlowLayout(Qt.QLayout):
     def expandingDirections(self):
         return 0
 
-    def hasHeightForWidth(self):
+    def hasWidthForHeight(self):
         return True
 
-    def heightForWidth(self, width):
-        height = self.doLayout(Qt.QRect(0, 0, width, 0), True);
-        return height
+    def widthForHeight(self, height):
+        return self.doLayout(Qt.QRect(0, 0, 0, height), True)
 
     def setGeometry(self, rect):
         super().setGeometry(rect)
@@ -219,41 +218,46 @@ class FlowLayout(Qt.QLayout):
       size += Qt.QSize(2*self.spacing(), 2*self.spacing())
       return size
 
-    def doLayout(self, rect, testOnly):
-        left, top, right, bottom = self.getContentsMargins()
-        effectiveRect = rect.adjusted(+left, +top, -right, -bottom)
-        x = effectiveRect.x()
-        y = effectiveRect.y()
-        lineHeight = 0
-
-        for item in self.itemList:
-            wid = item.widget()
-            spaceX = self.horizontalSpacing()
-            if spaceX == -1:
-                spaceX = wid.style().layoutSpacing(Qt.QSizePolicy.PushButton, Qt.QSizePolicy.PushButton, Qt.Qt.Horizontal)
-            spaceY = self.verticalSpacing()
-            if spaceY == -1:
-                spaceY = wid.style().layoutSpacing(Qt.QSizePolicy.PushButton, Qt.QSizePolicy.PushButton, Qt.Qt.Vertical)
-            nextX = x + item.sizeHint().width() + spaceX
-            if nextX - spaceX > effectiveRect.right() and lineHeight > 0:
-                x = effectiveRect.x()
-                y = y + lineHeight + spaceY
-                nextX = x + item.sizeHint().width() + spaceX
-                lineHeight = 0
-
-            if not testOnly:
+    def doLayout(self, rect, test_only):
+        x, y = rect.x(), rect.y()
+        width = height = 0
+        column = []
+        for item_idx, item in enumerate(self.itemList):
+            next_item = self.itemList[item_idx + 1] if item_idx + 1 < len(self.itemList) else None
+            next_y = y + item.sizeHint().height()
+            if next_y > rect.bottom() and width > 0:
+                y = rect.y()
+                x = x + width + self.spacing()
+                next_y = y + item.sizeHint().height()
+                width = 0
+            if not test_only:
                 item.setGeometry(Qt.QRect(Qt.QPoint(x, y), item.sizeHint()))
-
-            x = nextX
-            lineHeight = max(lineHeight, item.sizeHint().height())
-
-        return y + lineHeight + rect.y() + bottom
+                column.append(item)
+                height += item.sizeHint().height()
+                if next_item is None or next_y + next_item.sizeHint().height() > rect.bottom():
+                    actual_width = 0
+                    for citem in column:
+                        actual_width = max(actual_width, citem.widget().sizeHint().width())
+                    gap = (rect.height() - height) / (len(column) + 1)
+                    for citem_idx, citem in enumerate(column):
+                        r = citem.geometry()
+                        citem.setGeometry(Qt.QRect(
+                            r.left(),
+                            r.top() + citem_idx * gap,
+                            actual_width,
+                            r.height()
+                        ))
+                    column = []
+                    height = 0
+            y = next_y
+            width = max(width, item.sizeHint().width())
+        return x + width - rect.x()
 
     def smartSpacing(self, pm):
         parent = self.parent()
         if parent is None:
             return -1
         elif parent.isWidgetType():
-          return parent.style().pixelMetric(pm, None, parent)
+            return parent.style().pixelMetric(pm, None, parent)
         else:
             return parent.spacing()
