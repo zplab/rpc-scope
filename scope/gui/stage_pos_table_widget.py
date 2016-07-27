@@ -26,7 +26,7 @@ import json
 from PyQt5 import Qt
 from ris_widget import om
 
-class TablePosTableWidget(Qt.QWidget):
+class StagePosTableWidget(Qt.QWidget):
     @classmethod
     def can_run(cls, scope):
         try:

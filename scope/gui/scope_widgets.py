@@ -29,7 +29,7 @@ from . import andor_camera_widget
 from . import lamp_widget
 from . import scope_viewer_widget
 from . import microscope_widget
-from . import table_pos_table_widget
+from . import stage_pos_table_widget
 from . import joypad_input_widget
 
 WIDGETS = {
@@ -37,7 +37,7 @@ WIDGETS = {
     'lamps': lamp_widget.LampWidget,
     'viewer': scope_viewer_widget.ScopeViewerWidget,
     'microscope': microscope_widget.MicroscopeWidget,
-    'table_pos_table': table_pos_table_widget.TablePosTableWidget,
+    'stage_pos_table': stage_pos_table_widget.StagePosTableWidget,
     'joypad_input': joypad_input_widget.JoypadInputWidget
 }
 
