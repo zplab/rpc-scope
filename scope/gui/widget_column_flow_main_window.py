@@ -36,33 +36,36 @@ class WidgetColumnFlowMainWindow(Qt.QMainWindow):
 
     def add_widget(self, widget, floating=False):
         assert widget not in self.widgets
-        container = FloatableHideableWidgetContainer(widget)
-        self.widgets_to_containers[widget] = container
-        self.widgets.append(widget)
-        if floating:
-            container.pop_button.setChecked(True)
-            container.setParent(None)
-            container.show()
+        if isinstance(widget, Qt.QWidget):
+            container = FloatableHideableWidgetContainer(widget)
+            self.widgets_to_containers[widget] = container
+            self.widgets.append(widget)
+            if floating:
+                container.pop_button.setChecked(True)
+                container.setParent(None)
+                container.show()
+            else:
+                self._w.layout().addWidget(container)
+            container.pop_request_signal.connect(self.on_pop_request)
+            container.visibility_change_signal.connect(self.on_visibility_change_signal)
+            self.visibility_toolbar.addAction(container.visibility_change_action)
         else:
-            self._w.layout().addWidget(container)
-        container.pop_request_signal.connect(self.on_pop_request)
-        container.visibility_change_signal.connect(self.on_visibility_change_signal)
-        self.visibility_toolbar.addAction(container.visibility_change_action)
+            self.widgets.append(widget)
 
     def remove_widget(self, widget):
         assert widget in self.widgets
-        container = self.widgets_to_containers[widget]
-        container.pop_request_signal.disconnect(self.on_pop_request)
-        container.visibility_change_signal.disconnect(self.on_visibility_change_signal)
-        if container.is_visible and not container.is_floating:
-            self._w.layout().removeWidget(container)
-        container.deleteLater()
-        del self.widgets_to_containers[widget]
-        del self.widgets[self.widgets.index(widget)]
-        self.visibility_toolbar.removeAction(container.visibility_change_action)
-
-    def reflow(self):
-        pass
+        if isinstance(widget, Qt.QWidget):
+            container = self.widgets_to_containers[widget]
+            container.pop_request_signal.disconnect(self.on_pop_request)
+            container.visibility_change_signal.disconnect(self.on_visibility_change_signal)
+            if container.is_visible and not container.is_floating:
+                self._w.layout().removeWidget(container)
+            container.deleteLater()
+            del self.widgets_to_containers[widget]
+            del self.widgets[self.widgets.index(widget)]
+            self.visibility_toolbar.removeAction(container.visibility_change_action)
+        else:
+            del self.widgets[self.widgets.index(widget)]
 
     def on_pop_request(self, container, out):
         if out:

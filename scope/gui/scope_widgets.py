@@ -88,6 +88,10 @@ class WidgetWindow(widget_column_flow_main_window.WidgetColumnFlowMainWindow):
         setattr(self, name, widget)
         self.names_to_widgets[name] = widget
         self.widgets_to_names[widget] = name
+        if isinstance(widget, Qt.QAction):
+            if not hasattr(self, 'action_toolbar'):
+                self.action_toolbar = self.addToolBar('Actions')
+            self.action_toolbar.addAction(widget)
 
     def remove_widget(self, widget_or_name):
         if isinstance(widget_or_name, str):
@@ -100,3 +104,5 @@ class WidgetWindow(widget_column_flow_main_window.WidgetColumnFlowMainWindow):
         delattr(self, name)
         del self.widgets_to_names[widget]
         del self.names_to_widgets[name]
+        if isinstance(widget, Qt.QAction):
+            self.action_toolbar.removeAction(widget)

@@ -377,9 +377,14 @@ class JoypadInput:
 
     def make_and_start_event_loop_thread(self):
         assert not self.event_loop_is_running
-        thread = threading.Thread(target=self.event_loop)
-        thread.start()
-        return thread
+        self.thread = threading.Thread(target=self.event_loop)
+        self.thread.start()
+
+    def stop_and_destroy_event_loop_thread(self):
+        assert self.event_loop_is_running
+        self.exit_event_loop()
+        self.thread.join()
+        del self.thread
 
     def exit_event_loop(self):
         '''The exit_event_loop method is thread safe and is safe to call even if the event loop is not running.

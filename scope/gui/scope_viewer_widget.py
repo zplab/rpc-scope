@@ -65,8 +65,8 @@ class ScopeViewerWidgetQtObject(ris_widget.ris_widget.RisWidgetQtObject):
         self.scope = scope
         self.scope_toolbar = self.addToolBar('Scope')
         self.live_streamer = scope_client.LiveStreamer(scope, scope_properties, self.post_live_update)
-        # import freeimage
-        # self.layer_stack.imposed_image_mask = freeimage.read('/home/zplab/vignette_mask.png')
+        import freeimage
+        self.layer_stack.imposed_image_mask = freeimage.read('/home/zplab/vignette_mask.png')
         self.get_live_target_layer()
 
     def event(self, e):

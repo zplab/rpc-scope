@@ -27,12 +27,12 @@ import sdl2
 from ..client_util import joypad_input
 
 class _SDLEventLoopThread(Qt.QThread):
-    def __init__(self, sdl_input, parent=None):
+    def __init__(self, joypad_input, parent=None):
         super().__init__(parent)
-        self.sdl_input = sdl_input
+        self.joypad_input = joypad_input
 
     def run(self):
-        self.sdl_input.event_loop()
+        self.joypad_input.event_loop()
 
 class _JoypadInput(joypad_input.JoypadInput):
     def __init__(
@@ -61,32 +61,38 @@ class _JoypadInput(joypad_input.JoypadInput):
     def handle_joyhatmotion(self, hat_idx, pos):
         self.sdl_input_widget.hat_signal.emit(hat_idx, pos)
 
-class JoypadInputWidget(Qt.QWidget):
+    def make_and_start_event_loop_thread(self):
+        assert not self.event_loop_is_running
+        self.thread = _SDLEventLoopThread(self)
+        self.thread.start()
+
+    def stop_and_destroy_event_loop_thread(self):
+        assert self.event_loop_is_running
+        self.exit_event_loop()
+        self.thread.wait()
+        del self.thread
+
+# JoypadInputWidget is actually just a toggleable QAction.  QAction provides all the functionality required while avoiding
+# the need to make and lay out a QPushButton.
+class JoypadInputWidget(Qt.QAction):
     button_signal = Qt.pyqtSignal(int, bool)
     hat_signal = Qt.pyqtSignal(int, int)
 
     @staticmethod
     def can_run(scope):
-        return True
+        return hasattr(scope, 'stage')
 
     def __init__(self, host, scope, scope_properties, parent=None):
         super().__init__(parent)
         self.scope = scope
         self.scope_properties = scope_properties
-        self.joypad_input = _JoypadInput(self, scope_server_host=host)
-        self.setWindowTitle('Joypad Input')
-        self.sdl_input_event_loop_thread = _SDLEventLoopThread(self.joypad_input)
-        self.sdl_input_event_loop_thread.start()
-        Qt.QApplication.instance().aboutToQuit.connect(self.joypad_input.exit_event_loop)
+        self.scope_server_host = host
+        self.joypad_input = None
+        self.setText('Connect Joypad')
+        Qt.QApplication.instance().aboutToQuit.connect(self.disconnect)
         self.button_signal.connect(self.on_button_signal)
-        self.setContentsMargins(0, 0, 0, 0)
-        self.setLayout(Qt.QHBoxLayout())
-        self.pushbutton_widget = Qt.QPushButton('Connect to joypad')
-        self.pushbutton_widget.setFocusPolicy(Qt.Qt.NoFocus)
-        self.pushbutton_widget.setAutoDefault(False)
-        self.pushbutton_widget.setCheckable(True)
-        self.pushbutton_widget.setChecked(False)
-        self.layout().addWidget(self.pushbutton_widget)
+        self.triggered.connect(self.on_triggered)
+        self.connect()
 
     def on_button_signal(self, button_idx, pressed):
         if button_idx == sdl2.SDL_CONTROLLER_BUTTON_A:
@@ -95,6 +101,44 @@ class JoypadInputWidget(Qt.QWidget):
             self.scope.stage.stop_y()
             self.scope.stage.stop_z()
 
-    # TODO: add button for connecting/disconnecting.  show error when "connect" is clicked and no sdl inputs are
-    # available.  connect to the only available sdl input if there is only one.  display a dialog with a list
-    # of available sdl inputs if more than one are available, with ok and cancel prompt.
+    @property
+    def is_connected(self):
+        return self.joypad_input is not None
+
+    def on_triggered(self):
+        if self.is_connected:
+            self.disconnect()
+        else:
+            self.connect(device_id=None)
+
+    def connect(self, device_id=-1):
+        """Connect to the gamepad/joystick with the specified SDL2 device ID.  If -1 (the default) is supplied for
+        device_id, JoypadInputWidget attempts to use the gamepad/joystick with the lowest ID if available and remains
+        in the disconnected state if not.  Supplying None for device_id results in the gamepad/joystick with the
+        lowest ID being used if only one device is available, an error messagebox being displayed if there are no
+        devices available, and a device selection dialog being displayed if multiple devices are available.  Supplying
+        any other value connects to the specified gamepad/joystick and displays an error messagebox if this fails.
+
+        If connect is called while already connected, the existing connection is closed, and a new connection is
+        made following the rules described above."""
+        self.disconnect()
+        if device_id in (-1, None):
+            device_rows = sorted(joypad_input.enumerate_devices(), key=lambda v:v[0])
+            if not device_rows:
+                if device_id is None:
+                    Qt.QMessageBox.warning(self, "Joypad Error", "No gamepads/joysticks are visible to SDL2.")
+                return
+            if len(device_rows) == 1:
+                self.joypad_input = _JoypadInput(self, device_rows[0][0], scope_server_host=self.scope_server_host)
+                device_name = device_rows[0][2]
+        self.joypad_input.make_and_start_event_loop_thread()
+        self.setText('Disconnect Joypad')
+        self.setToolTip('Currently connected to "{}".'.format(device_name))
+
+    def disconnect(self):
+        if not self.is_connected:
+            return
+        self.joypad_input.stop_and_destroy_event_loop_thread()
+        self.joypad_input = None
+        self.setText('Connect Joypad')
+        self.setToolTip(None)
