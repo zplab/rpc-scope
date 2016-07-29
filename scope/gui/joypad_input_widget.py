@@ -126,7 +126,7 @@ class JoypadInputWidget(Qt.QAction):
             device_rows = sorted(joypad_input.enumerate_devices(), key=lambda v:v[0])
             if not device_rows:
                 if device_id is None:
-                    Qt.QMessageBox.warning(self, "Joypad Error", "No gamepads/joysticks are visible to SDL2.")
+                    Qt.QMessageBox.warning(None, "Joypad Error", "No gamepads/joysticks are visible to SDL2.")
                 return
             if len(device_rows) == 1:
                 self.joypad_input = _JoypadInput(self, device_rows[0][0], scope_server_host=self.scope_server_host)
