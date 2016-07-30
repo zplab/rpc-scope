@@ -72,7 +72,7 @@ class _JoypadInput(joypad_input.JoypadInput):
         self.thread.wait()
         del self.thread
 
-# JoypadInputWidget is actually just a toggleable QAction.  QAction provides all the functionality required while avoiding
+# JoypadInputWidget is actually just a QAction.  QAction provides all the functionality required while avoiding
 # the need to make and lay out a QPushButton.
 class JoypadInputWidget(Qt.QAction):
     button_signal = Qt.pyqtSignal(int, bool)
