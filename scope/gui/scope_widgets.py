@@ -106,3 +106,10 @@ class WidgetWindow(widget_column_flow_main_window.WidgetColumnFlowMainWindow):
         del self.names_to_widgets[name]
         if isinstance(widget, Qt.QAction):
             self.action_toolbar.removeAction(widget)
+
+    def on_pop_request(self, container, out):
+        super().on_pop_request(container, out)
+        if not out:
+            l = self._w.layout()
+            l.itemList.sort(key=lambda i: i.widget().windowTitle())
+            l.doLayout(self._w.rect(), False)
