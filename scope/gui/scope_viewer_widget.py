@@ -36,6 +36,7 @@ ris_widget.qwidgets.layer_table.LayerTableModel.PROPERTIES.insert(
 
 class ScopeViewerWidgetQtObject(ris_widget.ris_widget.RisWidgetQtObject):
     RW_LIVE_STREAM_BINDING_LIVE_UPDATE_EVENT = Qt.QEvent.registerEventType()
+    OVEREXPOSURE_GETCOLOR_EXPRESSION = 's.r < 1.0f ? vec4(s.rrr, 1.0f) : vec4(1.0f, 0.0f, 0.0f, 1.0f)'
 
     def __init__(
             self,
@@ -66,8 +67,15 @@ class ScopeViewerWidgetQtObject(ris_widget.ris_widget.RisWidgetQtObject):
         self.scope_toolbar = self.addToolBar('Scope')
         self.live_streamer = scope_client.LiveStreamer(scope, scope_properties, self.post_live_update)
         import freeimage
-        self.layer_stack.imposed_image_mask = freeimage.read('/home/zplab/vignette_mask.png')
-        self.get_live_target_layer()
+        import pathlib
+        if pathlib.Path('/home/zplab/vignette_mask.png').exists():
+            self.layer_stack.imposed_image_mask = freeimage.read('/home/zplab/vignette_mask.png')
+        self.show_over_exposed_action = Qt.QAction('Show Over-Exposed Live Pixels', self)
+        self.show_over_exposed_action.setCheckable(True)
+        self.show_over_exposed_action.setChecked(False)
+        self.show_over_exposed_action.toggled.connect(self.on_show_over_exposed_action_toggled)
+        self.show_over_exposed_action.setChecked(True)
+        self.scope_toolbar.addAction(self.show_over_exposed_action)
 
     def event(self, e):
         # This is called by the main QT event loop to service the event posted in post_live_update().
@@ -79,6 +87,8 @@ class ScopeViewerWidgetQtObject(ris_widget.ris_widget.RisWidgetQtObject):
                 mask=self.layer_stack.imposed_image_mask,
                 is_twelve_bit=self.live_streamer.bit_depth == '12 Bit',
                 use_open_mp=True)
+            if self.show_over_exposed_action.isChecked() and target_layer.image.type == 'G':
+                target_layer.getcolor_expression = self.OVEREXPOSURE_GETCOLOR_EXPRESSION
             return True
         return super().event(e)
 
@@ -102,6 +112,15 @@ class ScopeViewerWidgetQtObject(ris_widget.ris_widget.RisWidgetQtObject):
 
     def embed_widget_flow_pop_button(self, pop_button):
         self.scope_toolbar.addWidget(pop_button)
+
+    def on_show_over_exposed_action_toggled(self, show_over_exposed):
+        layer = self.get_live_target_layer()
+        if show_over_exposed:
+            if layer.image is not None and layer.image.type == 'G':
+                layer.getcolor_expression = self.OVEREXPOSURE_GETCOLOR_EXPRESSION
+        else:
+            # Revert to default getcolor_expression
+            del layer.getcolor_expression
 
 class ScopeViewerWidget(ris_widget.ris_widget.RisWidget):
     APP_PREFS_NAME = "ScopeViewerWidget"
