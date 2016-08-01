@@ -24,6 +24,7 @@
 
 import contextlib
 import ctypes
+import functools
 import sdl2
 import sys
 import threading
@@ -230,6 +231,8 @@ class JoypadInput:
     COARSE_DEMAND_FACTOR = 20
     FINE_DEMAND_FACTOR = 1
     Z_DEMAND_FACTOR = 0.5
+    # TODO: keep flag set of axes we have currently commanded to move and issue stops to only these axes at event loop
+    # end in the finally block (not in except block)
     AXIS_MOVEMENT_HANDLERS = {
         sdl2.SDL_CONTROLLER_AXIS_LEFTX: lambda self, demand: self.scope.stage.move_along_x(-demand * self.COARSE_DEMAND_FACTOR),
         sdl2.SDL_CONTROLLER_AXIS_LEFTY: lambda self, demand: self.scope.stage.move_along_y(demand * self.COARSE_DEMAND_FACTOR),
@@ -373,9 +376,12 @@ class JoypadInput:
                         self._event_handlers.get(event.type, self._on_unhandled_event)(event)
             except KeyboardInterrupt:
                 pass
+        except Exception as e:
+            print('excepted', e)
+            self._halt_stage()
+            raise
         finally:
             self.event_loop_is_running = False
-            self._halt_stage()
 
     def make_and_start_event_loop_thread(self):
         assert not self.event_loop_is_running
