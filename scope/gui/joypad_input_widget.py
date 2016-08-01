@@ -37,7 +37,7 @@ class _SDLEventLoopThread(Qt.QThread):
 class _JoypadInput(joypad_input.JoypadInput):
     def __init__(
             self,
-            sdl_input_widget,
+            joypad_input_widget,
             input_device_index=0,
             input_device_name=None,
             scope_server_host='127.0.0.1',
@@ -51,15 +51,15 @@ class _JoypadInput(joypad_input.JoypadInput):
             zmq_context=zmq_context,
             maximum_portion_of_wallclock_time_allowed_for_axis_commands=maximum_portion_of_wallclock_time_allowed_for_axis_commands,
             maximum_axis_command_cool_off=maximum_axis_command_cool_off)
-        self.sdl_input_widget = sdl_input_widget
+        self.joypad_input_widget = joypad_input_widget
         self.handle_button_callback = self._handle_button_callback
 
     @staticmethod
     def _handle_button_callback(self, button_idx, pressed):
-        self.sdl_input_widget.button_signal.emit(button_idx, pressed)
+        self.joypad_input_widget.button_signal.emit(button_idx, pressed)
 
     def handle_joyhatmotion(self, hat_idx, pos):
-        self.sdl_input_widget.hat_signal.emit(hat_idx, pos)
+        self.joypad_input_widget.hat_signal.emit(hat_idx, pos)
 
     def make_and_start_event_loop_thread(self):
         assert not self.event_loop_is_running
@@ -72,11 +72,15 @@ class _JoypadInput(joypad_input.JoypadInput):
         self.thread.wait()
         del self.thread
 
+    def handle_device_removed(self):
+        self.joypad_input_widget.connected_input_removed_signal.emit()
+
 # JoypadInputWidget is actually just a QAction.  QAction provides all the functionality required while avoiding
 # the need to make and lay out a QPushButton.
 class JoypadInputWidget(Qt.QAction):
     button_signal = Qt.pyqtSignal(int, bool)
     hat_signal = Qt.pyqtSignal(int, int)
+    connected_input_removed_signal = Qt.pyqtSignal()
 
     @staticmethod
     def can_run(scope):
@@ -101,6 +105,7 @@ class JoypadInputWidget(Qt.QAction):
         self.setText('Connect Joypad')
         Qt.QApplication.instance().aboutToQuit.connect(self.disconnect)
         self.button_signal.connect(self.on_button_signal)
+        self.connected_input_removed_signal.connect(self.on_connected_input_removed_signal)
         self.triggered.connect(self.on_triggered)
         self.connect(device_id)
 
@@ -110,6 +115,9 @@ class JoypadInputWidget(Qt.QAction):
             self.scope.stage.stop_x()
             self.scope.stage.stop_y()
             self.scope.stage.stop_z()
+
+    def on_connected_input_removed_signal(self):
+        self.disconnect()
 
     @property
     def is_connected(self):
@@ -127,7 +135,9 @@ class JoypadInputWidget(Qt.QAction):
         if device_id in (-1, None):
             if not device_rows:
                 if device_id is None:
-                    Qt.QMessageBox.warning(None, "Joypad Error", "No gamepads/joysticks are visible to SDL2.")
+                    m = "No gamepads/joysticks are available. Note that newly plugged-in gamepads/joysticks do not become " \
+                        "available until Python is restarted."
+                    Qt.QMessageBox.warning(None, "Joypad Error", m)
                 return
             if len(device_rows) == 1:
                 self.joypad_input = _JoypadInput(self, device_rows[0][0], scope_server_host=self.scope_server_host)
