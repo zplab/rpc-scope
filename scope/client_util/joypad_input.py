@@ -27,6 +27,7 @@ import ctypes
 import sdl2
 import sys
 import threading
+
 from scope import scope_client
 
 SDL_SUBSYSTEMS = sdl2.SDL_INIT_JOYSTICK | sdl2.SDL_INIT_GAMECONTROLLER | sdl2.SDL_INIT_TIMER
@@ -374,6 +375,7 @@ class JoypadInput:
                 pass
         finally:
             self.event_loop_is_running = False
+            self._halt_stage()
 
     def make_and_start_event_loop_thread(self):
         assert not self.event_loop_is_running
@@ -423,9 +425,12 @@ class JoypadInput:
     def default_handle_button_callback(self, button_idx, pressed):
         if button_idx == sdl2.SDL_CONTROLLER_BUTTON_A:
             # Stop all stage movement when what is typically the gamepad X button is pressed or released
-            self.scope.stage.stop_x()
-            self.scope.stage.stop_y()
-            self.scope.stage.stop_z()
+            self._halt_stage()
+
+    def _halt_stage(self):
+        self.scope.stage.stop_x()
+        self.scope.stage.stop_y()
+        self.scope.stage.stop_z()
 
     def handle_button(self, button_idx, pressed):
         if self.handle_button_callback is not None:
