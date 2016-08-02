@@ -41,6 +41,15 @@ WIDGETS = {
     'joypad_input': joypad_input_widget.JoypadInputWidget
 }
 
+DEFAULT_FLOATING_WIDGETS = {
+    'viewer',
+    'stage_pos_table'
+}
+
+DEFAULT_HIDDEN_WIDGETS = {
+    'stage_pos_table'
+}
+
 class WidgetWindow(widget_column_flow_main_window.WidgetColumnFlowMainWindow):
     def __init__(
             self,
@@ -71,7 +80,12 @@ class WidgetWindow(widget_column_flow_main_window.WidgetColumnFlowMainWindow):
         for wn in sorted(wncs.keys()):
             wc = wncs[wn]
             if wc.can_run(scope):
-                self.add_widget(wn, wc(host=host, scope=scope, scope_properties=scope_properties), wn=='viewer')
+                self.add_widget(
+                    wn,
+                    wc(host=host, scope=scope, scope_properties=scope_properties),
+                    floating = wn in DEFAULT_FLOATING_WIDGETS,
+                    visible = wn not in DEFAULT_HIDDEN_WIDGETS
+                )
             else:
                 desired_but_cant_run.append(wn)
         scope.rebroadcast_properties()
@@ -80,11 +94,11 @@ class WidgetWindow(widget_column_flow_main_window.WidgetColumnFlowMainWindow):
                 desired_but_cant_run if len(desired_but_cant_run) == 1 else ', '.join(desired_but_cant_run[:-1]) + ', or ' + desired_but_cant_run[-1]
             ))
 
-    def add_widget(self, name, widget, floating=False):
+    def add_widget(self, name, widget, floating=False, visible=True):
         assert not hasattr(self, name)
         assert name not in self.names_to_widgets
         assert widget not in self.widgets_to_names
-        super().add_widget(widget.qt_object if hasattr(widget, 'qt_object') else widget, floating)
+        super().add_widget(widget.qt_object if hasattr(widget, 'qt_object') else widget, floating=floating, visible=visible)
         setattr(self, name, widget)
         self.names_to_widgets[name] = widget
         self.widgets_to_names[widget] = name

@@ -34,7 +34,7 @@ class WidgetColumnFlowMainWindow(Qt.QMainWindow):
         self.widgets_to_containers = {}
         self.visibility_toolbar = self.addToolBar('Visibility')
 
-    def add_widget(self, widget, floating=False):
+    def add_widget(self, widget, floating=False, visible=True):
         assert widget not in self.widgets
         if isinstance(widget, Qt.QWidget):
             container = FloatableHideableWidgetContainer(widget)
@@ -49,6 +49,8 @@ class WidgetColumnFlowMainWindow(Qt.QMainWindow):
             container.pop_request_signal.connect(self.on_pop_request)
             container.visibility_change_signal.connect(self.on_visibility_change_signal)
             self.visibility_toolbar.addAction(container.visibility_change_action)
+            if not visible:
+                container.close()
         else:
             self.widgets.append(widget)
 
@@ -76,6 +78,9 @@ class WidgetColumnFlowMainWindow(Qt.QMainWindow):
 
     def on_visibility_change_signal(self, container, visible):
         container.setVisible(visible)
+        if container.is_floating and container.parent() is not None:
+            container.setParent(None)
+            container.show()
 
     def closeEvent(self, e):
         for container in self.widgets_to_containers.values():
