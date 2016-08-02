@@ -517,3 +517,8 @@ class FocusLossSignalingLineEdit(Qt.QLineEdit):
     def focusOutEvent(self, event):
         super().focusOutEvent(event)
         self.focus_lost.emit()
+
+    def sizeHint(self):
+        hint = super().sizeHint()
+        hint.setWidth(80)
+        return hint
