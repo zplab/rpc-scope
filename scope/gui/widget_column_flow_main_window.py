@@ -164,10 +164,11 @@ class FloatableHideableWidgetContainer(Qt.QWidget):
 
 # Adapted from Qt Docs / Qt Widgets / Flow Layout Example
 class FlowLayout(Qt.QLayout):
-    def __init__(self, margin=-1, hSpacing=-1, vSpacing=-1):
+    def __init__(self, margin=-1, hSpacing=-1, vSpacing=-1, default_height=1800):
         super().__init__()
         self.m_hSpace = hSpacing
         self.m_vSpace = vSpacing
+        self.default_height = default_height
         self.setContentsMargins(margin, margin, margin, margin)
         self.itemList = []
 
@@ -212,7 +213,7 @@ class FlowLayout(Qt.QLayout):
         self.doLayout(rect, False)
 
     def sizeHint(self):
-        return self.minimumSize()
+        return Qt.QSize(self.doLayout(Qt.QRect(0, 0, 0, self.default_height), True), self.default_height)
 
     def minimumSize(self):
       size = Qt.QSize()
@@ -241,12 +242,12 @@ class FlowLayout(Qt.QLayout):
                     actual_width = 0
                     for citem in column:
                         actual_width = max(actual_width, citem.widget().sizeHint().width())
-                    gap = (rect.height() - height) / (len(column) + 1)
+                    # gap = (rect.height() - height) / (len(column) + 1)
                     for citem_idx, citem in enumerate(column):
                         r = citem.geometry()
                         citem.setGeometry(Qt.QRect(
                             r.left(),
-                            r.top() + citem_idx * gap,
+                            r.top() + citem_idx,# * gap,
                             actual_width,
                             r.height()
                         ))
