@@ -250,7 +250,8 @@ class JoypadInput:
             scope_server_host='127.0.0.1',
             zmq_context=None,
             maximum_portion_of_wallclock_time_allowed_for_axis_commands=DEFAULT_MAX_AXIS_COMMAND_WALLCLOCK_TIME_PORTION,
-            maximum_axis_command_cool_off=DEFAULT_MAX_AXIS_COMMAND_COOL_OFF):
+            maximum_axis_command_cool_off=DEFAULT_MAX_AXIS_COMMAND_COOL_OFF,
+            warnings_enabled=False):
         """* input_device_index: The argument passed to SDL_JoystickOpen(index) or SDL_GameControllerOpen(index).
         Ignored if the value of input_device_name is not None.
         * input_device_name: If specified, input_device_name should be the exact string or UTF8-encoded bytearray by
@@ -313,11 +314,13 @@ class JoypadInput:
         self.num_axes = sdl2.SDL_JoystickNumAxes(self.jdevice)
         self.num_buttons = sdl2.SDL_JoystickNumButtons(self.jdevice)
         self.num_hats = sdl2.SDL_JoystickNumHats(self.jdevice)
-        print('JoypadInput is connecting to scope server...', file=sys.stderr)
+        self.warnings_enabled = warnings_enabled
+        if warnings_enabled:
+            print('JoypadInput is connecting to scope server...', file=sys.stderr)
         self.scope, self.scope_properties = scope_client.client_main(scope_server_host, zmq_context)
-        print('JoypadInput successfully connected to scope server.', file=sys.stderr)
+        if warnings_enabled:
+            print('JoypadInput successfully connected to scope server.', file=sys.stderr)
         self.event_loop_is_running = False
-        self.warnings_enabled = False
         self.quit_event_posted = False
         self.throttle_delay_command_time_ratio = 1 - maximum_portion_of_wallclock_time_allowed_for_axis_commands
         self.throttle_delay_command_time_ratio /= maximum_portion_of_wallclock_time_allowed_for_axis_commands
