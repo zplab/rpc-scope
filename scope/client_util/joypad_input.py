@@ -30,6 +30,7 @@ import sys
 import threading
 
 from scope import scope_client
+from scope.simple_rpc.rpc_client import RPCError
 
 SDL_SUBSYSTEMS = sdl2.SDL_INIT_JOYSTICK | sdl2.SDL_INIT_GAMECONTROLLER | sdl2.SDL_INIT_TIMER
 SDL_INITED = False
@@ -231,16 +232,6 @@ class JoypadInput:
     COARSE_DEMAND_FACTOR = 20
     FINE_DEMAND_FACTOR = 1
     Z_DEMAND_FACTOR = 0.5
-    # TODO: keep flag set of axes we have currently commanded to move and issue stops to only these axes at event loop
-    # end in the finally block (not in except block)
-    AXIS_MOVEMENT_HANDLERS = {
-        sdl2.SDL_CONTROLLER_AXIS_LEFTX: lambda self, demand: self.scope.stage.move_along_x(-demand * self.COARSE_DEMAND_FACTOR),
-        sdl2.SDL_CONTROLLER_AXIS_LEFTY: lambda self, demand: self.scope.stage.move_along_y(demand * self.COARSE_DEMAND_FACTOR),
-        sdl2.SDL_CONTROLLER_AXIS_RIGHTX: lambda self, demand: self.scope.stage.move_along_x(-demand * self.FINE_DEMAND_FACTOR),
-        sdl2.SDL_CONTROLLER_AXIS_RIGHTY: lambda self, demand: self.scope.stage.move_along_y(demand * self.FINE_DEMAND_FACTOR),
-        sdl2.SDL_CONTROLLER_AXIS_TRIGGERLEFT: lambda self, demand: self.scope.stage.move_along_z(-demand * self.Z_DEMAND_FACTOR),
-        sdl2.SDL_CONTROLLER_AXIS_TRIGGERRIGHT: lambda self, demand: self.scope.stage.move_along_z(demand * self.Z_DEMAND_FACTOR)
-    }
     # These dead zones are appropriate for the Logitech f310 gamepad in Xinput mode.  The f310, in Xinput mode,
     # does not reliably report axis displacements less than ~2000 units in magnitude.  In legacy mode, the f310
     # does not exhibit this issue.  Unfortunately, legacy mode does not offer trigger Z-axis, making it much less
@@ -355,18 +346,56 @@ class JoypadInput:
                 sdl2.SDL_JOYBUTTONDOWN: self._on_button_event,
                 sdl2.SDL_JOYBUTTONUP: self._on_button_event
             })
+        self._axis_movement_handlers = {
+            sdl2.SDL_CONTROLLER_AXIS_LEFTX: functools.partial(
+                self._handle_axis_motion,
+                demand_factor=self.COARSE_DEMAND_FACTOR,
+                invert=True,
+                set_stage_velocity_method=self.scope.stage.move_along_x
+            ),
+            sdl2.SDL_CONTROLLER_AXIS_LEFTY: functools.partial(
+                self._handle_axis_motion,
+                demand_factor=self.COARSE_DEMAND_FACTOR,
+                invert=False,
+                set_stage_velocity_method=self.scope.stage.move_along_y
+            ),
+            sdl2.SDL_CONTROLLER_AXIS_RIGHTX: functools.partial(
+                self._handle_axis_motion,
+                demand_factor=self.FINE_DEMAND_FACTOR,
+                invert=True,
+                set_stage_velocity_method=self.scope.stage.move_along_x
+            ),
+            sdl2.SDL_CONTROLLER_AXIS_RIGHTY: functools.partial(
+                self._handle_axis_motion,
+                demand_factor=self.FINE_DEMAND_FACTOR,
+                invert=False,
+                set_stage_velocity_method=self.scope.stage.move_along_y
+            ),
+            sdl2.SDL_CONTROLLER_AXIS_TRIGGERLEFT: functools.partial(
+                self._handle_axis_motion,
+                demand_factor=self.Z_DEMAND_FACTOR,
+                invert=True,
+                set_stage_velocity_method=self.scope.stage.move_along_z
+            ),
+            sdl2.SDL_CONTROLLER_AXIS_TRIGGERRIGHT: functools.partial(
+                self._handle_axis_motion,
+                demand_factor=self.Z_DEMAND_FACTOR,
+                invert=False,
+                set_stage_velocity_method=self.scope.stage.move_along_z
+            )
+        }
 
     def event_loop(self):
         assert not self.event_loop_is_running
         self._next_axes_tick = 0
         self._axes_throttle_delay_timer_set = False
-        self._last_axes_positions = {axis_idx: None for axis_idx in self.AXIS_MOVEMENT_HANDLERS.keys()}
         self._get_axis_pos = sdl2.SDL_GameControllerGetAxis if self.device_is_game_controller else sdl2.SDL_JoystickGetAxis
         self.event_loop_is_running = True
         try:
             assert SDL_INITED
             assert self.device
             self.init_handlers()
+            self._last_axes_positions = {axis_idx: None for axis_idx in self._axis_movement_handlers.keys()}
             try:
                 while not self.quit_event_posted:
                     event = sdl2.SDL_Event()
@@ -434,7 +463,7 @@ class JoypadInput:
         if only_axes_with_nonzero_last_command_velocity:
             for axis, pos in self._last_axes_positions.items():
                 if pos != 0:
-                    self.AXIS_MOVEMENT_HANDLERS[axis](self, 0)
+                    self._axis_movement_handlers[axis](demand=0)
         else:
             self.scope.stage.stop_x()
             self.scope.stage.stop_y()
@@ -451,7 +480,7 @@ class JoypadInput:
         self.handle_joyhatmotion(event.jhat.hat, event.jhat.value)
 
     def handle_joyhatmotion(self, hat_idx, pos):
-        print(hat_idx, pos)
+        pass
 
     @only_for_our_device
     def _on_axis_motion_event(self, event):
@@ -493,13 +522,13 @@ class JoypadInput:
     def _on_axes_throttle_delay_expired_event(self, event):
         if sdl2.SDL_GetTicks() < self._next_axes_tick:
             if self.warnings_enabled:
-                print('Axes throttling delay expiration event pre-empted.', sys.stderr)
+                print('Axes throttling delay expiration event pre-empted.', file=sys.stderr)
             return
         self._on_axes_motion()
 
     def _on_axes_motion(self):
         command_ticks = 0
-        for axis, cmd in self.AXIS_MOVEMENT_HANDLERS.items():
+        for axis, cmd in self._axis_movement_handlers.items():
             pos = self._get_axis_pos(self.device, axis)
             dead_zone = self.AXIS_DEAD_ZONES.get(axis)
             if dead_zone is not None:
@@ -512,7 +541,7 @@ class JoypadInput:
             if pos != self._last_axes_positions[axis]:
                 demand = pos / (32768 if pos <= 0 else 32767)
                 t0 = sdl2.SDL_GetTicks()
-                cmd(self, demand)
+                cmd(demand=demand)
                 t1 = sdl2.SDL_GetTicks()
                 self._last_axes_positions[axis] = pos
                 command_ticks += t1 - t0
@@ -520,6 +549,16 @@ class JoypadInput:
             command_ticks * self.throttle_delay_command_time_ratio,
             self.maximum_axis_command_cool_off
         ))
+
+    def _handle_axis_motion(self, demand, demand_factor, invert, set_stage_velocity_method):
+        try:
+            v = demand * demand_factor
+            if invert:
+                v *= -1
+            set_stage_velocity_method(v)
+        except RPCError as e:
+            if self.warnings_enabled:
+                print(e, file=sys.stderr)
 
 SDL_EVENT_NAMES = {
     sdl2.SDL_APP_DIDENTERBACKGROUND: 'SDL_APP_DIDENTERBACKGROUND',
