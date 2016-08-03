@@ -376,12 +376,9 @@ class JoypadInput:
                         self._event_handlers.get(event.type, self._on_unhandled_event)(event)
             except KeyboardInterrupt:
                 pass
-        except Exception as e:
-            print('excepted', e)
-            self._halt_stage()
-            raise
         finally:
             self.event_loop_is_running = False
+            self._halt_stage(only_axes_with_nonzero_last_command_velocity=True)
 
     def make_and_start_event_loop_thread(self):
         assert not self.event_loop_is_running
@@ -433,10 +430,17 @@ class JoypadInput:
             # Stop all stage movement when what is typically the gamepad X button is pressed or released
             self._halt_stage()
 
-    def _halt_stage(self):
-        self.scope.stage.stop_x()
-        self.scope.stage.stop_y()
-        self.scope.stage.stop_z()
+    def _halt_stage(self, only_axes_with_nonzero_last_command_velocity=False):
+        if only_axes_with_nonzero_last_command_velocity:
+            for axis, pos in self._last_axes_positions.items():
+                if pos != 0:
+                    self.AXIS_MOVEMENT_HANDLERS[axis](self, 0)
+        else:
+            self.scope.stage.stop_x()
+            self.scope.stage.stop_y()
+            self.scope.stage.stop_z()
+        for axis in self._last_axes_positions.keys():
+            self._last_axes_positions[axis] = 0
 
     def handle_button(self, button_idx, pressed):
         if self.handle_button_callback is not None:
