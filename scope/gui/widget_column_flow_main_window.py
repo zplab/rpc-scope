@@ -43,14 +43,13 @@ class WidgetColumnFlowMainWindow(Qt.QMainWindow):
             if floating:
                 container.pop_button.setChecked(True)
                 container.setParent(None)
-                container.show()
-            else:
+                if visible:
+                    container.show()
+            elif visible:
                 self._w.layout().addWidget(container)
             container.pop_request_signal.connect(self.on_pop_request)
             container.visibility_change_signal.connect(self.on_visibility_change_signal)
             self.visibility_toolbar.addAction(container.visibility_change_action)
-            if not visible:
-                container.close()
         else:
             self.widgets.append(widget)
 
@@ -127,7 +126,7 @@ class FloatableHideableWidgetContainer(Qt.QWidget):
             l.addWidget(contained_widget)
         self.visibility_change_action = Qt.QAction(contained_widget.windowTitle(), self)
         self.visibility_change_action.setCheckable(True)
-        self.visibility_change_action.setChecked(True)
+        self.visibility_change_action.setChecked(False)
         self.visibility_change_action.toggled.connect(self.on_visibility_change_action_toggled)
         contained_widget.windowTitleChanged.connect(self.on_contained_widget_window_title_changed)
         self.on_contained_widget_window_title_changed(contained_widget.windowTitle())
