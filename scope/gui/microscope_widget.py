@@ -520,5 +520,5 @@ class FocusLossSignalingLineEdit(Qt.QLineEdit):
 
     def sizeHint(self):
         hint = super().sizeHint()
-        hint.setWidth(80)
+        hint.setWidth(self.fontMetrics().width('44.57749') * 1.3)
         return hint
