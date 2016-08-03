@@ -101,6 +101,7 @@ class FloatableHideableWidgetContainer(Qt.QWidget):
         self.pop_button = Qt.QPushButton('\N{NORTH EAST ARROW}')
         self.pop_button.setCheckable(True)
         self.pop_button.setChecked(False)
+        self.pop_button.setFocusPolicy(Qt.Qt.NoFocus)
         self.pop_button.clicked.connect(self.on_popout_button_clicked)
         if hasattr(contained_widget, 'embed_widget_flow_pop_button'):
             contained_widget.embed_widget_flow_pop_button(self.pop_button)
