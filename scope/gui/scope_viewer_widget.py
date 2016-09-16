@@ -50,7 +50,7 @@ class ScopeViewerWidgetQtObject(ris_widget.ris_widget.RisWidgetQtObject):
             scope,
             scope_properties,
             **kw):
-        
+
         super().__init__(
             app_prefs_name=app_prefs_name,
             app_prefs_version=app_prefs_version,

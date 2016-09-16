@@ -1,5 +1,8 @@
 import signal
 
+import OpenGL
+OpenGL.ERROR_CHECKING = False
+
 from PyQt5 import Qt
 
 from .. import scope_client
@@ -10,9 +13,8 @@ def sigint_handler(*args):
     Qt.QApplication.quit()
 
 def gui_main(host, names_of_desired_widgets):
-    params = []
     Qt.QApplication.setAttribute(Qt.Qt.AA_ShareOpenGLContexts)
-    app = Qt.QApplication(params)
+    app = Qt.QApplication([])
 
     scope, scope_properties = scope_client.client_main(host)
     main_window = scope_widgets.WidgetWindow(
