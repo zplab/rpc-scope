@@ -53,7 +53,7 @@ def main(argv):
         help='suspend all queued jobs (do not remove jobs from queue, but do not run again until it is resumed)')
     parser_resume_all = subparsers.add_parser('resume_all',
         help='resume all suspended jobs (except those not running due to "error" status)')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     try:
         runner = scope_job_runner.JobRunner()
@@ -84,4 +84,4 @@ def main(argv):
 
 if __name__ == '__main__':
     import sys
-    sys.exit(main(sys.argv))
+    sys.exit(main(sys.argv[1:]))
