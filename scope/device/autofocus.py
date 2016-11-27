@@ -32,6 +32,8 @@ from zplib.image import fast_fft
 from ..util import transfer_ism_buffer
 from ..util import logging
 from ..config import scope_configuration
+from . import andor
+from .leica import stage
 
 logger = logging.get_logger(__name__)
 
@@ -127,7 +129,7 @@ def get_metric(metric, shape):
 class Autofocus:
     _CAMERA_MODE = dict(readout_rate='280 MHz', shutter_mode='Rolling')
 
-    def __init__(self, camera, stage):
+    def __init__(self, camera: andor.Camera, stage: stage.Stage):
         self._camera = camera
         self._stage = stage
 

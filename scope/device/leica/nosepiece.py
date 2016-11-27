@@ -41,13 +41,10 @@ GET_MIN_POS_OBJ = 76038
 GET_MAX_POS_OBJ = 76039
 SET_OBJECTIVE_TURRET_EVENT_SUBSCRIPTIONS = 76003
 
-class ObjectiveTurret(stand.LeicaComponent):
+class Nosepiece(stand.LeicaComponent):
     '''Note that objective position is reported as 0 when the objective turret is between positions. The objective
     turret is between positions when it is in the process of responding to a position change request and also when
     manually placed there by physical intervention.'''
-    def __init__(self, has_safe_mode, message_manager, property_server=None, property_prefix=''):
-        self._has_safe_mode = has_safe_mode
-        super().__init__(message_manager, property_server, property_prefix)
 
     def _setup_device(self):
         self._minp = int(self.send_message(GET_MIN_POS_OBJ, async=False, intent="get minimum objective turret position").response)
@@ -63,8 +60,10 @@ class ObjectiveTurret(stand.LeicaComponent):
             self._mags_to_positions[mag].append(p)
 
         config = scope_configuration.get_config()
+        self._has_safe_mode = config.nosepiece.HAS_SAFE_MODE
+
         # Ensure that halogen variable spectra correction filter is always set to maximum (least attenuation)
-        # NB: useless with DMi8 and external LED. Causes problems with Leica LED, which we don't have anymore.
+        # NB: does nothing on stands with no correction filter (DMi8, maybe DM6?).
         self._set_objectives_intensities(255)
 
         self.send_message(SET_OBJECTIVE_TURRET_EVENT_SUBSCRIPTIONS, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, async=False, intent="subscribe to objective turret position change events")

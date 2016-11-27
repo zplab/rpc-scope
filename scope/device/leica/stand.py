@@ -25,7 +25,10 @@
 import contextlib
 
 from ...messaging import message_device
+from ...messaging import message_manager
 from ...util import property_device
+from ...util import smart_serial
+from ...config import scope_configuration
 from . import microscopy_method_names
 
 GET_MODUL_TYPE = 70001
@@ -34,42 +37,16 @@ GET_ACT_METHOD = 70028
 SET_ACT_METHOD = 70029
 SET_STAND_EVENT_SUBSCRIPTIONS = 70003
 
-class LeicaComponent(message_device.LeicaAsyncDevice, property_device.PropertyDevice):
-    def __init__(self, message_manager, property_server=None, property_prefix=''):
-        # init LeicaAsyncDevice last because that calls the subclasses _setup_device() method, which might need
-        # access to the property_server etc.
+class Stand(message_device.LeicaAsyncDevice, property_device.PropertyDevice):
+    _DESCRIPTION = 'Leica microscope'
+    _EXPECTED_INIT_ERRORS = (smart_serial.SerialException,)
+
+    def __init__(self, property_server=None, property_prefix=''):
         property_device.PropertyDevice.__init__(self, property_server, property_prefix)
+        config = scope_configuration.get_config()
+        message_manager = LeicaMessageManager(config.stand.SERIAL_PORT, config.stand.SERIAL_BAUD, daemon=True)
         message_device.LeicaAsyncDevice.__init__(self, message_manager)
 
-    # set async first when pushing, revert async last when popping
-    def _get_push_weights(self, state):
-        return {'async':-1}
-
-    def _get_pop_weights(self, state):
-        return {'async':1}
-
-    def push_state(self, **state):
-        """Set a number of device parameters at once using keyword arguments, while
-        saving the old values of those parameters. pop_state() will restore those
-        previous values. push_state/pop_state pairs can be nested arbitrarily.
-
-        If the device is in async mode, wait for the state to be set before
-        proceeding.
-        """
-        super().push_state(**state)
-        self.wait() # no-op if not in async, otherwise wait for all setting to be done.
-
-    def pop_state(self):
-        """Restore the most recent set of device parameters changed by a push_state()
-        call.
-
-        If the device is in async mode, wait for the state to be restored before
-        proceeding.
-        """
-        super().pop_state()
-        self.wait() # no-op if not in async, otherwise wait for all setting to be done.
-
-class Stand(LeicaComponent):
     def _setup_device(self):
         # If we're talking to a DMi8 that has not received a command since being attached, its first reply contains a leading null byte.  So, we provoke
         # this reply by issuing an empty command (a carriage return), knowing that we will receive one of two replies: a '99999' or a '\099999'.  Receiving
@@ -115,3 +92,39 @@ class Stand(LeicaComponent):
         if microscopy_method_name not in microscopy_method_names.NAMES_TO_INDICES:
             raise KeyError('Value specified for microscopy method name must be one of {}.'.format(self.get_available_microscopy_methods()))
         response = self.send_message(SET_ACT_METHOD, microscopy_method_names.NAMES_TO_INDICES[microscopy_method_name], intent='switch microscopy methods')
+
+class LeicaComponent(message_device.LeicaAsyncDevice, property_device.PropertyDevice):
+    def __init__(self, stand: Stand, property_server=None, property_prefix=''):
+        # init LeicaAsyncDevice last because that calls the subclasses _setup_device() method, which might need
+        # access to the property_server etc.
+        property_device.PropertyDevice.__init__(self, property_server, property_prefix)
+        message_device.LeicaAsyncDevice.__init__(self, stand._message_manager)
+
+    # set async first when pushing, revert async last when popping
+    def _get_push_weights(self, state):
+        return {'async':-1}
+
+    def _get_pop_weights(self, state):
+        return {'async':1}
+
+    def push_state(self, **state):
+        """Set a number of device parameters at once using keyword arguments, while
+        saving the old values of those parameters. pop_state() will restore those
+        previous values. push_state/pop_state pairs can be nested arbitrarily.
+
+        If the device is in async mode, wait for the state to be set before
+        proceeding.
+        """
+        super().push_state(**state)
+        self.wait() # no-op if not in async, otherwise wait for all setting to be done.
+
+    def pop_state(self):
+        """Restore the most recent set of device parameters changed by a push_state()
+        call.
+
+        If the device is in async mode, wait for the state to be restored before
+        proceeding.
+        """
+        super().pop_state()
+        self.wait() # no-op if not in async, otherwise wait for all setting to be done.
+

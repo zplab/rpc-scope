@@ -30,6 +30,9 @@ from ..util import property_device
 from ..config import scope_configuration
 
 class Peltier(property_device.PropertyDevice):
+    _DESCRIPTION = 'Peltier controller'
+    _EXPECTED_INIT_ERRORS = (smart_serial.SerialException,)
+
     def __init__(self, property_server=None, property_prefix=''):
         super().__init__(property_server, property_prefix)
         config = scope_configuration.get_config()

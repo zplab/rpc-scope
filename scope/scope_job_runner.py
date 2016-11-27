@@ -83,7 +83,7 @@ class JobRunner(base_daemon.Runner):
         self.jobs.remove(exec_file)
         print('Job {} has been removed from the queue for future execution.'.format(exec_file))
         if self.current_job.get() == exec_file:
-            print('This job is currently running. This run has NOT been terminated.')
+            print('This job is running. The current run has NOT been terminated.')
         if self.is_running():
             self._awaken_daemon()
 
@@ -96,7 +96,7 @@ class JobRunner(base_daemon.Runner):
         self.jobs.update(exec_file, status=STATUS_SUSPENDED)
         print('Job {} has been suspended and will not be executed in the future unless resumed.'.format(exec_file))
         if self.current_job.get() == exec_file:
-            print('This job is currently running. This run has NOT been terminated.')
+            print('This job is running. The current run has NOT been terminated.')
         if self.is_running():
             self._awaken_daemon()
 
@@ -219,9 +219,12 @@ class JobRunner(base_daemon.Runner):
         self.assert_daemon()
         self.signal(signal.SIGINT)
         current_job = self.current_job.get()
-        if current_job:
+        if current_job is not None:
             print('Waiting for job {} to complete.'.format(current_job))
         self.current_job.wait()
+        if current_job is not None:
+            print('Job complete. Job-runner is stopping.')
+
 
     def _awaken_daemon(self):
         """Wake the daemon up if it is sleeping, so that it will reread the

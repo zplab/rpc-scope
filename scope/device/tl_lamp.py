@@ -23,12 +23,16 @@
 # Authors: Zach Pincus
 
 from ..util import property_device
+from ..config import scope_configuration
+from . import iotool
 
-class TL_Lamp_Base(property_device.PropertyDevice):
-    def __init__(self, iotool, property_server=None, property_prefix=''):
+class SutterLED_Lamp(property_device.PropertyDevice):
+    def __init__(self, iotool: iotool.IOTool, property_server=None, property_prefix=''):
         super().__init__(property_server, property_prefix)
+        config = scope_configuration.get_config()
         self._iotool = iotool
         self.set_enabled(False)
+        self.set_intensity(config.tl.INITIAL_INTENSITY)
 
     def set_enabled(self, enabled):
         """Turn lamp on or off.
@@ -42,16 +46,10 @@ class TL_Lamp_Base(property_device.PropertyDevice):
 
     def _update_push_states(self, state, old_state):
         # superclass prevents pushing a state identical to the current one.
-        # But for TL_Lamp, this is useful in case something is going to use
+        # But for SutterLED_Lamp, this is useful in case something is going to use
         # IOTool to change the intensity behind the scenes and thus wants to
         # push the current intensity/enabled state onto the stack.
         pass
-
-
-class SutterLED_Lamp(TL_Lamp_Base):
-    def __init__(self, iotool, property_server=None, property_prefix=''):
-        super().__init__(iotool, property_server, property_prefix)
-        self.set_intensity(255)
 
     def set_intensity(self, value):
         """Set intensity to any value in the range [0, 255] for min to max.
@@ -64,8 +62,4 @@ class SutterLED_Lamp(TL_Lamp_Base):
         return self._intensity
 
 
-class LeicaLED_Lamp(TL_Lamp_Base):
-    def __init__(self, dmi8_tl, iotool, property_server=None, property_prefix=''):
-        super().__init__(iotool, property_server, property_prefix)
-        self.set_intensity = dmi8_tl.set_lamp_intensity
-        self.get_intensity = dmi8_tl.get_lamp_intensity
+

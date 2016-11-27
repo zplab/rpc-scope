@@ -22,24 +22,14 @@
 #
 # Authors: Zach Pincus
 
-from serial import SerialException
 
-from .messaging import message_manager, message_device
-from .device.leica import stand, stage, objective_turret, illumination_axes
-from .device.andor import camera
-from .device.io_tool import io_tool
-from .device import spectra_x
-from .device import tl_lamp
-from .device import acquisition_sequencer
-from .device import autofocus
-from .device import peltier
-from .device import footpedal
-
+import importlib
+from .messaging import message_device
 from .config import scope_configuration
+from .util import property_device
 
 from .util import logging
 logger = logging.get_logger(__name__)
-
 
 class Namespace:
     pass
@@ -48,85 +38,61 @@ class Scope(message_device.AsyncDeviceNamespace):
     def __init__(self, property_server=None):
         super().__init__()
 
+        if property_server is not None:
+            self.rebroadcast_properties = property_server.rebroadcast_properties
+
+        self._components = {}
+
         self.get_configuration = scope_configuration.get_config
         config = self.get_configuration()
+        for attr_name, component_class_path in config.scope_components:
+            module_name, class_name = component_class_path.rsplit('.', 1)
+            module = importlib.import_module('.device.'+module_name, __name__)
+            component_class = getattr(module, class_name)
+            self.initialize_component(attr_name, component_class)
 
-        if property_server:
-            self.rebroadcast_properties = property_server.rebroadcast_properties
-        
-        has_leica_LED = False
-        try:
-            logger.info('Looking for microscope.')
-            manager = message_manager.LeicaMessageManager(config.Stand.SERIAL_PORT, config.Stand.SERIAL_BAUD)
-            self.stand = stand.Stand(manager, property_server, property_prefix='scope.stand.')
-            function_units = self.stand.get_available_function_unit_IDs()
-            is_dm6000 = all(FU in function_units for FU in [81, 83, 84, 94])
-            has_leica_LED = not is_dm6000 and 77 in function_units
-            
-            has_obj_safe_mode = is_dm6000
-            self.nosepiece = objective_turret.ObjectiveTurret(has_obj_safe_mode, manager, property_server, property_prefix='scope.nosepiece.')
-            self.stage = stage.Stage(manager, property_server, property_prefix='scope.stage.')
-            if is_dm6000:
-                il = illumination_axes.DM6000B_IL
-                tl = illumination_axes.DM6000B_TL
-                self._shutter_watcher = illumination_axes.DM6000B_ShutterWatcher(manager, property_server, property_prefix='scope.')
-            else:
-                il = illumination_axes.DMi8_IL
-                if has_leica_LED:
-                    tl = illumination_axes.DMi8_LeicaLED_TL
-                else:
-                    tl = illumination_axes.DMi8_TL
-            self.il = il(manager, property_server, property_prefix='scope.il.')
-            self.tl = tl(manager, property_server, property_prefix='scope.tl.')
-            has_scope = True
-        except SerialException:
-            has_scope = False
-            logger.log_exception('Could not connect to microscope:')
-
-        try:
-            logger.info('Looking for IOTool.')
-            self.iotool = io_tool.IOTool()
-            has_iotool = True
-        except SerialException:
-            has_iotool = False
-            logger.log_exception('Could not connect to IOTool:')
-
-        if (not has_scope) and has_iotool:
-            self.il = Namespace()
-            self.tl = Namespace()
-
-        if has_iotool:
+    def initialize_component(self, attr_name, component_class):
+        kws = {}
+        for kwarg, requires_class in component_class.__init__.__annotations__.items():
+            # scope component classes require annotations for all dependencies in the
+            # init function (except property server stuff, which is handled below)
             try:
-                logger.info('Looking for Spectra X.')
-                self.il.spectra_x = spectra_x.SpectraX(self.iotool, property_server, property_prefix='scope.il.spectra_x.')
-                has_spectra_x = True
-            except SerialException:
-                has_spectra_x = False
-                logger.log_exception('Could not connect to Spectra X:')
-            if has_leica_LED: # using DMi8, and scope is turned on
-                self.tl.lamp = tl_lamp.LeicaLED_Lamp(self.tl, self.iotool, property_server, property_prefix='scope.tl.lamp.')
-            else:
-                self.tl.lamp = tl_lamp.SutterLED_Lamp(self.iotool, property_server, property_prefix='scope.tl.lamp.')
-            self.footpedal = footpedal.Footpedal(self.iotool)
+                kws[kwarg] = self._components[requires_class]
+            except KeyError:
+                return False
+
+        if issubclass(component_class, property_device.PropertyDevice):
+            kws['property_server'] = self.property_server
+            property_path = ['self'] + component_class.attr_name.split('.')
+            filtered = [entry for entry in property_path if not entry.startswith('_')]
+            kws['property_prefix'] = '.'.join(filtered) + '.'
 
         try:
-            logger.info('Looking for camera.')
-            self.camera = camera.Camera(property_server, property_prefix='scope.camera.')
-            has_camera = True
-        except camera.lowlevel.AndorError:
-            has_camera = False
-            logger.log_exception('Could not connect to camera:')
+            expected_errs = component_class._EXPECTED_INIT_ERRORS
+        except AttributeError:
+            expected_errs = ()
 
-        if has_camera and has_iotool and has_spectra_x:
-            self.camera.acquisition_sequencer = acquisition_sequencer.AcquisitionSequencer(self)
+        try:
+            description = component_class._DESCRIPTION
+        execpt AttributeError:
+            description = component_class.__name__
 
-        if has_scope and has_camera:
-            self.camera.autofocus = autofocus.Autofocus(self.camera, self.stage)
+        if expected_errs:
+            logger.info('Looking for {}...'.format(description))
+        try:
+            component = component_class(**kws)
+        except expected_errs:
+            logger.log_exception('Could not connect to {}:'.format(description))
 
-        if 'Peltier' in config:
-            try:
-                logger.info('Looking for peltier controller.')
-                self.peltier = peltier.Peltier(property_server, property_prefix='scope.peltier.')
-            except SerialException:
-                logger.log_exception('Could not connect to peltier controller:')
-
+        owner = self
+        *attr_path, name = attr_name.split('.')
+        for elem in attr_path:
+            if hasattr(owner, elem):
+                owner = getattr(owner, elem)
+            else:
+                namespace = Namespace()
+                setattr(owner, elem, namespace)
+                owner = namespace
+        setattr(owner, name, component)
+        self._components[component_class] = component
+        return True

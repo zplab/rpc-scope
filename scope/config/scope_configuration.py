@@ -58,8 +58,9 @@ def get_config():
             from . import default_config
             shutil.copyfile(default_config.__file__, str(CONFIG_FILE))
         module_globals = runpy.run_path(str(CONFIG_FILE))
-        _CONFIG = ConfigDict(module_globals['scope_configuration'])
-    return _CONFIG
+        _CONFIG = module_globals['scope_configuration']
+     # return a new ConfigDict every time to prevent mutation of the global state
+    return ConfigDict(_CONFIG)
 
 class ConfigDict(dict):
     """dict subclass that supports attribute-style value access, as well

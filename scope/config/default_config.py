@@ -1,5 +1,24 @@
 scope_configuration = dict(
-    Server = dict(
+    scope_components = (
+        ('stand', 'leica.stand.Stand'),
+        ('stage', 'leica.stage.Stage'),
+        ('nosepiece', 'nosepiece.Nosepiece'), # dm6000 dmi8
+        #('nosepiece', 'nosepiece.ManualNosepiece'), # dm6
+        #('il', 'leica.illumination_axes.IL'), # dmi8
+        ('il', 'leica.illumination_axes.FieldWheel_IL'), # dm6000 dm6
+        ('tl', 'leica.illumination_axes.TL'),
+        ('_shutter_watcher', 'leica.illumination_axes.ShutterWatcher'), # dm6000 dm6
+        ('iotool', 'iotool.IOTool'),
+        ('il.spectra', 'spectra.Spectra'),
+        ('tl.lamp', 'tl_lamp.SutterLED_Lamp'),
+        ('camera', 'andor.Camera'),
+        ('camera.acquisition_sequencer', 'acquisition_sequencer.AcquisitionSequencer'),
+        ('camera.autofocus', 'autofocus.Autofocus'),
+        ('temperature_controller', 'temp_control.Peltier') # dm6000
+        #('temperature_controller', 'temp_control.Chiller') # dm6
+    ),
+
+    server = dict(
         LOCALHOST = '127.0.0.1',
         PUBLICHOST = '*',
 
@@ -9,16 +28,21 @@ scope_configuration = dict(
         IMAGE_TRANSFER_RPC_PORT = '6003'
     ),
 
-    Stand = dict(
+    stand = dict(
         SERIAL_PORT = '/dev/ttyScope',
         SERIAL_BAUD = 115200,
     ),
 
-    Camera = dict(
+    nosepiece = dict(
+        HAS_SAFE_MODE = True # dm6000
+        #HAS_SAFE_MODE = False # dmi8 dm6
+    ),
+
+    camera = dict(
         MODEL = 'ZYLA-5.5-USB3'
     ),
 
-    IOTool = dict(
+    iotool = dict(
         SERIAL_PORT = '/dev/ttyIOTool',
         LUMENCOR_PINS = dict(
             uv = 'D6',
@@ -26,7 +50,8 @@ scope_configuration = dict(
             cyan = 'D3',
             teal = 'D4',
             green_yellow = 'D2',
-            red = 'D1'
+            red = 'D1' # dm6000 dmi8
+            # switch_green_yellow = 'D1' # dm6
         ),
 
         CAMERA_PINS = dict(
@@ -46,7 +71,7 @@ scope_configuration = dict(
             fall_ms = 0.013 # Time from start of fall to end of fall
         ),
 
-        # SPX timings: depends *strongly* on how recently the last time the
+        # SPECTRA_TIMING: depends *strongly* on how recently the last time the
         # lamp was turned on was. 100 ms ago vs. 10 sec ago changes the on-latency
         # by as much as 100 us.
         # Some lamps have different rise times vs. latencies.
@@ -61,25 +86,27 @@ scope_configuration = dict(
         # With 5 sec delay, cyan and green on-latency goes to 123 usec.
         # With 20 sec delay, it is at 130 us.
         # Plug in sort-of average values below, assuming 5 sec delay:
-        SPECTRA_X_TIMING = dict(
+        SPECTRA_TIMING = dict(
             on_latency_ms = .120, # Time from trigger signal to start of rise
             rise_ms = .015, # Time from start of rise to end of rise
             off_latency_ms = 0.08, # Time from end of trigger to start of fall
             fall_ms = .010 # Time from start of fall to end of fall
         ),
-
-        FOOTPEDAL_PIN = 'B4',
-        FOOTPEDAL_CLOSED_TTL_STATE = False,
-        FOOTPEDAL_BOUNCE_DELAY_MS = 100
     ),
 
-    SpectraX = dict(
-        SERIAL_PORT = '/dev/ttySpectraX',
+    spectra = dict(
+        SERIAL_PORT = '/dev/ttySpectra',
         SERIAL_BAUD = 9600
     ),
 
-    Peltier = dict(
+    peltier = dict(
         SERIAL_PORT = '/dev/ttyPeltier',
         SERIAL_BAUD = 2400
     )
+
+    circulator = dict(
+        SERIAL_PORT = '/dev/ttyCirculator',
+        SERIAL_BAUD = ???
+    )
+
 )

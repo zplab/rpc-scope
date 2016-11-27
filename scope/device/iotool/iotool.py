@@ -36,6 +36,10 @@ class IOTool:
     documentation about the IOTool microcontroller firmware itself, but in this
     case the microcontroller is used to drive and time TTL/PWM signals to various
     microscope hardware."""
+
+    _DESCRIPTION = 'IOTool hardware interface'
+    _EXPECTED_INIT_ERRORS = (smart_serial.SerialException,)
+
     def __init__(self):
         self._config = scope_configuration.get_config()
         try:

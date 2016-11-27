@@ -168,10 +168,7 @@ class IL(stand.LeicaComponent):
     def _on_turret_pos_event(self, response):
         self._update_property('filter_cube', response.response[1:].strip())
 
-class DMi8_IL(IL):
-    pass
-
-class DM6000B_IL(_ShutterDeviceMixin, IL):
+class FieldWheel_IL(_ShutterDeviceMixin, IL):
     '''IL represents an interface into elements used in Incident Light (Fluorescence) mode.'''
     _shutter_idx = 1
     # TODO(?): if needed, add DIC fine shearing
@@ -186,67 +183,12 @@ class DM6000B_IL(_ShutterDeviceMixin, IL):
         self.register_event_callback(GET_POS_LFWHEEL, self._on_lfwheel_position_change_event)
         self._update_property('field_wheel', self.get_field_wheel())
 
-    def set_filter_cube(self, cube):
-        self._filter_cube.set_value(cube)
-
-    def _on_turret_pos_event(self, response):
-        self._update_property('filter_cube', response.response[1:].strip())
-
     def _on_lfwheel_position_change_event(self, response):
         self._update_property('field_wheel', self._field_wheel._hw_to_usr[int(response.response)])
 
 class TL(_ShutterDeviceMixin, stand.LeicaComponent):
-    '''IL represents an interface into elements used in Transmitted Light (Brighftield and DIC) mode.'''
-    _shutter_idx = 0
-
-class DMi8_TL(stand.LeicaComponent):
-    pass
-
-class DMi8_LeicaLED_TL(TL):
-    def _setup_device(self):
-        super()._setup_device()
-        self.send_message(
-            SET_SHUTTER_EVENT_SUBSCRIPTIONS,
-            0, # lamp switched on/switched off
-            1, # new lamp voltage
-            0, # lamp switched
-            0, # lamp step mode switched on/off
-            1, # TL shutter open/closed
-            0, # IL shutter open/closed
-            async=False,
-            intent="subscribe to TL shutter opened/closed and lamp intensity events"
-        )
-        self.register_event_callback(GET_SHUTTER_LAMP, self._on_shutter_event)
-        self.register_event_callback(GET_LAMP, self._on_lamp_event)
-        self._update_property('lamp.intensity', self.get_lamp_intensity())
-
-
-    def _on_shutter_event(self, response):
-        tl_open, il_open = (bool(int(c)) for c in response.response.split())
-        self._update_property('shutter_open', tl_open)
-        # no IL shutter -- reported as always open...
-
-    def _on_lamp_event(self, response):
-        intensity, lamp = (int(c) for c in response.response.split())
-        if lamp != self._shutter_idx:
-            logger.warning('Received IL lamp event from DMi8 which has no Leica-controlled IL lamp')
-        else:
-            self._update_property('lamp.intensity', intensity)
-
-    def get_TTL_shutter_control_enabled(self):
-        return bool(int(self.send_message(GET_SHUTTER_CTL, self._shutter_idx, async=False).response.split(' ')[0]))
-
-    def set_TTL_shutter_control_enabled(self, enabled):
-        self.send_message(SET_SHUTTER_CTL, int(enabled), self._shutter_idx, async=False, intent='set TTL shutter control')
-
-    def get_lamp_intensity(self):
-        return int(self.send_message(GET_LAMP, self._shutter_idx, async=False).response.split(' ')[0])
-
-    def set_lamp_intensity(self, intensity):
-        self.send_message(SET_LAMP, int(intensity), self._shutter_idx, async=False, intent='set TL lamp intensity')
-
-class DM6000B_TL(TL):
     '''TL represents an interface into elements used in Transmitted Light (Brighftield and DIC) mode.'''
+    _shutter_idx = 0
     def _setup_device(self):
         super()._setup_device()
         self.send_message(SET_KOND_EVENT_SUBSCRIPTIONS, 1, async=False, intent="subscribe to flapping condenser flap events")
@@ -303,7 +245,7 @@ class DM6000B_TL(TL):
         pos_max = int(self.send_message(GET_MAX_POS_APBL_TL, async=False, intent="get aperture diaphragm max position").response)
         return pos_min, pos_max
 
-class DM6000B_ShutterWatcher(stand.LeicaComponent):
+class ShutterWatcher(stand.LeicaComponent):
     def _setup_device(self):
         self.send_message(
             SET_SHUTTER_EVENT_SUBSCRIPTIONS,

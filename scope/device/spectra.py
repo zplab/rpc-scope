@@ -1,3 +1,4 @@
+
 # The MIT License (MIT)
 #
 # Copyright (c) 2014-2015 WUSTL ZPLAB
@@ -29,6 +30,7 @@ from ..util import smart_serial
 from ..util import property_device
 from ..util import state_stack
 from ..config import scope_configuration
+from . import iotool
 
 def _make_dac_bytes(IIC_Addr, bit):
     dac_bytes = bytearray(b'\x53\x00\x03\x00\x00\x00\x50')
@@ -60,26 +62,29 @@ class Lamp(state_stack.StateStackDevice):
     def __init__(self, name, spectra_x):
         super().__init__()
         self._name = name
-        self._spectra_x = spectra_x
+        self._spectra = spectra
 
     def set_intensity(self, value):
         """Set lamp intensity in the range [0, 255]"""
-        self._spectra_x._lamp_intensity(self._name, value)
+        self._spectra._lamp_intensity(self._name, value)
 
     def get_intensity(self):
-        return self._spectra_x._lamp_intensities[self._name]
+        return self._spectra._lamp_intensities[self._name]
 
     def set_enabled(self, enabled):
-        self._spectra_x._lamp_enable(self._name, enabled)
+        self._spectra._lamp_enable(self._name, enabled)
 
     def get_enabled(self):
-        return self._spectra_x._lamp_enableds[self._name]
+        return self._spectra._lamp_enableds[self._name]
 
-class SpectraX(property_device.PropertyDevice):
-    def __init__(self, iotool, property_server=None, property_prefix=''):
+class Spectra(property_device.PropertyDevice):
+    _DESCRIPTION = 'Lumencor Spectra'
+    _EXPECTED_INIT_ERRORS = (smart_serial.SerialException,)
+
+    def __init__(self, iotool: iotool.IOTool, property_server=None, property_prefix=''):
         super().__init__(property_server, property_prefix)
         config = scope_configuration.get_config()
-        self._serial_port = smart_serial.Serial(config.SpectraX.SERIAL_PORT, baudrate=config.SpectraX.SERIAL_BAUD, timeout=1)
+        self._serial_port = smart_serial.Serial(config.spectra.SERIAL_PORT, baudrate=config.spectra.SERIAL_BAUD, timeout=1)
         # RS232 Lumencor docs state: "The [following] two commands MUST be issued after every power cycle to properly configure controls for further commands."
         # "Set GPIO0-3 as open drain output"
         self._serial_port.write(b'\x57\x02\xFF\x50')
@@ -90,7 +95,7 @@ class SpectraX(property_device.PropertyDevice):
             self.get_temperature()
         except smart_serial.SerialTimeout:
             # explicitly clobber traceback from SerialTimeout exception
-            raise smart_serial.SerialException('Could not read data from Spectra X -- is it turned on?')
+            raise smart_serial.SerialException('Could not read data from Spectra -- is it turned on?')
         self._iotool = iotool
         if property_server:
             self._update_property('temperature', self.get_temperature())
@@ -125,7 +130,7 @@ class SpectraX(property_device.PropertyDevice):
         self._update_property(lamp+'.intensity', value)
 
     def _lamp_enable(self, lamp, enabled):
-        self._iotool.execute(*self._iotool.commands.spectra_x_lamps(**{lamp:enabled}))
+        self._iotool.execute(*self._iotool.commands.spectra_lamps(**{lamp:enabled}))
         self._lamp_enableds[lamp] = enabled
         self._update_property(lamp+'.enabled', enabled)
 
@@ -150,7 +155,7 @@ class SpectraX(property_device.PropertyDevice):
 
     def lamps(self, **lamp_parameters):
         """Set a number of lamp parameters at once using keyword arguments, e.g.
-        spectra_x.lamps(red_enabled=True, red_intensity=255, blue_enabled=False)
+        spectra.lamps(red_enabled=True, red_intensity=255, blue_enabled=False)
 
         Intensity values must be in the range [0, 255]. Valid lamp names can be
         retrieved with get_lamp_specs().

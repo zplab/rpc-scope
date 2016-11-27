@@ -122,8 +122,8 @@ class AT_Enum(ReadOnly_AT_Enum, enumerated_properties.DictProperty):
         lowlevel.SetEnumIndex(self._feature, value)
 
 class Camera(property_device.PropertyDevice):
-    """This class provides an abstraction of the raw Andor API ctypes shim found in
-    rpc_acquisition.andor.lowlevel."""
+    _DESCRIPTION = 'Andor camera'
+    _EXPECTED_INIT_ERRORS = (lowlevel.AndorError,)
 
     _CAMERA_DEFAULTS = [
         ('AOIBinning', lowlevel.SetEnumString, '1x1'),
