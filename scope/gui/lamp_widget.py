@@ -26,7 +26,7 @@ from . import device_widget
 from PyQt5 import Qt
 
 class SpectraXWidget(device_widget.DeviceWidget):
-    PROPERTY_ROOT = 'scope.il.spectra_x.'
+    PROPERTY_ROOT = 'scope.il.spectra.'
 
     def __init__(self, host, scope, scope_properties, parent=None):
         super().__init__(host, scope, scope_properties, parent)
@@ -37,7 +37,7 @@ class SpectraXWidget(device_widget.DeviceWidget):
         grid_layout = Qt.QGridLayout()
         container_layout.addLayout(grid_layout)
 
-        lamp_specs = scope.il.spectra_x.lamp_specs
+        lamp_specs = scope.il.spectra.lamp_specs
         # sort lamp names by the values of the lamp_specs dict; to wit, the center wavelengths
         lamps = sorted(lamp_specs.keys(), key=lamp_specs.get)
         self.lamp_controllers = [LampController(self, self.PROPERTY_ROOT+lamp, grid_layout, i) for i, lamp in enumerate(lamps)]

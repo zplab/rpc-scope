@@ -85,7 +85,7 @@ class Commands:
     def goto(self, index):
         return self._make_command('go', index)
 
-    def spectra_x_lamps(self, **lamps):
+    def spectra_lamps(self, **lamps):
         """Produce a sequence of IOTool commands to enable and disable given
         Spectra X lamps.
 

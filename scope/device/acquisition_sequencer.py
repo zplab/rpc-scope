@@ -245,7 +245,7 @@ class AcquisitionSequencer:
                 # wait for lamps to turn off
                 io_config = self._config.IOTool
                 time.sleep(max(io_config.TL_TIMING.off_latency_ms + io_config.TL_TIMING.fall_ms,
-                               io_config.SPECTRA_X_TIMING.off_latency_ms + io_config.SPECTRA_X_TIMING.fall_ms) / 1000)
+                               io_config.SPECTRA_TIMING.off_latency_ms + io_config.SPECTRA_TIMING.fall_ms) / 1000)
                 readout_ms = self._camera.get_readout_time() # get this after setting the relevant camera modes above
                 self._exposures = [exp + readout_ms for exp in self._fire_all_time]
                 self._iotool.start_program()

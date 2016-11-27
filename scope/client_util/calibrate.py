@@ -51,9 +51,9 @@ class DarkCurrentCorrector:
         with scope.il.in_state(shutter_open=False), \
              scope.tl.in_state(shutter_open=False), \
              scope.tl.lamp.in_state(enabled=False):
-            if hasattr(scope.il, 'spectra_x'):
-                scope.il.spectra_x.push_state(**{lamp+'_enabled':False for lamp in
-                    scope.il.spectra_x.lamp_specs.keys()})
+            if hasattr(scope.il, 'spectra'):
+                scope.il.spectra.push_state(**{lamp+'_enabled':False for lamp in
+                    scope.il.spectra.lamp_specs.keys()})
             scope.camera.start_image_sequence_acquisition(frame_count=len(self.exposures)*frames_to_average, trigger_mode='Software')
             for exp in self.exposures:
                 images = []
@@ -62,8 +62,8 @@ class DarkCurrentCorrector:
                     images.append(scope.camera.next_image(max(1000, 2*exp)))
                 self.dark_images.append(numpy.mean(images, axis=0))
             scope.camera.end_image_sequence_acquisition()
-            if hasattr(scope.il, 'spectra_x'):
-                scope.il.spectra_x.pop_state()
+            if hasattr(scope.il, 'spectra'):
+                scope.il.spectra.pop_state()
 
     def correct(self, image, exposure_ms):
         """Correct a given image for the dark-currents.
@@ -113,7 +113,7 @@ def meter_exposure_and_intensity(scope, lamp, max_exposure=200, max_intensity=25
     Parameters:
         scope: scope client object
         lamp: lamp object to adjust (should be scope.camera.tl.lamp or one of
-            the several lamps in scope.il.spectra_x)
+            the several lamps in scope.il.spectra)
         max_exposure: longest allowable exposure in ms
         max_intensity: largest allowable lamp intensity
         min_intensity_fraction: least bright value (in terms of the 95th
@@ -169,7 +169,7 @@ def meter_exposure(scope, lamp, max_exposure=200, min_intensity_fraction=0.3,
     Parameters:
         scope: scope client object
         lamp: lamp object to adjust (should be scope.camera.tl.lamp or one of
-            the several lamps in scope.il.spectra_x)
+            the several lamps in scope.il.spectra)
         max_exposure: longest allowable exposure in ms
         min_intensity_fraction: least bright value (in terms of the 95th
             percentile of image intensities) allowed for the image to count as

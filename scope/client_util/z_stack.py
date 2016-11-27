@@ -26,7 +26,7 @@ import numpy
 import time
 import contextlib
 
-def z_stack(scope, mm_range, num_steps, tl_enabled=False, **spectra_x_state):
+def z_stack(scope, mm_range, num_steps, tl_enabled=False, **spectra_state):
     """Acquire a z-series of images.
 
     Parameters:
@@ -35,8 +35,8 @@ def z_stack(scope, mm_range, num_steps, tl_enabled=False, **spectra_x_state):
             z-stack. The range will be the current focus positon +/- mm_range/2.
         num_steps: number of focus steps within the range to acquire.
         tl_enabled: should the transmitted lamp be enabled during acquisition?
-        spectra_x_state: state of the spectra x during acquisition (see
-         documentation for scope.il.spectra_x.lamps for parameter description; a
+        spectra_state: state of the spectra x during acquisition (see
+         documentation for scope.il.spectra.lamps for parameter description; a
          simple example would be 'cyan_enabled=True' to turn on the cyan lamp.)
 
     Returns: images, z_positions
@@ -61,9 +61,9 @@ def z_stack(scope, mm_range, num_steps, tl_enabled=False, **spectra_x_state):
             with contextlib.ExitStack() as stack:
                 scope.tl.lamp.push_state(enabled=tl_enabled)
                 stack.callback(scope.tl.lamp.pop_state)
-                if spectra_x_state:
-                    scope.il.spectra_x.push_state(**spectra_x)
-                    stack.callback(scope.il.spectra_x.pop_state)
+                if spectra_state:
+                    scope.il.spectra.push_state(**spectra)
+                    stack.callback(scope.il.spectra.pop_state)
                 scope.camera.send_software_trigger()
                 time.sleep(exposure_sec)
 

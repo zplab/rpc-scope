@@ -59,7 +59,7 @@ LAMP_SPECS = {
 LAMP_NAMES = set(LAMP_DAC_COMMANDS.keys())
 
 class Lamp(state_stack.StateStackDevice):
-    def __init__(self, name, spectra_x):
+    def __init__(self, name, spectra):
         super().__init__()
         self._name = name
         self._spectra = spectra

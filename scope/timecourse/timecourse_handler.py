@@ -150,7 +150,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.scope.stand.active_microscopy_method = 'TL BF'
         self.scope.nosepiece.magnification = self.OBJECTIVE
         self.scope.il.shutter_open = True
-        self.scope.il.spectra_x.lamps(**{lamp+'_enabled':False for lamp in self.scope.il.spectra_x.lamp_specs})
+        self.scope.il.spectra.lamps(**{lamp+'_enabled':False for lamp in self.scope.il.spectra.lamp_specs})
         self.scope.tl.shutter_open = True
         self.scope.tl.lamp.enabled = False
         self.scope.tl.condenser_retracted = self.OBJECTIVE == 5 # only retract condenser for 5x objective
@@ -201,7 +201,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         # calculate a fluorescent flatfield if requested
         if self.FLUORESCENCE_FLATFIELD_LAMP:
             self.scope.stage.position = ref_positions[0]
-            lamp = getattr(self.scope.il.spectra_x, self.FLUORESCENCE_FLATFIELD_LAMP)
+            lamp = getattr(self.scope.il.spectra, self.FLUORESCENCE_FLATFIELD_LAMP)
             with lamp.in_state(enabled=True):
                 calibrate.meter_exposure_and_intensity(self.scope, lamp, max_exposure=400,
                     min_intensity_fraction=0.1)
