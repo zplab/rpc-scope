@@ -185,7 +185,7 @@ class Camera(property_device.PropertyDevice):
 
         config = scope_configuration.get_config()
 
-        lowlevel.initialize(config.Camera.MODEL) # safe to call this multiple times
+        lowlevel.initialize(config.camera.MODEL) # safe to call this multiple times
 
         self._live_mode = False
         self.return_to_default_state()

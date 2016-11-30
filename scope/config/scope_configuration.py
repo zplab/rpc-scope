@@ -39,12 +39,12 @@ def _make_tcp_host(host, port):
 def get_addresses(host=None):
     config = get_config()
     if host is None:
-        host = config.Server.LOCALHOST
+        host = config.server.LOCALHOST
     return dict(
-        rpc=_make_tcp_host(host, config.Server.RPC_PORT),
-        interrupt=_make_tcp_host(host, config.Server.RPC_INTERRUPT_PORT),
-        property=_make_tcp_host(host, config.Server.PROPERTY_PORT),
-        image_transfer_rpc=_make_tcp_host(host, config.Server.IMAGE_TRANSFER_RPC_PORT)
+        rpc=_make_tcp_host(host, config.server.RPC_PORT),
+        interrupt=_make_tcp_host(host, config.server.RPC_INTERRUPT_PORT),
+        property=_make_tcp_host(host, config.server.PROPERTY_PORT),
+        image_transfer_rpc=_make_tcp_host(host, config.server.IMAGE_TRANSFER_RPC_PORT)
      )
 
 _CONFIG = None

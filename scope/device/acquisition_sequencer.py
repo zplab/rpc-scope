@@ -103,7 +103,7 @@ class AcquisitionSequencer:
         """
         self._compiled = False
         if lamp == 'TL':
-            lamp_timing = self._config.IOTool.TL_TIMING
+            lamp_timing = self._config.sutter_led.TIMING
         else:
             if tl_intensity is not None:
                 raise ValueError('Cannot control TL intensity when the requested lamp is not TL.')
@@ -111,7 +111,7 @@ class AcquisitionSequencer:
                 lamp = [lamp]
             if not self._lamp_names.issuperset(lamp):
                 raise ValueError('Unrecognized spectra lamp name. Valid names are: {}'.format(', '.join(sorted(self._lamp_names))))
-            lamp_timing = self._config.IOTool.SPECTRA_TIMING
+            lamp_timing = self._config.spectra.TIMING
         # Now, calculate the exposure timing: how long to delay after turning the lamp on, and
         # how long to delay after turning the lamp off.
         # The on-delay is not just the exposure time: we need to account for latency between
@@ -149,16 +149,16 @@ class AcquisitionSequencer:
         iotool_steps = []
         self._fire_all_time = [] # contains the total time for each step that the camera is in "fire all" mode. This plus the readout time is the actual exposure time (for dark current calculations)
         commands = self._iotool.commands
-        io_config = self._config.IOTool
+        cam_config = self._config.iotool
         iotool_steps.append(commands.wait_time(20)) # configure a 20 microsecond debounce-wait for high/low signals to stabilize
-        iotool_steps.append(commands.wait_high(io_config.CAMERA_PINS.arm))
+        iotool_steps.append(commands.wait_high(cam_config.IOTOOL_PINS.arm))
         for step in self._steps:
-            iotool_steps.append(commands.set_high(io_config.CAMERA_PINS.trigger)) # trigger a camera acquisition
-            iotool_steps.append(commands.set_low(io_config.CAMERA_PINS.trigger))
+            iotool_steps.append(commands.set_high(cam_config.IOTOOL_PINS.trigger)) # trigger a camera acquisition
+            iotool_steps.append(commands.set_low(cam_config.IOTOOL_PINS.trigger))
             # wait until all rows are exposing, reported by the camera's FireAll signal
             # Sometimes it takes a moment for the FireAll signal to clear after the trigger, so delay 50 us before waiting for FireAll
             iotool_steps += self._add_delay(0.05)
-            iotool_steps.append(commands.wait_high(io_config.CAMERA_PINS.aux_out1)) # AuxOut1 is set to 'FireAll'
+            iotool_steps.append(commands.wait_high(cam_config.IOTOOL_PINS.aux_out1)) # AuxOut1 is set to 'FireAll'
             # Now turn on the required lamp (either TL or Spectra X)
             if step.lamp == 'TL':
                 iotool_steps.extend(commands.transmitted_lamp(enabled=True, intensity=step.tl_intensity))
@@ -177,8 +177,8 @@ class AcquisitionSequencer:
             self._fire_all_time.append(step.on_delay_ms + total_off_delay)
 
         # send one last trigger to end the final acquisition
-        iotool_steps.append(commands.set_high(io_config.CAMERA_PINS.trigger))
-        iotool_steps.append(commands.set_low(io_config.CAMERA_PINS.trigger))
+        iotool_steps.append(commands.set_high(cam_config.IOTOOL_PINS.trigger))
+        iotool_steps.append(commands.set_low(cam_config.IOTOOL_PINS.trigger))
         self._iotool.store_program(*iotool_steps)
         self._compiled = True
         self._iotool_program = iotool_steps
@@ -243,9 +243,9 @@ class AcquisitionSequencer:
         try:
             with self._spectra.in_state(**self._starting_fl_lamp_state), self._tl_lamp.in_state(enabled=False, intensity=self._tl_lamp.get_intensity()):
                 # wait for lamps to turn off
-                io_config = self._config.IOTool
-                time.sleep(max(io_config.TL_TIMING.off_latency_ms + io_config.TL_TIMING.fall_ms,
-                               io_config.SPECTRA_TIMING.off_latency_ms + io_config.SPECTRA_TIMING.fall_ms) / 1000)
+                config = self._config
+                time.sleep(max(config.sutter_led.TIMING.off_latency_ms + config.sutter_led.TIMING.fall_ms,
+                               config.spectra.TIMING.off_latency_ms + config.spectra.TIMING.fall_ms) / 1000)
                 readout_ms = self._camera.get_readout_time() # get this after setting the relevant camera modes above
                 self._exposures = [exp + readout_ms for exp in self._fire_all_time]
                 self._iotool.start_program()

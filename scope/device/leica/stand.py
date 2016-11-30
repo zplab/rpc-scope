@@ -44,7 +44,7 @@ class Stand(message_device.LeicaAsyncDevice, property_device.PropertyDevice):
     def __init__(self, property_server=None, property_prefix=''):
         property_device.PropertyDevice.__init__(self, property_server, property_prefix)
         config = scope_configuration.get_config()
-        message_manager = LeicaMessageManager(config.stand.SERIAL_PORT, config.stand.SERIAL_BAUD, daemon=True)
+        message_manager = LeicaMessageManager(config.stand.SERIAL_PORT, config.stand.SERIAL_ARGS, daemon=True)
         message_device.LeicaAsyncDevice.__init__(self, message_manager)
 
     def _setup_device(self):

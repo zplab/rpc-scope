@@ -45,7 +45,7 @@ class ScopeServer(base_daemon.Runner):
         with self.arg_file.open('r') as f:
             args = json.load(f)
         config = scope_configuration.get_config()
-        self.host = config.Server.PUBLICHOST if args['public'] else config.Server.LOCALHOST
+        self.host = config.server.PUBLICHOST if args['public'] else config.server.LOCALHOST
         super().start(self.log_dir, args['verbose'])
 
     # function is to be run only when NOT running as a daemon

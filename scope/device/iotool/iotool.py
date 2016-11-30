@@ -53,15 +53,15 @@ class IOTool:
         """Attempt to reset the IOTool device to a known-good state."""
         if hasattr(self, '_serial_port'):
             del self._serial_port
-        self._serial_port = smart_serial.Serial(self._config.IOTool.SERIAL_PORT, timeout=2)
+        self._serial_port = smart_serial.Serial(self._config.iotool.SERIAL_PORT, timeout=2, **self._config.iotool.SERIAL_ARGS)
         self._serial_port.write(b'!\nreset\n')
         time.sleep(0.5) # give it time to reboot
         wait_start = time.time()
-        while not os.path.exists(self._config.IOTool.SERIAL_PORT):
+        while not os.path.exists(self._config.iotool.SERIAL_PORT):
             time.sleep(0.1)
             if time.time() - wait_start > 5:
                 raise smart_serial.SerialException('IOTool device did not properly reset!')
-        self._serial_port = smart_serial.Serial(self._config.IOTool.SERIAL_PORT, timeout=2)
+        self._serial_port = smart_serial.Serial(self._config.iotool.SERIAL_PORT, timeout=2)
         self._serial_port.write(_ECHO_OFF + b'\n') # disable echo
         echo_reply = self._wait_for_ready_prompt()
         assert echo_reply == _ECHO_OFF + b'\r\n' # read back echo of above (no further echoes will come)

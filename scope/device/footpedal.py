@@ -28,13 +28,13 @@ from ..config import scope_configuration
 class Footpedal:
     def __init__(self, iotool):
         config = scope_configuration.get_config()
-        pin = config.IOTool.FOOTPEDAL_PIN
-        bounce_ms = config.IOTool.FOOTPEDAL_BOUNCE_DELAY_MS
+        pin = config.iotool.FOOTPEDAL_PIN
+        bounce_ms = config.iotool.FOOTPEDAL_BOUNCE_DELAY_MS
         self._last_time = 0
         self._iotool = iotool
         self._bounce_sec = bounce_ms / 1000
         self._delay = iotool.commands.delay_ms(int(bounce_ms))
-        if config.IOTool.FOOTPEDAL_CLOSED_TTL_STATE:
+        if config.iotool.FOOTPEDAL_CLOSED_TTL_STATE:
             self._depress = iotool.commands.wait_high(pin)
             self._release = iotool.commands.wait_low(pin)
         else:

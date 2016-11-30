@@ -23,11 +23,10 @@
 # Authors: Zach Pincus
 
 import sys
-import fcntl
-import struct
 import select
 import os
 import errno
+import time
 
 import serial
 import serial.serialposix as serialposix
@@ -37,7 +36,7 @@ class SerialTimeout(SerialException):
     pass
 
 class Serial(serialposix.Serial):
-    """Serial port class that differs from the python serial library in three
+    """Serial port class that differs from the pyserial library in three
     key ways:
     (1) Read timeouts raise an exception rather than just returning less
     data than requested. This makes it easier to detect error conditions.
@@ -48,14 +47,14 @@ class Serial(serialposix.Serial):
     (3) A read_until() command is provided that reads from the serial port
     until some string is matched.
     """
-    def __init__(self, port, baudrate=9600, timeout=None, **kwargs):
+    def __init__(self, port, **kwargs):
         self.read_buffer = b''
-        super().__init__(port, baudrate=baudrate, timeout=timeout, **kwargs)
+        super().__init__(port, **kwargs)
 
-    def inWaiting(self):
+    @serialposix.Serial.in_waiting.getter
+    def in_waiting(self):
         """Return the number of characters currently in the input buffer."""
-        s = fcntl.ioctl(self.fd, serialposix.TIOCINQ, serialposix.TIOCM_zero_str)
-        return struct.unpack('I',s)[0] + len(self.read_buffer)
+        return serialposix.Serial.in_waiting.fget(self) + len(self.read_buffer)
 
     def read(self, size=1):
         """Read size bytes from the serial port. If a timeout occurs, an
@@ -64,7 +63,7 @@ class Serial(serialposix.Serial):
            KeyboardInterrupt, before 'size' bytes have been read, the pending
            bytes read will not be lost but will be available to subsequent read()
            calls."""
-        if not self.isOpen(): raise serialposix.portNotOpenError
+        if not self.is_open: raise serialposix.portNotOpenError
         if len(self.read_buffer) > size:
             read_buffer = self.read_buffer
             try:
@@ -111,7 +110,12 @@ class Serial(serialposix.Serial):
             raise k
 
     def read_all_buffered(self):
-        return self.read(self.inWaiting())
+        return self.read(self.in_waiting())
+
+    def clear_input_buffer(self):
+        while self.in_waiting():
+            if len(self.read_all_buffered()) > 0:
+                time.sleep(0.01)
 
     def read_until(self, match):
         """Read bytes from the serial until the sequence of bytes specified in
@@ -120,7 +124,7 @@ class Serial(serialposix.Serial):
            match is made. If interrupted by a timeout or KeyboardInterrupt before
            the match is made, the pending bytes read will not be lost but will be
            available to subsequent read_until() calls."""
-        if not self.isOpen(): raise serialposix.portNotOpenError
+        if not self.is_open: raise serialposix.portNotOpenError
         search_start = 0
         ml = len(match)
         while True:
@@ -136,9 +140,8 @@ class Serial(serialposix.Serial):
                 # is nothing to read.
                 if not ready:
                     raise SerialTimeout()   # timeout
-                s = fcntl.ioctl(self.fd, serialposix.TIOCINQ, serialposix.TIOCM_zero_str)
-                in_waiting = struct.unpack('I',s)[0]
-                buf = os.read(self.fd, max(in_waiting, ml))
+                in_recv_buffer = serialposix.Serial.in_waiting.fget(self)
+                buf = os.read(self.fd, max(in_recv_buffer, ml))
                 # read should always return some data as select reported it was
                 # ready to read when we get to this point.
                 if not buf:

@@ -166,15 +166,16 @@ class MessageManager(threading.Thread):
 
 class SerialMessageManager(MessageManager):
     """MessageManager subclass that sends and receives from a serial port."""
-    def __init__(self, serial_port, serial_baud, response_terminator, daemon=True):
+    def __init__(self, serial_port, serial_args, response_terminator, daemon=True):
         """Parameters:
-            serial_port, serial_baud: information for connecting to serial device
+            serial_port: name of serial device
+            serial_args: dict of keyword arguments for configuring the serial port
             response_terminator: byte or bytes that terminate a response message
             daemon: quit running in the background automatically when the interpreter is exited
                     (otherwise must set self.running to False to quit)"""
         # need a timeout on the serial port so that _receive_message can
         # occasionally check its 'running' attribute to decide if it needs to return.
-        self.serial_port = smart_serial.Serial(serial_port, baudrate=serial_baud, timeout=1)
+        self.serial_port = smart_serial.Serial(serial_port, timeout=1, **serial_args)
         self.thread_name = 'SerialMessageManager({})'.format(self.serial_port.port)
         self.response_terminator = response_terminator
         super().__init__(daemon)
@@ -194,8 +195,8 @@ class SerialMessageManager(MessageManager):
 
 class LeicaMessageManager(SerialMessageManager):
     """MessageManager subclass appropriate for routing messages from Leica API"""
-    def __init__(self, serial_port, serial_baud, daemon=True):
-        super().__init__(serial_port, serial_baud, response_terminator=b'\r', daemon=daemon)
+    def __init__(self, serial_port, serial_args, daemon=True):
+        super().__init__(serial_port, serial_args, response_terminator=b'\r', daemon=daemon)
 
     def _generate_response_key(self, response):
         if response[0] == '$':
@@ -213,7 +214,7 @@ class LeicaMessageManager(SerialMessageManager):
             # debug messages.
             logger.debug('received UNEXPECTED notification from Leica device: {} with response key: {}', response, response_key)
         elif response[2:4] == '99':
-            # Error responses in the xx99x class  won't map back to a given response key properly, so we hackishly assume they 
+            # Error responses in the xx99x class  won't map back to a given response key properly, so we hackishly assume they
             # pertain to the most recent command sent.
             if response[2:5] == '998':
                 logger.error('Leica function unit {} not available.', response[:2])

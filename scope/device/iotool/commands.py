@@ -87,22 +87,29 @@ class Commands:
 
     def spectra_lamps(self, **lamps):
         """Produce a sequence of IOTool commands to enable and disable given
-        Spectra X lamps.
+        Spectra lamps.
 
-        Keyword arguments must be lamp names, as specified in
-        scope_configuration.LUMENCOR_PINS. The values specified must be True to
-        enable that lamp, False to disable, or None to do nothing (unspecified
-        lamps are also not altered)."""
+        Keyword arguments must be lamp names, as specified in the scope configuration.
+        The values specified must be True to enable that lamp, False to disable,
+        or None to do nothing (unspecified lamps are also not altered)."""
         commands = []
         for lamp, enabled in lamps.items():
             if enabled is None:
                 continue
-            pin = self._config.IOTool.LUMENCOR_PINS[lamp]
+            pin = self._config.spectra.IOTOOL_LAMP_PINS[lamp]
             if enabled:
                 commands.append(self.set_high(pin))
             else:
                 commands.append(self.set_low(pin))
         return commands
+
+    def spectra_enable_green(self):
+        """Produce a command that switches the green/yellow paddle to the green filter position."""
+        return self.set_high(self._config.spectra.IOTOOL_GREEN_YELLOW_SWITCH_PIN)
+
+    def spectra_enable_yellow(self):
+        """Produce a command that switches the green/yellow paddle to the yellow filter position."""
+        return self.set_low(self._config.spectra.IOTOOL_GREEN_YELLOW_SWITCH_PIN)
 
     def transmitted_lamp(self, enabled=None, intensity=None):
         """Produce a sequence of IOTool commands to enable/disable and control the
@@ -114,11 +121,11 @@ class Commands:
         """
         commands = []
         if intensity is not None:
-            assert 0 <= intensity <= self._config.IOTool.TL_PWM_MAX
-            commands.append(self.pwm(self._config.IOTool.TL_PWM_PIN, intensity))
+            assert 0 <= intensity <= self._config.iotool.TL_PWM_MAX
+            commands.append(self.pwm(self._config.iotool.TL_PWM_PIN, intensity))
         if enabled is not None:
             if enabled:
-                commands.append(self.set_high(self._config.IOTool.TL_ENABLE_PIN))
+                commands.append(self.set_high(self._config.iotool.TL_ENABLE_PIN))
             else:
-                commands.append(self.set_low(self._config.IOTool.TL_ENABLE_PIN))
+                commands.append(self.set_low(self._config.iotool.TL_ENABLE_PIN))
         return commands

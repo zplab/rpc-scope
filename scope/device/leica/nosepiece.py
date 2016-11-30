@@ -24,7 +24,6 @@
 
 import collections
 
-from ...config import scope_configuration
 from ...messaging import message_device
 from . import stand
 from . import microscopy_method_names
@@ -41,10 +40,10 @@ GET_MIN_POS_OBJ = 76038
 GET_MAX_POS_OBJ = 76039
 SET_OBJECTIVE_TURRET_EVENT_SUBSCRIPTIONS = 76003
 
-class Nosepiece(stand.LeicaComponent):
-    '''Note that objective position is reported as 0 when the objective turret is between positions. The objective
-    turret is between positions when it is in the process of responding to a position change request and also when
-    manually placed there by physical intervention.'''
+class ManualNosepiece(stand.LeicaComponent):
+    # Note that objective position is reported as 0 when the objective turret is between positions. The objective
+    # turret is between positions when it is in the process of responding to a position change request and also when
+    # manually placed there by physical intervention.
 
     def _setup_device(self):
         self._minp = int(self.send_message(GET_MIN_POS_OBJ, async=False, intent="get minimum objective turret position").response)
@@ -58,9 +57,6 @@ class Nosepiece(stand.LeicaComponent):
             mag = None if mag == '-' else int(mag)
             self._mags[p] = mag
             self._mags_to_positions[mag].append(p)
-
-        config = scope_configuration.get_config()
-        self._has_safe_mode = config.nosepiece.HAS_SAFE_MODE
 
         # Ensure that halogen variable spectra correction filter is always set to maximum (least attenuation)
         # NB: does nothing on stands with no correction filter (DMi8, maybe DM6?).
@@ -111,26 +107,6 @@ class Nosepiece(stand.LeicaComponent):
     def get_magnification_values(self):
         return list(sorted(filter(lambda m: m is not None, self._mags_to_positions.keys())))
 
-    def get_has_safe_mode(self):
-        return self._has_safe_mode
-
-    def get_safe_mode(self):
-        '''True if the microscope must be explicitly set to "dry" or "immersion" mode before changing to
-        a dry or immersion lens.'''
-        if self._has_safe_mode:
-            return self.send_message(GET_MODE, async=False, intent="get objective turret mode").response == '1'
-        else:
-            return False
-
-    def set_safe_mode(self, mode):
-        '''If set to True, the microscope must be explicitly set to "dry" or "immersion" mode before changing to
-        a dry or immersion lens.'''
-        if self._has_safe_mode:
-            if mode:
-                leica_mode = 1
-            else:
-                leica_mode = 0
-            self.send_message(SET_MODE, leica_mode, intent="set objective turret mode")
 
     def get_immersion_mode(self):
         '''True if the microscope is in immersion mode.'''
@@ -207,3 +183,43 @@ class Nosepiece(stand.LeicaComponent):
         intensities = ' '.join([str(intensity)] * 16)
         for p in range(self._minp, self._maxp+1):
             self.send_message(SET_OBJPAR, p, 14, intensities, async=False, intent="set per-microscopy-mode objective intensities")
+
+
+class MotorizedNosepiece(ManualNosepiece):
+    def set_position(self, position):
+        if position == 0:
+            raise ValueError('Nosepiece position can not be set to 0; zero indicates that the nosepiece is currently between objective positions.')
+        if not (self._minp <= position <= self._maxp):
+            raise ValueError('Nosepiece position must be in range [{}, {}].'.format(self._minp, self._maxp))
+        self.send_message(POS_ABS_OBJ, position, intent="change objective turret position")
+
+    def set_magnification(self, magnification):
+        if magnification not in self._mags_to_positions:
+            raise ValueError('magnification must be one of the following: {}.'.format(sorted([m for m in list(self._mags_to_positions.keys()) if m is not None])))
+        mag_positions = self._mags_to_positions[magnification]
+        if len(mag_positions) > 1:
+            raise ValueError('magnification value {} is ambiguous; objectives at positions {} all have this magnification.'.format(magnification, mag_positions))
+        self.send_message(POS_ABS_OBJ, mag_positions[0], intent="change objective turret position")
+
+
+class MotorizedNosepieceWithSafeMode(ManualNosepiece):
+    def set_position(self, position):
+        try:
+            self.set_position(position)
+        except stand.message_device.LeicaError:
+            if self.get_safe_mode() and self._get_objpar(self.get_position(), 5) != self._get_objpar(position, 5):
+                raise stand.message_device.LeicaError('Attempting to change to an objective with a different immersion/dry state is forbidden in safe mode.')
+            else:
+                raise
+
+    def get_safe_mode(self):
+        '''True if the microscope must be explicitly set to "dry" or "immersion" mode before changing to
+        a dry or immersion lens.'''
+        return self.send_message(GET_MODE, async=False, intent="get objective turret mode").response == '1'
+
+    def set_safe_mode(self, mode):
+        '''If set to True, the microscope must be explicitly set to "dry" or "immersion" mode before changing to
+        a dry or immersion lens.'''
+        leica_mode = 1 if mode else 0
+        self.send_message(SET_MODE, leica_mode, intent="set objective turret mode")
+
