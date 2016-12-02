@@ -675,7 +675,8 @@ class Stage(stand.LeicaComponent):
         distances = numpy.array(distances)
         speeds = numpy.array(speeds)
         ramps = numpy.array(ramps)
-        _calibrate_speed_coefficients(times, distances, speeds, ramps)
+        _calibrate_z_speed_coefficients(times, distances, speeds, ramps)
+        self._setup_device()
         return times, distances, speeds, ramps
 
 def _calibrate_z_speed_coefficients(times, distances, speeds, ramps):
@@ -735,6 +736,5 @@ def _calibrate_z_speed_coefficients(times, distances, speeds, ramps):
     Z_SPEED_MM_PER_SECOND_PER_UNIT *= speed_factor
     Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT *= ramp_factor
     Z_MOVE_FUDGE_FACTOR = fudge_factor
-    self._setup_device()
     return time_estimates
 

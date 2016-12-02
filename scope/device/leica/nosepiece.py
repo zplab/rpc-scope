@@ -66,18 +66,6 @@ class ManualNosepiece(stand.LeicaComponent):
         self.register_event_callback(GET_OBJPAR, self._on_turret_moved_event)
         self._update_property('position', self.get_position())
 
-    def set_position(self, position):
-        if position == 0:
-            raise ValueError('Nosepiece position can not be set to 0; zero indicates that the nosepiece is currently between objective positions.')
-        if position is not None:
-            try:
-                self.send_message(POS_ABS_OBJ, position, intent="change objective turret position")
-            except stand.message_device.LeicaError:
-                if self.get_safe_mode() and self._get_objpar(self.get_position(), 5) != self._get_objpar(position, 5):
-                    raise stand.message_device.LeicaError('Attempting to change to an objective with a different immersion/dry state is forbidden in safe mode.')
-                else:
-                    raise
-
     def get_position(self):
         '''Current objective turret position. Note that 0 is special and indicates that the objective turret is
         between objective positions.'''
@@ -85,14 +73,6 @@ class ManualNosepiece(stand.LeicaComponent):
 
     def get_position_min_max(self):
         return self._minp, self._maxp
-
-    def set_magnification(self, magnification):
-        if magnification not in self._mags_to_positions:
-            raise ValueError('magnification must be one of the following: {}.'.format(sorted([m for m in list(self._mags_to_positions.keys()) if m is not None])))
-        mag_positions = self._mags_to_positions[magnification]
-        if len(mag_positions) > 1:
-            raise ValueError('magnification value {} is ambiguous; objectives at positions {} all have this magnification.'.format(magnification, mag_positions))
-        self.send_message(POS_ABS_OBJ, mag_positions[0], intent="change objective turret position")
 
     def get_magnification(self):
         '''The current objective's magnification. I.e., the magnification of the objective at the currently selected

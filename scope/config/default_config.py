@@ -2,9 +2,9 @@ scope_configuration = dict(
     drivers = ( # order is important!
         ('stand', 'leica.stand.Stand'),
         ('stage', 'leica.stage.Stage'),
-        #('nosepiece', 'nosepiece.MotorizedNosepieceWithSafeMode'), # dm6000
-        #('nosepiece', 'nosepiece.MotorizedNosepiece'), # dmi8
-        #('nosepiece', 'nosepiece.ManualNosepiece'), # dm6
+        #('nosepiece', 'leica.nosepiece.MotorizedNosepieceWithSafeMode'), # dm6000
+        #('nosepiece', 'leica.nosepiece.MotorizedNosepiece'), # dmi8
+        #('nosepiece', 'leica.nosepiece.ManualNosepiece'), # dm6
         #('il', 'leica.illumination_axes.IL'), # dmi8
         #('il', 'leica.illumination_axes.FieldWheel_IL'), # dm6000 dm6
         ('tl', 'leica.illumination_axes.TL'),
@@ -46,9 +46,9 @@ scope_configuration = dict(
 
     iotool = dict(
         SERIAL_PORT = '/dev/ttyIOTool',
-        SERIAL_ARGS = {
+        SERIAL_ARGS = dict(
             baudrate=115200
-        }
+        )
     ),
 
     spectra = dict(
@@ -60,9 +60,9 @@ scope_configuration = dict(
             cyan = 'D3',
             teal = 'D4',
             green_yellow = 'D2',
-            red = 'D1' # dm6000 dmi8
+            #red = 'D1' # dm6000 dmi8
         ),
-        #IOTOOL_GREEN_YELLOW_SWITCH_PIN = 'D1' # dm6
+        #IOTOOL_GREEN_YELLOW_SWITCH_PIN = 'D1', # dm6
 
         # TIMING: depends *strongly* on how recently the last time the
         # lamp was turned on was. 100 ms ago vs. 10 sec ago changes the on-latency
@@ -85,13 +85,14 @@ scope_configuration = dict(
             off_latency_ms = 0.08, # Time from end of trigger to start of fall
             fall_ms = 0.010 # Time from start of fall to end of fall
         ),
-        #FILTER_SWITCH_DELAY = 1 # dm6
+        #FILTER_SWITCH_DELAY = 0.15 # dm6
     ),
 
     sutter_led = dict(
         IOTOOL_ENABLE_PIN = 'E6',
         IOTOOL_PWM_PIN = 'D0',
         IOTOOL_PWM_MAX = 255,
+        INITIAL_INTENSITY = 86,
         TIMING = dict(
             on_latency_ms = 0.025, # Time from trigger signal to start of rise
             rise_ms = 0.06, # Time from start of rise to end of rise
@@ -109,8 +110,8 @@ scope_configuration = dict(
 
     circulator = dict(
         SERIAL_PORT = '/dev/ttyCirculator',
-        SERIAL_ARGS = {
+        SERIAL_ARGS = dict(
             baudrate=9600
-        }
+        )
     )
 )

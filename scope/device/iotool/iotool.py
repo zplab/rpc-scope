@@ -47,7 +47,7 @@ class IOTool:
         except (smart_serial.SerialTimeout, RuntimeError):
             # explicitly clobber traceback from SerialTimeout exception
             raise smart_serial.SerialException('Could not communicate with IOTool device -- is it attached?')
-        self.commands = commands.Commands()
+        self.commands = commands
 
     def reset(self):
         """Attempt to reset the IOTool device to a known-good state."""
@@ -55,13 +55,22 @@ class IOTool:
             del self._serial_port
         self._serial_port = smart_serial.Serial(self._config.iotool.SERIAL_PORT, timeout=2, **self._config.iotool.SERIAL_ARGS)
         self._serial_port.write(b'!\nreset\n')
+        self._serial_port.close()
         time.sleep(0.5) # give it time to reboot
         wait_start = time.time()
         while not os.path.exists(self._config.iotool.SERIAL_PORT):
             time.sleep(0.1)
             if time.time() - wait_start > 5:
                 raise smart_serial.SerialException('IOTool device did not properly reset!')
-        self._serial_port = smart_serial.Serial(self._config.iotool.SERIAL_PORT, timeout=2)
+        for timeout in [0.1, 0.5, 1]:
+            # try opening the serial port a few times, in case the os doesn't make it properly available right away
+            try:
+                self._serial_port = smart_serial.Serial(self._config.iotool.SERIAL_PORT, timeout=2, **self._config.iotool.SERIAL_ARGS)
+                break
+            except smart_serial.SerialException as e:
+                time.sleep(timeout)
+        if self._serial_port.closed:
+            raise smart_serial.SerialException('Could not reopen IOTool device after reset: {}'.format(e))
         self._serial_port.write(_ECHO_OFF + b'\n') # disable echo
         echo_reply = self._wait_for_ready_prompt()
         assert echo_reply == _ECHO_OFF + b'\r\n' # read back echo of above (no further echoes will come)

@@ -104,14 +104,14 @@ class SpectraX(property_device.PropertyDevice):
             self._timer_thread = threading.Thread(target=self._timer_update_temp, daemon=True)
             self._timer_thread.start()
 
-        self._available_lamps = set(self._spconfig.IOTOOL_PINS.keys())
+        self._available_lamps = set(self._spconfig.IOTOOL_LAMP_PINS.keys())
+        for name in self._available_lamps:
+            setattr(self, name, Lamp(name, self))
 
         self._lamp_intensities = {}
         self._lamp_enableds = {}
         self.lamps(**{lamp+'_enabled':False for lamp in self._available_lamps})
         self.lamps(**{lamp+'_intensity':255 for lamp in self._available_lamps})
-        for name in self._available_lamps:
-            setattr(self, name, Lamp(name, self))
 
     def _timer_update_temp(self):
         while self._timer_running:
@@ -132,9 +132,27 @@ class SpectraX(property_device.PropertyDevice):
         self._update_property(lamp+'.intensity', value)
 
     def _lamp_enable(self, lamp, enabled):
-        self._iotool.execute(*self._iotool.commands.spectra_lamps(**{lamp:enabled}))
+        self._iotool.execute(*self._iotool_lamp_commands(**{lamp:enabled}))
         self._lamp_enableds[lamp] = enabled
         self._update_property(lamp+'.enabled', enabled)
+
+    def _iotool_lamp_commands(self, **lamps):
+        """Produce a sequence of IOTool commands to enable and disable given
+        Spectra lamps.
+
+        Keyword arguments must be lamp names, as specified in the scope configuration.
+        The values specified must be True to enable that lamp, False to disable,
+        or None to do nothing (unspecified lamps are also not altered)."""
+        commands = []
+        for lamp, enabled in lamps.items():
+            if enabled is None:
+                continue
+            pin = self._spconfig.IOTOOL_LAMP_PINS[lamp]
+            if enabled:
+                commands.append(self._iotool.commands.set_high(pin))
+            else:
+                commands.append(self._iotool.commands.set_low(pin))
+        return commands
 
     def get_lamp_specs(self):
         """Return a dict mapping lamp names to tuples of (peak_wavelength, bandwidth), in nm,
@@ -162,19 +180,19 @@ class SpectraX(property_device.PropertyDevice):
         if hasattr(self, 'set_'+prop):
             return getattr(self, 'get_'+prop), getattr(self, 'set_'+prop)
         else:
-            lampname, prop = lamp_prop.rsplit('_', 1)
-            if lampname not in self._available_lamps:
+            lamp_name, lamp_prop = prop.rsplit('_', 1)
+            if lamp_name not in self._available_lamps:
                 raise ValueError('Invalid lamp name')
-            lamp = getattr(self, lampname)
-            if hasattr(lamp, 'set_'+ prop):
-                return getattr(lamp, 'get_'+prop), getattr(lamp, 'set_'+prop)
+            lamp = getattr(self, lamp_name)
+            if hasattr(lamp, 'set_'+ lamp_prop):
+                return getattr(lamp, 'get_'+lamp_prop), getattr(lamp, 'set_'+lamp_prop)
             else:
-                raise ValueError('Invalid lamp parameter "{}"'.format(prop))
+                raise ValueError('Invalid lamp parameter "{}"'.format(lamp_prop))
 
     def _set_state(self, properties_and_values):
         for prop, value in properties_and_values:
             setter = self._get_getter_setter(prop)[1]
-            setter(prop)
+            setter(value)
 
     def push_state(self, **lamp_parameters):
         """Set a number of parameters at once using keyword arguments, while
@@ -192,12 +210,20 @@ class SpectraX(property_device.PropertyDevice):
             setter(value)
         self._state_stack.append(old_state)
 
-class Spectra(property_device.PropertyDevice):
+class Spectra(SpectraX):
     _DESCRIPTION = 'Lumencor Spectra'
 
     def __init__(self, iotool: iotool.IOTool, property_server=None, property_prefix=''):
         super().__init__(iotool, property_server, property_prefix)
-        self.set_green_yellow_position('green')
+        self.set_green_yellow_filter('green')
+
+    def _iotool_enable_green_command(self):
+        """Produce a command that switches the green/yellow paddle to the green filter position."""
+        return self._iotool.commands.set_high(self._spconfig.IOTOOL_GREEN_YELLOW_SWITCH_PIN)
+
+    def _iotool_enable_yellow_command(self):
+        """Produce a command that switches the green/yellow paddle to the yellow filter position."""
+        return self._iotool.commands.set_low(self._spconfig.IOTOOL_GREEN_YELLOW_SWITCH_PIN)
 
     def set_green_yellow_filter(self, position):
         """'position' should be either 'green' or 'yellow' to insert the
@@ -205,9 +231,9 @@ class Spectra(property_device.PropertyDevice):
         if position not in {'green', 'yellow'}:
             raise ValueError('"position" parameter must be either "green" or "yellow"')
         if position == 'green':
-            self._iotool.execute(*self._iotool.commands.spectra_enable_green())
+            self._iotool.execute(self._iotool_enable_green_command())
         else:
-            self._iotool.execute(*self._iotool.commands.spectra_enable_yellow())
+            self._iotool.execute(self._iotool_enable_yellow_command())
         time.sleep(self._spconfig.FILTER_SWITCH_DELAY)
         self._green_yellow_pos = position
         self._update_property('green_yellow_filter', position)

@@ -110,10 +110,10 @@ class Serial(serialposix.Serial):
             raise k
 
     def read_all_buffered(self):
-        return self.read(self.in_waiting())
+        return self.read(self.in_waiting)
 
     def clear_input_buffer(self):
-        while self.in_waiting():
+        while self.in_waiting:
             if len(self.read_all_buffered()) > 0:
                 time.sleep(0.01)
 
@@ -140,8 +140,8 @@ class Serial(serialposix.Serial):
                 # is nothing to read.
                 if not ready:
                     raise SerialTimeout()   # timeout
-                in_recv_buffer = serialposix.Serial.in_waiting.fget(self)
-                buf = os.read(self.fd, max(in_recv_buffer, ml))
+                in_recv_buffer = serialposix.Serial.in_waiting.fget(self) # call the superclass property getter...
+                buf = os.read(self.fd, in_recv_buffer)
                 # read should always return some data as select reported it was
                 # ready to read when we get to this point.
                 if not buf:

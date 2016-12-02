@@ -96,13 +96,11 @@ class FilterCube(enumerated_properties.DictProperty):
     def _get_hw_to_usr(self):
         min_pos = int(self._il.send_message(GET_MIN_POS_IL_TURRET, async=False, intent="get IL turret minimum position").response)
         max_pos = int(self._il.send_message(GET_MAX_POS_IL_TURRET, async=False, intent="get IL turret maximum position").response)
-        # NB: All positions in our filter cube turret are occupied and the manual does not describe the response to
-        # a name query for an empty position. I assume that it is "-" or "", but this assumption may require correction
-        # if we ever do come to have an empty position.
+        # Empty filter positions can have odd names, like '-' or '-1'. Filter them out directly.
         d = {}
         for i in range(min_pos, max_pos+1):
             name = self._il.send_message(GET_CUBENAME, i, async=False, intent="get filter cube name").response[1:].strip()
-            if len(name) != 0 and name != '-':
+            if len(name) != 0 and name not in {'-', '-1'}:
                 d[i] = name
         return d
 

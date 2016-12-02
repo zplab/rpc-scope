@@ -64,9 +64,10 @@ class TemperatureController(property_device.PropertyDevice):
     def get_temperature(self):
         temp = self._get_temperature()
         self._update_property('temperature', temp)
+        return temp
 
     def set_target_temperature(self, temp):
-        temp_out = self._set_target_temperature()
+        temp_out = self._set_target_temperature(temp)
         self._update_property('target_temperature', temp_out)
 
 

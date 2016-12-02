@@ -33,7 +33,7 @@ from . import tl_lamp
 ExposureStep = collections.namedtuple('ExposureStep', ['exposure_ms', 'lamp', 'tl_intensity', 'delay_after_ms', 'on_delay_ms', 'off_delay_ms'])
 
 class AcquisitionSequencer:
-    def __init__(self, camera: andor.Camera, iotool: iotool.IOTool, spectra: spectra.Spectra, tl_lamp: tl_lamp.SutterLED_Lamp):
+    def __init__(self, camera: andor.Camera, iotool: iotool.IOTool, spectra: spectra.SpectraX, tl_lamp: tl_lamp.SutterLED_Lamp):
         self._camera = camera
         self._iotool = iotool
         self._spectra = spectra
@@ -149,7 +149,7 @@ class AcquisitionSequencer:
         iotool_steps = []
         self._fire_all_time = [] # contains the total time for each step that the camera is in "fire all" mode. This plus the readout time is the actual exposure time (for dark current calculations)
         commands = self._iotool.commands
-        cam_config = self._config.iotool
+        cam_config = self._config.camera
         iotool_steps.append(commands.wait_time(20)) # configure a 20 microsecond debounce-wait for high/low signals to stabilize
         iotool_steps.append(commands.wait_high(cam_config.IOTOOL_PINS.arm))
         for step in self._steps:
@@ -161,16 +161,16 @@ class AcquisitionSequencer:
             iotool_steps.append(commands.wait_high(cam_config.IOTOOL_PINS.aux_out1)) # AuxOut1 is set to 'FireAll'
             # Now turn on the required lamp (either TL or Spectra X)
             if step.lamp == 'TL':
-                iotool_steps.extend(commands.transmitted_lamp(enabled=True, intensity=step.tl_intensity))
+                iotool_steps.extend(self._tl_lamp._iotool_lamp_commands(enabled=True, intensity=step.tl_intensity))
             else:
-                iotool_steps.extend(commands.spectra_lamps(**{lamp:True for lamp in step.lamp}))
+                iotool_steps.extend(self._spectra._iotool_lamp_commands(**{lamp:True for lamp in step.lamp}))
             # wait the required amount of time for the lamp to turn on and expose the image (as calculated in add_step)
             iotool_steps += self._add_delay(step.on_delay_ms)
             # Now turn off the lamp.
             if step.lamp == 'TL':
-                iotool_steps.extend(commands.transmitted_lamp(enabled=False))
+                iotool_steps.extend(self._tl_lamp._iotool_lamp_commands(enabled=False))
             else:
-                iotool_steps.extend(commands.spectra_lamps(**{lamp:False for lamp in step.lamp}))
+                iotool_steps.extend(self._spectra._iotool_lamp_commands(**{lamp:False for lamp in step.lamp}))
             # Now wait for the lamp to go off, plus any extra requested delay.
             total_off_delay = step.off_delay_ms + step.delay_after_ms
             iotool_steps += self._add_delay(total_off_delay)

@@ -38,16 +38,17 @@ class Scope(message_device.AsyncDeviceNamespace):
     def __init__(self, property_server=None):
         super().__init__()
 
+        self._property_server = property_server
         if property_server is not None:
             self.rebroadcast_properties = property_server.rebroadcast_properties
 
-        self._components = {}
+        self._components = []
 
         self.get_configuration = scope_configuration.get_config
         config = self.get_configuration()
         for attr_name, component_class_path in config.drivers:
             module_name, class_name = component_class_path.rsplit('.', 1)
-            module = importlib.import_module('.device.'+module_name, __name__)
+            module = importlib.import_module('.device.'+module_name, __package__)
             component_class = getattr(module, class_name)
             self.initialize_component(attr_name, component_class)
 
@@ -56,14 +57,17 @@ class Scope(message_device.AsyncDeviceNamespace):
         for kwarg, requires_class in component_class.__init__.__annotations__.items():
             # scope component classes require annotations for all dependencies in the
             # init function (except property server stuff, which is handled below)
-            try:
-                kws[kwarg] = self._components[requires_class]
-            except KeyError:
+            for component in self._components:
+                if isinstance(component, requires_class):
+                    kws[kwarg] = component
+                    break
+            if kwarg not in kws:
+                logger.warning('Could not initialize {}: requires {}', component_class.__name__, requires_class.__name__)
                 return False
 
         if issubclass(component_class, property_device.PropertyDevice):
-            kws['property_server'] = self.property_server
-            property_path = ['self'] + component_class.attr_name.split('.')
+            kws['property_server'] = self._property_server
+            property_path = ['scope'] + attr_name.split('.')
             filtered = [entry for entry in property_path if not entry.startswith('_')]
             kws['property_prefix'] = '.'.join(filtered) + '.'
 
@@ -74,15 +78,15 @@ class Scope(message_device.AsyncDeviceNamespace):
 
         try:
             description = component_class._DESCRIPTION
-        execpt AttributeError:
+        except AttributeError:
             description = component_class.__name__
 
         if expected_errs:
-            logger.info('Looking for {}...'.format(description))
+            logger.info('Looking for {}...', description)
         try:
             component = component_class(**kws)
         except expected_errs:
-            logger.log_exception('Could not connect to {}:'.format(description))
+            logger.log_exception('Could not connect to {}:', description)
 
         owner = self
         *attr_path, name = attr_name.split('.')
@@ -94,5 +98,5 @@ class Scope(message_device.AsyncDeviceNamespace):
                 setattr(owner, elem, namespace)
                 owner = namespace
         setattr(owner, name, component)
-        self._components[component_class] = component
+        self._components.append(component)
         return True
