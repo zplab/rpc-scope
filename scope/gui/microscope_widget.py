@@ -352,7 +352,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                     try:
                         update_low_limit(new_low_limit)
                     except rpc_client.RPCError as e:
-                        error = 'Could not set {} axis to {} ({}).'format(axis_name, new_low_limit, e.args[0])
+                        error = 'Could not set {} axis to {} ({}).'.format(axis_name, new_low_limit, e.args[0])
                         Qt.QMessageBox.warning(self, 'RPC Exception', error)
             low_limit_text_widget.returnPressed.connect(submit_low_limit_text)
 
