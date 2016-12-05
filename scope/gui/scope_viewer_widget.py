@@ -30,6 +30,11 @@ import ris_widget.ris_widget
 import ris_widget.qwidgets.layer_table
 from .. import scope_client
 
+# TODO: Should live_target be a flipbook entry instead of a layer?
+# If so, get rid of the layer-name showing.
+# TODO: Fix vignette masking to use center and radius, and to have some
+# UI for selecting same. Also, remove openmp stuff.
+
 # Show layer name column in LayerTable
 ris_widget.qwidgets.layer_table.LayerTableModel.PROPERTIES.insert(
     ris_widget.qwidgets.layer_table.LayerTableModel.PROPERTIES.index('opacity') + 1, 'name')

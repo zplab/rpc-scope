@@ -29,6 +29,8 @@ from ..simple_rpc import rpc_client
 INT_MIN, INT_MAX = 1, None
 FLOAT_MIN, FLOAT_MAX, FLOAT_DECIMALS = 0, None, 3
 
+# TODO: make advanced properties a separate widget.
+
 class AndorCameraWidget(device_widget.DeviceWidget):
     PROPERTY_ROOT = 'scope.camera.'
 

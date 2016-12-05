@@ -104,7 +104,10 @@ class ManualNosepiece(stand.LeicaComponent):
         '''Returns a list of objective magnifications. List index corresponds to objective position. None values
         in the list represent empty objective turret positions. For example, [None, 10, 5] indicates that there
         is no objective at position 0, a 10x objective at position 1, and a 5x objective at objective turret position
-        2.'''
+        2.
+
+        Note that position 0 always has no objective, as it is the special signal for "between positions".
+        '''
         return self._mags
 
     def _on_turret_moved_event(self, response):

@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-# Authors: Erik Hvatum <ice.rikh@gmail.com>
+# Authors: Zach Pincus <zpincus@wustl.edu> and Erik Hvatum <ice.rikh@gmail.com>
 
 import enum
 from pathlib import Path
@@ -28,47 +28,44 @@ from PyQt5 import Qt
 from . import device_widget
 from ..simple_rpc import rpc_client
 
-class PT(enum.Enum):
-    Bool = 0
-    Int = 1
-    Enum = 2
-    Objective = 3
-    StageAxisPos = 4
-
 class MicroscopeWidget(device_widget.DeviceWidget):
     PROPERTY_ROOT = 'scope.'
     PROPERTIES = [
-#       ('stand.active_microscopy_method', PT.Enum, 'stand.available_microscopy_methods'),
-        ('nosepiece.position', PT.Objective, 'nosepiece.all_objectives'),
-#       ('nosepiece.safe_mode', PT.Bool),
-#       ('nosepiece.immersion_mode', PT.Bool),
-        ('il.shutter_open', PT.Bool),
-        ('tl.shutter_open', PT.Bool),
-        ('il.field_wheel', PT.Enum, 'il.field_wheel_positions'),
-        ('il.filter_cube', PT.Enum, 'il.filter_cube_values'),
+        # tuple contains: property, type, and zero or more args that are passed to
+        # the 'make_'+type+'widget() function.
+#       ('stand.active_microscopy_method', 'enum', 'stand.available_microscopy_methods'),
+        ('nosepiece.position', 'objective'),
+#       ('nosepiece.safe_mode', 'bool'),
+#       ('nosepiece.immersion_mode', 'bool'),
+        ('il.shutter_open', 'bool'),
+        ('tl.shutter_open', 'bool'),
+        ('il.field_wheel', 'enum', 'il.field_wheel_positions'),
+        ('il.filter_cube', 'enum', 'il.filter_cube_values'),
         # The final element of the 'tl.aperature_diaphragm' tuple, 'scope.nosepiece.position', indicates
         # that 'tl.aperture_diaphragm_range' may change with 'scope.nosepiece.position'.  So,
         # 'tl.aperture_diaphragm_range' should be refreshed upon 'scope.nosepiece.position' change.
-        ('tl.aperture_diaphragm', PT.Int, 'tl.aperture_diaphragm_range', 'nosepiece.position'),
-        ('tl.field_diaphragm', PT.Int, 'tl.field_diaphragm_range', 'nosepiece.position'),
-        ('tl.condenser_retracted', PT.Bool),
-        ('stage.xy_fine_manual_control', PT.Bool),
-        ('stage.z_fine_manual_control', PT.Bool),
+        ('tl.aperture_diaphragm', 'int', 'tl.aperture_diaphragm_range', 'nosepiece.position'),
+        ('tl.field_diaphragm', 'int', 'tl.field_diaphragm_range', 'nosepiece.position'),
+        ('tl.condenser_retracted', 'bool'),
+        ('stage.xy_fine_manual_control', 'bool'),
+        ('stage.z_fine_manual_control', 'bool'),
         # TODO: use hard max values read from scope, if possible
-        ('stage.x', PT.StageAxisPos, 'stage', 'x', 225),
-        ('stage.y', PT.StageAxisPos, 'stage', 'y', 76),
-        ('stage.z', PT.StageAxisPos, 'stage', 'z', 26, 'nosepiece.position')
+        # TODO: If not possible, verify that hard max values are identical across all scopes
+        # otherwise make this a config parameter.
+        ('stage.x', 'stage_axis_pos', 225),
+        ('stage.y', 'stage_axis_pos', 76),
+        ('stage.z', 'stage_axis_pos', 26)
     ]
 
     @classmethod
     def can_run(cls, scope):
         # We're useful if at least one of our properties can be read.  Properties that can not be read
         # when the widget is created are not shown in the GUI.
-        for ppath, *_ in cls.PROPERTIES:
+        for property, *rest in cls.PROPERTIES:
             attr = scope
             try:
-                for attr_name in ppath.split('.'):
-                    attr = getattr(attr, attr_name)
+                for name in property.split('.'):
+                    attr = getattr(attr, name)
             except:
                 continue
             return True
@@ -80,58 +77,55 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         self.setWindowTitle('Microscope')
         self.setLayout(Qt.QGridLayout())
         self.scope = scope
-        self.widget_makers = {
-            PT.Bool : self.make_bool_widget,
-            PT.Int : self.make_int_widget,
-            PT.StageAxisPos : self.make_stage_axis_pos_widget,
-            PT.Enum : self.make_enum_widget,
-            PT.Objective : self.make_objective_widget}
-        for ptuple in self.PROPERTIES:
-            self.make_widgets_for_property(ptuple)
+        for property, widget_type, *widget_args in self.PROPERTIES:
+            self.make_widgets_for_property(self.PROPERTY_ROOT + property, widget_type, widget_args)
         self.layout().addItem(Qt.QSpacerItem(
             0, 0, Qt.QSizePolicy.MinimumExpanding, Qt.QSizePolicy.MinimumExpanding), self.layout().rowCount(), 0,
             1,  # Spacer is just one logical row tall (that row stretches vertically to occupy all available space)...
             -1) # ... and, it spans all the columns in its row
 
-    def pattr(self, ppath):
+    def get_scope_attr(self, property):
+        """look up an attribute on the scope object by property name, which is
+        expected to start with 'scope.' -- e.g. 'scope.stage.z_high_soft_limit'
+        """
         attr = self.scope
-        for attr_name in ppath.split('.'):
-            attr = getattr(attr, attr_name)
+        for name in property.split('.')[1:]:
+            attr = getattr(attr, name)
         return attr
 
-    def make_widgets_for_property(self, ptuple):
+    def make_widgets_for_property(self, property, widget_type, widget_args):
         try:
-            self.pattr(ptuple[0])
-        except:
-            e = 'Failed to read value of "{}{}", so this property will not be presented in the GUI.'
-            Qt.qDebug(e.format(self.PROPERTY_ROOT, ptuple[0]))
+            self.get_scope_attr(property)
+        except AttributeError:
+            # The property isn't available for this scope object, so don't
+            # make a widget for it.
+            # e = 'Failed to read value of "{}", so this property will not be presented in the GUI.'.format(property)
+            # Qt.qDebug(e)
             return
         layout = self.layout()
         row = layout.rowCount()
-        label = Qt.QLabel(ptuple[0] + ':')
+        label = Qt.QLabel(property[len(self.PROPERTY_ROOT):] + ':') # strip the 'scope.' off
         layout.addWidget(label, row, 0)
-        widget = self.widget_makers[ptuple[1]](*ptuple)
+        widget = getattr(self, 'make_{}_widget'.format(widget_type))(property, *widget_args)
         layout.addWidget(widget, row, 1)
-        return label, widget
 
-    def make_bool_widget(self, rppath, pt):
+    def make_bool_widget(self, property):
         widget = Qt.QCheckBox()
-        ppath = self.PROPERTY_ROOT + rppath
-        update = self.subscribe(ppath, callback=widget.setChecked)
+        update = self.subscribe(property, callback=widget.setChecked)
         if update is None:
-            raise TypeError('{} is not a writable property!'.format(ppath))
-        def gui_changed(value):
-            try:
-                update(value)
-            except rpc_client.RPCError as e:
-                error = 'Could not set {} ({}).'.format(ppath, e.args[0])
-                Qt.QMessageBox.warning(self, 'Invalid Value', error)
-        widget.toggled.connect(gui_changed)
+            widget.setEnabled(False)
+        else:
+            def gui_changed(value):
+                try:
+                    update(value)
+                except rpc_client.RPCError as e:
+                    error = 'Could not set {} ({}).'.format(property, e.args[0])
+                    Qt.QMessageBox.warning(self, 'Invalid Value', error)
+            widget.toggled.connect(gui_changed)
         return widget
 
-    def make_int_widget(self, rppath, pt, range_rppath, provoke_update_rppath):
+    def make_int_widget(self, property, range_property, range_depends_on_property):
         widget = Qt.QWidget()
-        ppath = self.PROPERTY_ROOT + rppath
         layout = Qt.QHBoxLayout()
         widget.setLayout(layout)
         slider = Qt.QSlider(Qt.Qt.Horizontal)
@@ -139,97 +133,87 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         layout.addWidget(slider)
         spinbox = Qt.QSpinBox()
         layout.addWidget(spinbox)
-        handling_change = False
-        def prop_changed(value):
-            nonlocal handling_change
+        handling_change = Condition() # acts as false, except when in a with-block, where it acts as true
+
+        def range_changed(_):
             if handling_change:
                 return
-            handling_change = True
-            try:
+            with handling_change:
+                range = self.get_scope_attr(self.PROPERTY_ROOT + range_property)
+                slider.setRange(*range)
+                spinbox.setRange(*range)
+        self.subscribe(self.PROPERTY_ROOT + range_depends_on_property, callback=range_changed)
+
+        def prop_changed(value):
+            if handling_change:
+                return
+            with handling_change:
                 slider.setValue(value)
                 spinbox.setValue(value)
-            finally:
-                handling_change = False
-        def range_changed(_):
-            nonlocal handling_change
-            if handling_change:
-                return
-            handling_change = True
-            try:
-                range_ = self.pattr(range_rppath)
-                slider.setRange(*range_)
-                spinbox.setRange(*range_)
-            finally:
-                handling_change = False
-        def gui_changed(value):
-            nonlocal handling_change
-            if handling_change:
-                return
-            handling_change = True
-            try:
-                update(value)
-            finally:
-                handling_change = False
-        update = self.subscribe(ppath, callback=prop_changed)
+        update = self.subscribe(property, callback=prop_changed)
+
         if update is None:
-            raise TypeError('{} is not a writable property!'.format(ppath))
-        self.subscribe(self.PROPERTY_ROOT + provoke_update_rppath, callback=range_changed)
-        slider.valueChanged[int].connect(gui_changed)
-        spinbox.valueChanged[int].connect(gui_changed)
+            spinbox.setEnabled(False)
+            slider.setEnabled(False)
+        else:
+            def gui_changed(value):
+                if handling_change:
+                    return
+                with handling_change:
+                    update(value)
+
+            # TODO: verify the below doesn't blow up without indexing the
+            # overloaded valueChanged signal as [int]
+            slider.valueChanged.connect(gui_changed)
+            spinbox.valueChanged.connect(gui_changed)
         return widget
 
-    def make_enum_widget(self, rppath, pt, choices_rppath):
+    def make_enum_widget(self, property, choices_property):
         widget = Qt.QComboBox()
         widget.setEditable(False)
-        ppath = self.PROPERTY_ROOT + rppath
-        widget.addItems(sorted(self.pattr(choices_rppath)))
-        update = self.subscribe(ppath, callback=widget.setCurrentText)
+        widget.addItems(sorted(self.get_scope_attr(self.PROPERTY_ROOT + choices_property)))
+        update = self.subscribe(property, callback=widget.setCurrentText)
         if update is None:
-            raise TypeError('{} is not a writable property!'.format(ppath))
-        def gui_changed(value):
-            try:
-                update(value)
-            except rpc_client.RPCError as e:
-                error = 'Could not set {} ({}).'.format(ppath, e.args[0])
-                Qt.QMessageBox.warning(self, 'RPC Exception', error)
-        widget.currentTextChanged.connect(gui_changed)
+            widget.setEnabled(False)
+        else:
+            def gui_changed(value):
+                try:
+                    update(value)
+                except rpc_client.RPCError as e:
+                    error = 'Could not set {} ({}).'.format(property, e.args[0])
+                    Qt.QMessageBox.warning(self, 'RPC Exception', error)
+            widget.currentTextChanged.connect(gui_changed)
         return widget
 
-    def make_objective_widget(self, rppath, pt, objectives_rppath):
+    def make_objective_widget(self, property):
         widget = Qt.QComboBox()
         widget.setEditable(False)
-        ppath = self.PROPERTY_ROOT + rppath
-        mags = self.pattr(objectives_rppath)
+        mags = self.get_scope_attr(self.PROPERTY_ROOT + 'nosepiece.all_objectives')
         model = _ObjectivesModel(mags, widget.font(), self)
         widget.setModel(model)
         def prop_changed(value):
             widget.setCurrentIndex(value)
-        update = self.subscribe(ppath, callback=prop_changed)
+        update = self.subscribe(property, callback=prop_changed)
         if update is None:
-            raise TypeError('{} is not a writable property!'.format(ppath))
-        def gui_changed(value):
-            try:
-                update(value)
-            except rpc_client.RPCError as e:
-                error = 'Could not set {} ({}).'.format(ppath, e.args[0])
-                Qt.QMessageBox.warning(self, 'RPC Exception', error)
-        widget.currentIndexChanged[int].connect(gui_changed)
+            widget.setEnabled(False)
+        else:
+            def gui_changed(value):
+                try:
+                    update(value)
+                except rpc_client.RPCError as e:
+                    error = 'Could not set {} ({}).'.format(property, e.args[0])
+                    Qt.QMessageBox.warning(self, 'RPC Exception', error)
+            # TODO: verify the below doesn't blow up without indexing the
+            # overloaded currentIndexChanged signal as [int]
+            widget.currentIndexChanged.connect(gui_changed)
         return widget
 
-    def make_stage_axis_pos_widget(self, rppath, pt, stage_rppath, axis_name, axis_max_val, provoke_update_rppath=None):
-        device = self.pattr(stage_rppath)
+    def make_stage_axis_pos_widget(self, property, axis_max_val):
         widget = Qt.QWidget()
         vlayout = Qt.QVBoxLayout()
         widget.setLayout(vlayout)
-        handling_low_soft_limit_change = False
-        handling_high_soft_limit_change = False
-        handling_pos_change = False
-        props = self.scope_properties.properties
-        low_limit_rppath = '{}.{}_low_soft_limit'.format(stage_rppath, axis_name)
-        low_limit_ppath = self.PROPERTY_ROOT + low_limit_rppath
-        pos_ppath = self.PROPERTY_ROOT + rppath
-        high_limit_rppath = '{}.{}_high_soft_limit'.format(stage_rppath, axis_name)
-        high_limit_ppath = self.PROPERTY_ROOT + high_limit_rppath
+        axis_name = property.split('.')[-1]
+        props = self.scope_properties.properties # dict of tracked properties, updated by property client
 
         # [low limits status indicator] [-------<slider>-------] [high limits status indicator]
         hlayout = Qt.QHBoxLayout()
@@ -247,12 +231,16 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         high_limit_status_label.setPixmap(self.limit_pixmaps_and_tooltips.high_no_limit_pm)
         hlayout.addWidget(high_limit_status_label)
         vlayout.addLayout(hlayout)
-        at_ls_pname = '{}{}.at_{}_low_soft_limit'.format(self.PROPERTY_ROOT, stage_rppath, axis_name)
-        at_lh_pname = '{}{}.at_{}_low_hard_limit'.format(self.PROPERTY_ROOT, stage_rppath, axis_name)
+
+        at_ls_property = self.PROPERTY_ROOT + 'stage.at_{}_low_soft_limit'.format(axis_name)
+        at_lh_property = self.PROPERTY_ROOT + 'stage.at_{}_low_hard_limit'.format(axis_name)
+        at_hs_property = self.PROPERTY_ROOT + 'stage.at_{}_high_soft_limit'.format(axis_name)
+        at_hh_property = self.PROPERTY_ROOT + 'stage.at_{}_high_hard_limit'.format(axis_name)
+
         def at_low_limit_prop_changed(_):
             try:
-                at_s = props[at_ls_pname]
-                at_h = props[at_lh_pname]
+                at_s = props[at_ls_property]
+                at_h = props[at_lh_property]
             except KeyError:
                 return
             if at_s and at_h:
@@ -269,14 +257,12 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 tt = self.limit_pixmaps_and_tooltips.low_no_limit_tt
             low_limit_status_label.setPixmap(pm)
             low_limit_status_label.setToolTip(tt)
-        self.subscribe(at_ls_pname, at_low_limit_prop_changed)
-        self.subscribe(at_lh_pname, at_low_limit_prop_changed)
-        at_hs_pname = '{}{}.at_{}_high_soft_limit'.format(self.PROPERTY_ROOT, stage_rppath, axis_name)
-        at_hh_pname = '{}{}.at_{}_high_hard_limit'.format(self.PROPERTY_ROOT, stage_rppath, axis_name)
+        self.subscribe(at_ls_property, at_low_limit_prop_changed)
+        self.subscribe(at_lh_property, at_low_limit_prop_changed)
         def at_high_limit_prop_changed(_):
             try:
-                at_s = props[at_hs_pname]
-                at_h = props[at_hh_pname]
+                at_s = props[at_hs_property]
+                at_h = props[at_hh_property]
             except KeyError:
                 return
             if at_s and at_h:
@@ -293,13 +279,13 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 tt = self.limit_pixmaps_and_tooltips.high_no_limit_tt
             high_limit_status_label.setPixmap(pm)
             high_limit_status_label.setToolTip(tt)
-        self.subscribe(at_hs_pname, at_high_limit_prop_changed)
-        self.subscribe(at_hh_pname, at_high_limit_prop_changed)
+        self.subscribe(at_hs_property, at_high_limit_prop_changed)
+        self.subscribe(at_hh_property, at_high_limit_prop_changed)
 
         # [stop] [low soft limit text edit] [position text edit] [high soft limit text edit] [reset high soft limit button]
         hlayout = Qt.QHBoxLayout()
         stop_button = Qt.QPushButton(widget.style().standardIcon(Qt.QStyle.SP_BrowserStop), '')
-        stop_button.setToolTip('Stop movement along {}.'.format(rppath))
+        stop_button.setToolTip('Stop movement along {} axis.'.format(axis_name))
         stop_button.setEnabled(False)
         hlayout.addWidget(stop_button)
         low_limit_text_widget = FocusLossSignalingLineEdit()
@@ -325,125 +311,128 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         )
         hlayout.addWidget(reset_limits_button)
         vlayout.addLayout(hlayout)
+
         def moving_along_axis_changed(value):
             stop_button.setEnabled(value)
+        self.subscribe('{}stage.moving_along_{}'.format(self.PROPERTY_ROOT, axis_name), moving_along_axis_changed)
+
         def stop_moving_along_axis():
             try:
-                self.pattr('{}.stop_{}'.format(stage_rppath, axis_name))()
+                self.get_scope_attr(self.PROPERTY_ROOT+'stage.stop_{}'.format(axis_name))()
             except rpc_client.RPCError as e:
-                error = 'Could not stop movement along {} ({}).'.format(rppath, e.args[0])
+                error = 'Could not stop movement along {} axis ({}).'.format(axis_name, e.args[0])
                 Qt.QMessageBox.warning(self, 'RPC Exception', error)
+        # TODO: verify the below doesn't blow up without indexing the
+        # overloaded clicked signal as [bool]
+        stop_button.clicked.connect(stop_moving_along_axis)
+
+        # low limit sub-widget
+        low_limit_property = self.PROPERTY_ROOT + 'stage.{}_low_soft_limit'.format(axis_name)
+        handling_low_soft_limit_change = Condition() # start out false, except when used as with-block context manager
         def low_limit_prop_changed(value):
-            nonlocal handling_low_soft_limit_change
             if handling_low_soft_limit_change:
                 return
-            handling_low_soft_limit_change = True
-            try:
+            with handling_low_soft_limit_change:
                 low_limit_text_widget.setText(str(value))
                 pos_text_validator.setBottom(value)
                 high_limit_text_validator.setBottom(value)
-            finally:
-                handling_low_soft_limit_change = False
-        def submit_low_limit_text():
-            nonlocal handling_low_soft_limit_change
-            if handling_low_soft_limit_change:
-                return
-            handling_low_soft_limit_change = True
-            try:
-                new_low_limit = float(low_limit_text_widget.text())
-                try:
-                    update_low_limit(new_low_limit)
-                except rpc_client.RPCError as e:
-                    error = 'Could not set {}.{} to {} ({}).'
-                    error = error.format(stage_rppath, axis_name, new_low_limit, e.args[0])
-                    Qt.QMessageBox.warning(self, 'RPC Exception', error)
-            except ValueError:
-                pass
-            finally:
-                handling_low_soft_limit_change = False
-        def low_limit_text_focus_lost():
-            low_limit_text_widget.setText(str(props.get(low_limit_ppath, '')))
-        def pos_prop_changed(value):
-            nonlocal handling_pos_change
+
+        update_low_limit = self.subscribe(low_limit_property, low_limit_prop_changed)
+        if update_low_limit is None:
+            low_limit_text_widget.setEnabled(False)
+        else:
+            def submit_low_limit_text():
+                if handling_low_soft_limit_change:
+                    return
+                with handling_low_soft_limit_change:
+                    try:
+                        new_low_limit = float(low_limit_text_widget.text())
+                    except ValueError:
+                        return
+                    try:
+                        update_low_limit(new_low_limit)
+                    except rpc_client.RPCError as e:
+                        error = 'Could not set {} axis to {} ({}).'format(axis_name, new_low_limit, e.args[0])
+                        Qt.QMessageBox.warning(self, 'RPC Exception', error)
+            low_limit_text_widget.returnPressed.connect(submit_low_limit_text)
+
+            def low_limit_text_focus_lost():
+                low_limit_text_widget.setText(str(props.get(low_limit_property, '')))
+
+            low_limit_text_widget.focus_lost.connect(low_limit_text_focus_lost)
+
+        # position sub-widget
+        handling_pos_change = Condition()
+        def position_changed(value):
             if handling_pos_change:
                 return
-            handling_pos_change = True
-            try:
+            with handling_pos_change:
                 pos_text_widget.setText(str(value))
                 pos_slider.setValue(value * pos_slider_factor)
-            finally:
-                handling_pos_change = False
+
+        self.subscribe(property, position_changed)
+        get_pos = getattr(self.scope.stage, '_get_{}'.format(axis_name))
+        set_pos = getattr(self.scope.stage, '_set_{}'.format(axis_name))
+
         def submit_pos_text():
-            nonlocal handling_pos_change
             if handling_pos_change:
                 return
-            handling_pos_change = True
-            try:
-                new_pos = float(pos_text_widget.text())
+            with handling_pos_change:
+                try:
+                    new_pos = float(pos_text_widget.text())
+                except ValueError:
+                    return
                 if new_pos != get_pos():
                     try:
                         set_pos(new_pos, async='fire_and_forget')
                     except rpc_client.RPCError as e:
-                        error = 'Could not set {} to {} ({}).'.format(rppath, new_pos, e.args[0])
+                        error = 'Could not set {} axis to {} ({}).'.format(axis_name, new_pos, e.args[0])
                         Qt.QMessageBox.warning(self, 'RPC Exception', error)
-            except ValueError:
-                pass
-            finally:
-                handling_pos_change = False
+        pos_text_widget.returnPressed.connect(submit_pos_text)
+
         def pos_text_focus_lost():
-            pos_text_widget.setText(str(props.get(pos_ppath, '')))
+            pos_text_widget.setText(str(props.get(property, '')))
+        pos_text_widget.focus_lost.connect(pos_text_focus_lost)
+
+        # high limit sub-widget
+        high_limit_property = self.PROPERTY_ROOT + 'stage.{}_high_soft_limit'.format(axis_name)
+        handling_high_soft_limit_change = Condition()
         def high_limit_prop_changed(value):
-            nonlocal handling_high_soft_limit_change
             if handling_high_soft_limit_change:
                 return
-            handling_high_soft_limit_change = True
-            try:
+            with handling_high_soft_limit_change:
                 high_limit_text_widget.setText(str(value))
                 pos_text_validator.setTop(value)
                 low_limit_text_validator.setTop(value)
-            finally:
-                handling_high_soft_limit_change = False
-        def submit_high_limit_text():
-            nonlocal handling_high_soft_limit_change
-            if handling_high_soft_limit_change:
-                return
-            handling_high_soft_limit_change = True
-            try:
-                new_high_limit = float(high_limit_text_widget.text())
-                try:
-                    update_high_limit(new_high_limit)
-                except rpc_client.RPCError as e:
-                    error = 'Could not set {}.{} to {} ({}).'
-                    error = error.format(stage_rppath, axis_name, new_high_limit, e.args[0])
-                    Qt.QMessageBox.warning(self, 'RPC Exception', error)
-            except ValueError:
-                pass
-            finally:
-                handling_high_soft_limit_change = False
-        def high_limit_text_focus_lost():
-            high_limit_text_widget.setText(str(props.get(high_limit_ppath, '')))
+        update_high_limit = self.subscribe(high_limit_property, high_limit_prop_changed)
+        if update_high_limit is None:
+            high_limit_text_widget.setEnabled(False)
+        else:
+            def submit_high_limit_text():
+                if handling_high_soft_limit_change:
+                    return
+                with handling_high_soft_limit_change:
+                    try:
+                        new_high_limit = float(high_limit_text_widget.text())
+                    except ValueError:
+                        return
+                    try:
+                        update_high_limit(new_high_limit)
+                    except rpc_client.RPCError as e:
+                        error = 'Could not set {} axis to {} ({}).'.format(name, new_high_limit, e.args[0])
+                        Qt.QMessageBox.warning(self, 'RPC Exception', error)
+            high_limit_text_widget.returnPressed.connect(submit_high_limit_text)
+
+            def high_limit_text_focus_lost():
+                high_limit_text_widget.setText(str(props.get(high_limit_property, '')))
+            high_limit_text_widget.focus_lost.connect(high_limit_text_focus_lost)
+
         def reset_limits_button_clicked(_):
             update_low_limit(0.0)
-            self.pattr('{}.reset_{}_high_soft_limit'.format(stage_rppath, axis_name))()
-            
-        stop_button.clicked[bool].connect(stop_moving_along_axis)
-        self.subscribe('{}{}.moving_along_{}'.format(self.PROPERTY_ROOT, stage_rppath, axis_name), moving_along_axis_changed)
-        update_low_limit = self.subscribe(low_limit_ppath, low_limit_prop_changed)
-        if update_low_limit is None:
-            raise TypeError('{} is not a writable property!'.format(low_limit_ppath))
-        low_limit_text_widget.returnPressed.connect(submit_low_limit_text)
-        low_limit_text_widget.focus_lost.connect(low_limit_text_focus_lost)
-        self.subscribe(pos_ppath, pos_prop_changed)
-        get_pos = getattr(device, '_get_{}'.format(axis_name))
-        set_pos = getattr(device, '_set_{}'.format(axis_name))
-        pos_text_widget.returnPressed.connect(submit_pos_text)
-        pos_text_widget.focus_lost.connect(pos_text_focus_lost)
-        update_high_limit = self.subscribe(high_limit_ppath, high_limit_prop_changed)
-        if update_high_limit is None:
-            raise TypeError('{} is not a writable property!'.format(high_limit_ppath))
-        high_limit_text_widget.returnPressed.connect(submit_high_limit_text)
-        high_limit_text_widget.focus_lost.connect(high_limit_text_focus_lost)
-        reset_limits_button.clicked[bool].connect(reset_limits_button_clicked)
+            self.get_scope_attr(self.PROPERTY_ROOT + 'stage.reset_{}_high_soft_limit'.format(axis_name))()
+        # TODO: verify the below doesn't blow up without indexing the
+        # overloaded clicked signal as [bool]
+        reset_limits_button.clicked.connect(reset_limits_button_clicked)
 
         # We do not receive events for z high soft limit changes initiated by means other than assigning
         # to scope.stage.z_high_soft_limit or calling scope.stage.reset_z_high_soft_limit().  However,
@@ -451,19 +440,28 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         # possible exception: it would make sense for the limit to change with objective in order to prevent
         # head crashing.  In case that happens, we refresh z high soft limit upon objective change.
         # TODO: verify that this is never needed and get rid of it if so
-        if provoke_update_rppath is not None:
+        if axis_name is 'z':
             def objective_changed(_):
-                nonlocal handling_high_soft_limit_change
                 if handling_high_soft_limit_change:
                     return
-                handling_high_soft_limit_change = True
-                try:
-                    high_limit_text_widget.setText(str(self.pattr('{}.{}_high_soft_limit'.format(stage_rppath, axis_name))))
-                finally:
-                    handling_high_soft_limit_change = False
-            self.subscribe(self.PROPERTY_ROOT + provoke_update_rppath, objective_changed)
+                with handling_high_soft_limit_change:
+                    high_limit_text_widget.setText(str(self.get_scope_attr(self.PROPERTY_ROOT + 'stage.z_high_soft_limit')))
+            self.subscribe(self.PROPERTY_ROOT + 'nosepiece.position', objective_changed)
 
         return widget
+
+class Condition:
+    def __init__(self):
+        self.condition = False
+
+    def __bool__(self):
+        return self.condition
+
+    def __enter__(self):
+        self.condition = True
+
+    def __exit__(self, *exc_info):
+        self.condition = False
 
 class _ObjectivesModel(Qt.QAbstractListModel):
     def __init__(self, mags, font, parent=None):
@@ -488,10 +486,10 @@ class _ObjectivesModel(Qt.QAbstractListModel):
             row = midx.row()
             mag = self.mags[row]
             if role == Qt.Qt.DisplayRole:
-                r = '{} : {}{}'.format(
+                r = '{}: {}{}'.format(
                     row,
                     'BETWEEN POSITIONS' if row == 0 else mag,
-                    '' if mag is None else 'x')
+                    '' if mag is None else '×')
                 return Qt.QVariant(r)
             if role == Qt.Qt.FontRole and mag is None:
                 return Qt.QVariant(self.empty_pos_font)

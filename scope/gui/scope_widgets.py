@@ -32,6 +32,8 @@ from . import microscope_widget
 from . import stage_pos_table_widget
 from . import joypad_input_widget
 
+# TODO: remove pop-in / pop-out ability.
+
 WIDGETS = {
     'camera': andor_camera_widget.AndorCameraWidget,
     'lamps': lamp_widget.LampWidget,
