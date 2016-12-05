@@ -366,7 +366,7 @@ class Camera(property_device.PropertyDevice):
 
     # STATE-STACK HANDLING
     # there are complex dependencies here. When pushing, better to set frame_count AFTER cycle_mode,
-    # and trigger_mode AFTER exposure_time, and overlap_mode after all the things it depends on.
+    # and trigger_mode AFTER exposure_time, and overlap_enabled after all the things it depends on.
     # when popping, better to go in reverse order from setting the dependent parameters like overlap and frame_count.
     # Also, always better to set frame_rate last, because many things can change the available range.
     # In all cases, want to turn off live mode ASAP or turn it on at the end
@@ -390,7 +390,17 @@ class Camera(property_device.PropertyDevice):
         return weights
 
     def _update_push_states(self, state, old_state):
-        super()._update_push_states(state, old_state)
+        keys_to_deduplicate = set(state.keys())
+        if 'trigger_mode' in keys_to_deduplicate and old_state['trigger_mode'] != state['trigger_mode']:
+            # if we're changing the trigger mode, the overlap mode may change automatically,
+            # so we don't want to assume that the old_state value is authoritative.
+            if 'overlap_enabled' in keys_to_deduplicate:
+                keys_to_deduplicate.remove('overlap_enabled')
+        for k in keys_to_deduplicate:
+            if old_state[k] == state[k]:
+                state.pop(k)
+                old_state.pop(k)
+
         if state.get('overlap_enabled', False):
             # Setting overlap_enabled can clobber the exposure time,
             # so we need to make sure to save the existing exposure time.

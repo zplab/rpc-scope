@@ -1,3 +1,5 @@
+# TODO: UGLY HACK to get around the fact that importing pyfftw after numpy breaks things on some systems (WTF?)
+import pyfftw
 import argparse
 import traceback
 
