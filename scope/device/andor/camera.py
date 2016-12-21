@@ -697,11 +697,14 @@ class Camera(property_device.PropertyDevice):
                 self._buffer_maker.queue_buffer()
         lowlevel.Command('AcquisitionStart')
 
-    def next_image(self, read_timeout_ms=lowlevel.ANDOR_INFINITE):
+    def next_image(self, read_timeout_ms=None):
         """Retrieve the next image from the image acquisition sequence. Will block
         if the image has not yet been triggered or retrieved from the camera.
         If a timeout is provided, either an image will be returned within that time
-        or an AndorError of TIMEDOUT will be raised."""
+        or an AndorError of TIMEDOUT will be raised. If the timeout is None,
+        then the call will block until an image becomes available."""
+        if read_timeout_ms is None:
+            read_timeout_ms = lowlevel.ANDOR_INFINITE
         self._buffer_maker.queue_if_needed()
         lowlevel.WaitBuffer(int(round(read_timeout_ms)))
         self._update_image_data(*self._buffer_maker.convert_buffer())
@@ -720,6 +723,9 @@ class Camera(property_device.PropertyDevice):
         self.pop_state()
         del self._buffer_maker
 
+    def flush():
+        """Flush the camera RAM, which can be used to recover from a bad state."""
+        lowlevel.Flush()
 
     def calculate_streaming_mode(self, frame_count, desired_frame_rate, **camera_params):
         """Determine the best-possible frame rate for a streaming acquisition of
