@@ -57,9 +57,9 @@ class Scope(message_device.AsyncDeviceNamespace):
         for kwarg, requires_class in component_class.__init__.__annotations__.items():
             # scope component classes require annotations for all dependencies in the
             # init function (except property server stuff, which is handled below)
-            for component in self._components:
-                if isinstance(component, requires_class):
-                    kws[kwarg] = component
+            for extant_component in self._components:
+                if isinstance(extant_component, requires_class):
+                    kws[kwarg] = extant_component
                     break
             if kwarg not in kws:
                 logger.warning('Could not initialize {}: requires {}', component_class.__name__, requires_class.__name__)
@@ -86,8 +86,8 @@ class Scope(message_device.AsyncDeviceNamespace):
         try:
             component = component_class(**kws)
         except expected_errs:
-            logger.log_exception('Could not connect to {}:', description)
-
+            logger.log_exception('Could not connect to {}:'.format(description))
+            return False
         owner = self
         *attr_path, name = attr_name.split('.')
         for elem in attr_path:
