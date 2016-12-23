@@ -82,8 +82,6 @@ class HideableWidgetContainer(Qt.QWidget):
             ll.setContentsMargins(1,1,1,1)
             self.frame.setLayout(ll)
             ll.addWidget(self.title_label)
-            ll.addSpacerItem(Qt.QSpacerItem(0, 0, Qt.QSizePolicy.Expanding))
-            ll.addWidget(self.pop_button)
             l.addWidget(contained_widget)
         else:
             l.addWidget(contained_widget)

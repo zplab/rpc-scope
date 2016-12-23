@@ -85,22 +85,16 @@ class AndorCameraWidget(device_widget.DeviceWidget):
         self.setLayout(Qt.QGridLayout())
         for row, property in enumerate(properties):
             type, readonly = property_types.get(property, ('String', True)) # if the property type isn't in the dict, assume its a readonly string
-            self.make_widgets_for_property(property, type, readonly)
-        self.layout().addItem(Qt.QSpacerItem(0, 0, Qt.QSizePolicy.MinimumExpanding, Qt.QSizePolicy.MinimumExpanding), row+1, 0,
-                                             1,  # Spacer is just one logical row tall (that row stretches vertically to occupy all available space)...
-                                             -1) # ... and, it spans all the columns in its row
+            self.make_widgets_for_property(row, property, type, readonly)
 
     def make_widgets_for_property(self, row, property, type, readonly):
         label = Qt.QLabel(property + ':')
         self.layout().addWidget(label, row, 0)
         widget = self.make_widget(property, type, readonly)
-        ret = [label, widget]
         self.layout().addWidget(widget, row, 1)
         if property in self.UNITS:
             unit_label = Qt.QLabel(self.UNITS[property])
-            ret.append(unit_label)
             self.layout().addWidget(unit_label, row, 2)
-        return ret
 
     def make_widget(self, property, type, readonly):
         if readonly:

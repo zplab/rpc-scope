@@ -49,6 +49,6 @@ class WidgetWindow(widget_column_flow_main_window.WidgetColumnFlowMainWindow):
                         self.action_toolbar = self.addToolBar('Actions')
                     self.action_toolbar.addAction(widget)
                 else:
-                    self.add_widget(widget_info['name'], widget, widget_info['docked'], widget_info['start_visible'])
+                    self.add_widget(widget, widget_info['docked'], widget_info['start_visible'])
         scope.rebroadcast_properties()
 

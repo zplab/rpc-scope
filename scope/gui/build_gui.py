@@ -35,7 +35,7 @@ def gui_main(host, desired_widgets=None):
     app = Qt.QApplication([])
 
     scope, scope_properties = scope_client.client_main(host)
-    if widgets is None:
+    if desired_widgets is None:
         widgets = WIDGETS
     else:
         desired_widgets = set(desired_widgets)
