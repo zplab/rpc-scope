@@ -115,9 +115,6 @@ class ScopeViewerWidgetQtObject(ris_widget.ris_widget.RisWidgetQtObject):
         self.layers.insert(0, t)
         return t
 
-    def embed_widget_flow_pop_button(self, pop_button):
-        self.scope_toolbar.addWidget(pop_button)
-
     def on_show_over_exposed_action_toggled(self, show_over_exposed):
         layer = self.get_live_target_layer()
         if show_over_exposed:
