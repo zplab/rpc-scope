@@ -61,30 +61,18 @@ class HideableWidgetContainer(Qt.QWidget):
         super().__init__()
         self.contained_widget = contained_widget
         l = Qt.QVBoxLayout()
-        margins = list(l.getContentsMargins())
-        margins[1] = 0
-        l.setContentsMargins(*margins)
         self.setLayout(l)
         self.docked = docked
         if docked:
-            self.frame = Qt.QFrame()
-            self.frame.setFrameStyle(Qt.QFrame.StyledPanel | Qt.QFrame.Plain)
-            self.frame.setBackgroundRole(Qt.QPalette.Shadow)
-            self.frame.setAutoFillBackground(True)
-            self.frame.setSizePolicy(Qt.QSizePolicy.Expanding, Qt.QSizePolicy.Fixed) # need for floating widgets too?
             self.title_label = Qt.QLabel()
             f = self.title_label.font()
             f.setBold(True)
             self.title_label.setAlignment(Qt.Qt.AlignLeft | Qt.Qt.AlignVCenter)
             self.title_label.setFont(f)
-            l.addWidget(self.frame)
-            ll = Qt.QVBoxLayout()
-            ll.setContentsMargins(1,1,1,1)
-            self.frame.setLayout(ll)
-            ll.addWidget(self.title_label)
-            l.addWidget(contained_widget)
-        else:
-            l.addWidget(contained_widget)
+            self.title_label.setBackgroundRole(Qt.QPalette.Shadow)
+            self.title_label.setAutoFillBackground(True)
+            l.addWidget(self.title_label)
+        l.addWidget(contained_widget)
         self.visibility_change_action = Qt.QAction(contained_widget.windowTitle(), self)
         self.visibility_change_action.setCheckable(True)
         self.visibility_change_action.setChecked(False)

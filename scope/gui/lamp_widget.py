@@ -52,8 +52,6 @@ class SpectraXWidget(device_widget.DeviceWidget):
         self.subscribe(self.PROPERTY_ROOT + 'temperature',
            callback=lambda temp: temperature_label.setText('Temperature: {}°C'.format(temp)))
 
-        container_layout.addStretch()
-
     def disable_all(self):
         for lamp_controller in self.lamp_controllers:
             lamp_controller.toggle.setChecked(False)
