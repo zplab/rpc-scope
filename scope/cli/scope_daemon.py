@@ -10,7 +10,7 @@ def main(argv):
     subparsers = parser.add_subparsers(help='sub-command help', dest='command')
     subparsers.required = True
     parser_start = subparsers.add_parser('start', help='start the microscope server, if not running')
-    parser_start.add_argument('--public', action='store_true', help='Allow network connections to the server [default: allow only local connections]')
+    parser_start.add_argument('--local', action='store_false', dest='public', help='Allow only local connections to the server [default: allow network connections]')
     parser_start.add_argument('--verbose', action='store_true', help='Log all RPC calls and property state changes.')
     parser_stop = subparsers.add_parser('stop', help='stop the microscope server, if running')
     parser_stop.add_argument('-f', '--force', action='store_true', help='forcibly kill the server process')
