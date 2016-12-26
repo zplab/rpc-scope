@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-# Authors: Erik Hvatum <ice.rikh@gmail.com>
+# Author: Zach Pincus <zpincus@wustl.edu>
 
 from PyQt5 import Qt
 from . import widget_column_flow_main_window

@@ -1,3 +1,4 @@
+
 # The MIT License (MIT)
 #
 # Copyright (c) 2015-2016 WUSTL ZPLAB
@@ -20,8 +21,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-# Authors: Erik Hvatum <ice.rikh@gmail.com>
-
+# Authors: Erik Hvatum <ice.rikh@gmail.com>, Zach Pincus <zpincus@wustl.edu>
 import contextlib
 import ctypes
 import functools
@@ -199,7 +199,7 @@ def only_for_our_device(handler):
             return handler(self, event)
     return f
 
-class JoypadInput:
+class GameControllerInput:
     # Class of thread to use for event loop (useful to swap out for a Qt thread if
     # this is to be run in a GUI context)
     THREAD_TYPE = threading.Thread
