@@ -44,13 +44,6 @@ class WidgetColumnFlowMainWindow(Qt.QMainWindow):
             container.setParent(None)
         self.visibility_toolbar.addAction(container.visibility_change_action)
 
-    def on_pop_request(self, container, out):
-        if out:
-            container.setParent(None)
-            container.show()
-        else:
-            self._w.layout().addWidget(container)
-
     def closeEvent(self, e):
         for container in self.containers:
             if not container.docked:

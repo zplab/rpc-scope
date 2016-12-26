@@ -75,7 +75,7 @@ class AndorCameraWidget(device_widget.DeviceWidget):
         self.build_gui()
 
     def build_gui(self):
-        self.setWindowTitle('Andor Camera ({})'.format(self.camera.model_name))
+        self.setWindowTitle('Camera')
         properties = ['live_mode'] + self.PROPERTIES
         property_types = dict(self.camera.andor_property_types)
         property_types['live_mode'] = ('Bool', False)
@@ -206,7 +206,7 @@ class AndorCameraWidget(device_widget.DeviceWidget):
 
 class AndorAdvancedCameraWidget(AndorCameraWidget):
     def build_gui(self):
-        self.setWindowTitle('Advanced Camera Settings')
+        self.setWindowTitle('Advanced Camera')
         property_types = dict(self.camera.andor_property_types)
         advanced_properties = sorted(property_types.keys() - set(self.PROPERTIES))
         self.add_property_rows(advanced_properties, property_types)
