@@ -69,8 +69,8 @@ class AndorCameraWidget(device_widget.DeviceWidget):
         'exposure_time': (0.001, 30000, 3)
     }
 
-    def __init__(self, host, scope, scope_properties, parent=None):
-        super().__init__(host, scope, scope_properties, parent)
+    def __init__(self, scope, scope_properties, parent=None):
+        super().__init__(scope, scope_properties, parent)
         self.camera = scope.camera
         self.build_gui()
 
