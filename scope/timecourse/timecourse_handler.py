@@ -148,7 +148,11 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         # on objective switch. That gives a sane-ish default. Then allow specific customization of
         # these values later.
         self.scope.stand.active_microscopy_method = 'TL BF'
-        self.scope.nosepiece.magnification = self.OBJECTIVE
+        try:
+            self.scope.nosepiece.magnification = self.OBJECTIVE
+        except AttributeError:
+            # non-motorized nosepiece
+            pass
         self.scope.il.shutter_open = True
         self.scope.il.spectra.lamps(**{lamp+'_enabled':False for lamp in self.scope.il.spectra.lamp_specs})
         self.scope.tl.shutter_open = True
