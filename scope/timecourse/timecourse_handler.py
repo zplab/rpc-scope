@@ -262,7 +262,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         z_max = self.experiment_metadata['z_max']
         self.scope.camera.exposure_time = self.bf_exposure
         self.scope.tl.lamp.intensity = self.tl_intensity
-        with scope.tl.lamp.in_state(enabled=True), scope.stage.in_state(z_speed=1):
+        with self.scope.tl.lamp.in_state(enabled=True), self.scope.stage.in_state(z_speed=1):
             coarse_z, fine_z = autofocus.coarse_fine_autofocus(self.scope, z_start, z_max,
                 self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
                 self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS)
