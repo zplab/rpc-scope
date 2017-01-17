@@ -92,7 +92,7 @@ def open_device(device):
         if not 0 <= device < input_device_count:
             raise ValueError('Invalid device index {}; there are only {} available devices.'.format(device, input_device_count))
         index = device
-        name = sdl2.SDL_JoystickNameForIndex(input_device_index).decode('utf-8')
+        name = sdl2.SDL_JoystickNameForIndex(index).decode('utf-8')
     else:
         name = device
         namebytes = device.encode('utf-8')
@@ -479,9 +479,9 @@ class GameControllerInput:
         ))
 
     def _handle_axis_motion(self, demand, demand_factor, invert, set_stage_velocity_method):
-            v = demand * demand_factor
-            if invert:
-                v *= -1
+        v = demand * demand_factor
+        if invert:
+            v *= -1
         try:
             set_stage_velocity_method(v)
         except RPCError as e:

@@ -10,7 +10,8 @@ scope_configuration = dict(
         ('tl', 'leica.illumination_axes.TL'),
         #('_shutter_watcher', 'leica.illumination_axes.ShutterWatcher'), # dm6000 dm6
         ('iotool', 'iotool.IOTool'),
-        ('il.spectra', 'spectra.Spectra'),
+        #('il.spectra', 'spectra.Spectra'), # dm6
+        #('il.spectra', 'spectra.SpectraX'), # dm6000 dmi8
         ('tl.lamp', 'tl_lamp.SutterLED_Lamp'),
         ('camera', 'andor.Camera'),
         ('camera.acquisition_sequencer', 'acquisition_sequencer.AcquisitionSequencer'),
@@ -101,17 +102,17 @@ scope_configuration = dict(
         ),
     ),
 
-    peltier = dict(
-        SERIAL_PORT = '/dev/ttyPeltier',
-        SERIAL_ARGS = dict(
-            baudrate = 2400
-        )
-    ),
-
-    circulator = dict(
-        SERIAL_PORT = '/dev/ttyCirculator',
-        SERIAL_ARGS = dict(
-            baudrate=9600
-        )
-    )
+    # peltier = dict(
+    #     SERIAL_PORT = '/dev/ttyPeltier',
+    #     SERIAL_ARGS = dict(
+    #         baudrate = 2400
+    #     )
+    # ),
+    #
+    # circulator = dict(
+    #     SERIAL_PORT = '/dev/ttyCirculator',
+    #     SERIAL_ARGS = dict(
+    #         baudrate=9600
+    #     )
+    # )
 )

@@ -64,7 +64,6 @@ class GameControllerInputWidget(Qt.QAction):
         self.game_controller_input = None
         self.setText('Connect Game Controller')
         Qt.QApplication.instance().aboutToQuit.connect(self.disconnect)
-        self.button_signal.connect(self.on_button_signal)
         self.connected_input_removed_signal.connect(self.on_connected_input_removed_signal)
         self.triggered.connect(self.on_triggered)
         self.connect(device)
