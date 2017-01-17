@@ -84,7 +84,7 @@ class GameControllerInputWidget(Qt.QAction):
         if self.is_connected:
             self.disconnect()
         else:
-            self.connect(device_id=None)
+            self.connect(device=None)
 
     def connect(self, device=-1):
         self.disconnect()
