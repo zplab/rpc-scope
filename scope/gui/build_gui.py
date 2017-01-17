@@ -18,10 +18,10 @@ WIDGETS = [
     dict(name='camera', cls=andor_camera_widget.AndorCameraWidget, start_visible=True, docked=True),
     dict(name='lamps', cls=lamp_widget.LampWidget, start_visible=True, docked=True),
     dict(name='microscope', cls=microscope_widget.MicroscopeWidget, start_visible=True, docked=True),
-    dict(name='game_controller', cls=game_controller_input_widget.GameControllerInputWidget, start_visible=True, docked=True),
     dict(name='advanced_camera', cls=andor_camera_widget.AndorAdvancedCameraWidget, start_visible=False, docked=False),
     dict(name='viewer', cls=scope_viewer_widget.ScopeViewerWidgetQtObject, start_visible=True, docked=False),
-    dict(name='stage_table', cls=stage_pos_table_widget.StagePosTableWidget, start_visible=False, docked=False)
+    dict(name='stage_table', cls=stage_pos_table_widget.StagePosTableWidget, start_visible=False, docked=False),
+    dict(name='game_controller', cls=game_controller_input_widget.GameControllerInputWidget)
 ]
 
 WIDGET_NAMES = set(widget['name'] for widget in WIDGETS)

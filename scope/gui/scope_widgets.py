@@ -34,6 +34,7 @@ class WidgetWindow(widget_column_flow_main_window.WidgetColumnFlowMainWindow):
         super().__init__(parent)
         self.setWindowTitle(window_title)
         self.action_toolbar = None
+        self.action_widgets = []
         for widget_info in widgets:
             widget_class = widget_info['cls']
             if widget_class.can_run(scope):
@@ -42,6 +43,7 @@ class WidgetWindow(widget_column_flow_main_window.WidgetColumnFlowMainWindow):
                     if self.action_toolbar is None:
                         self.action_toolbar = self.addToolBar('Actions')
                     self.action_toolbar.addAction(widget)
+                    self.action_widgets.append(widget) # need to keep a reference arount, otherwise it goes away
                 else:
                     self.add_widget(widget, widget_info['docked'], widget_info['start_visible'])
         scope.rebroadcast_properties()
