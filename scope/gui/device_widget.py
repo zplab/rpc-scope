@@ -42,7 +42,7 @@ class DeviceWidget(Qt.QWidget):
         else:
             return True
 
-    def __init__(self, host, scope, scope_properties, parent):
+    def __init__(self, scope, scope_properties, parent):
         super().__init__(parent)
         self.setAttribute(Qt.Qt.WA_DeleteOnClose, True)
         self.rpc_client = scope._rpc_client

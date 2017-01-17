@@ -20,17 +20,14 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-# Authors: Erik Hvatum <ice.rikh@gmail.com>
+# Author: Zach Pincus <zpincus@wustl.edu>
 
 from PyQt5 import Qt
 from . import widget_column_flow_main_window
 
 class WidgetWindow(widget_column_flow_main_window.WidgetColumnFlowMainWindow):
-    def __init__(
-            self,
-            host, scope, scope_properties, widgets, window_title='Scope Widgets', parent=None):
+    def __init__(self, scope, scope_properties, widgets, window_title='Scope Widgets', parent=None):
         """Arguments:
-            host: Hostname or IP address of scope server.
             scope, scope_properties: as returned by scope.scope_client.client_main(..).
             widgets: list of widget information dictionaries as defined in build_gui
             parent: defaults to None, which is what you want if WidgetWindow is a top level window."""
@@ -40,10 +37,7 @@ class WidgetWindow(widget_column_flow_main_window.WidgetColumnFlowMainWindow):
         for widget_info in widgets:
             widget_class = widget_info['cls']
             if widget_class.can_run(scope):
-                widget = widget_class(host=host, scope=scope, scope_properties=scope_properties)
-                if hasattr(widget, 'qt_object'):
-                    # if widget is like ris_widget which wraps a "qt_object", grab the underlying qt object
-                    widget = widget.qt_object
+                widget = widget_class(scope=scope, scope_properties=scope_properties)
                 if isinstance(widget, Qt.QAction):
                     if self.action_toolbar is None:
                         self.action_toolbar = self.addToolBar('Actions')

@@ -43,17 +43,22 @@ class ScopeViewerWidgetQtObject(ris_widget.ris_widget.RisWidgetQtObject):
     RW_LIVE_STREAM_BINDING_LIVE_UPDATE_EVENT = Qt.QEvent.registerEventType()
     OVEREXPOSURE_GETCOLOR_EXPRESSION = 's.r < 1.0f ? vec4(s.rrr, 1.0f) : vec4(1.0f, 0.0f, 0.0f, 1.0f)'
 
+    @staticmethod
+    def can_run(scope):
+        return hasattr(scope, 'camera')
+
     def __init__(
             self,
-            app_prefs_name,
-            app_prefs_version,
-            window_title,
-            parent,
-            window_flags,
-            msaa_sample_count,
-            layers,
             scope,
             scope_properties,
+            app_prefs_name='ScopeViewerWidget',
+            app_prefs_version=1,
+            window_title='Scope Viewer',
+            parent=None,
+            window_flags=Qt.Qt.WindowFlags(0),
+            msaa_sample_count=2,
+            show=True,
+            layers = tuple(),
             **kw):
 
         super().__init__(
@@ -68,7 +73,6 @@ class ScopeViewerWidgetQtObject(ris_widget.ris_widget.RisWidgetQtObject):
         hh = self.layer_table_view.horizontalHeader()
         col = ris_widget.qwidgets.layer_table.LayerTableModel.PROPERTIES.index('name')
         hh.resizeSection(col, hh.sectionSize(col) * 1.5)
-        self.scope = scope
         self.scope_toolbar = self.addToolBar('Scope')
         self.live_streamer = scope_client.LiveStreamer(scope, scope_properties, self.post_live_update)
         import freeimage
@@ -131,13 +135,8 @@ class ScopeViewerWidget(ris_widget.ris_widget.RisWidget):
     ]
     QT_OBJECT_CLASS = ScopeViewerWidgetQtObject
 
-    @staticmethod
-    def can_run(scope):
-        return hasattr(scope, 'camera')
-
     def __init__(
             self,
-            host,
             scope,
             scope_properties,
             window_title='Scope Viewer',

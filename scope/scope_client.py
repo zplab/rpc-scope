@@ -55,7 +55,7 @@ def _replace_in_state(client, scope):
 
         obj.in_state = _make_in_state_func(obj)
 
-def _make_rpc_client(rpc_addr, interrupt_addr, image_transfer_addr, context=None):
+def _make_rpc_client(rpc_addr, interrupt_addr, image_transfer_addr, context):
     client = rpc_client.ZMQClient(rpc_addr, interrupt_addr, context)
     image_transfer_client = rpc_client.BaseZMQClient(image_transfer_addr, context)
     is_local, get_data = transfer_ism_buffer.client_get_data_getter(image_transfer_client)
@@ -107,9 +107,16 @@ def _make_rpc_client(rpc_addr, interrupt_addr, image_transfer_addr, context=None
     scope._lock_attrs() # prevent unwary users from setting new attributes that won't get communicated to the server
     return scope
 
-def client_main(host='127.0.0.1', context=None, subscribe_all=False):
-    if context is None:
-        context = zmq.Context()
+def clone_scope(scope):
+    """Create an identical client with distinct ZMQ sockets, so that it may be safely used
+    from a separate thread."""
+    rpc_addr = scope._rpc_client.rpc_addr
+    interrupt_addr = scope._rpc_client.interrupt_addr
+    image_transfer_addr = scope._image_transfer_client.rpc_addr
+    return _make_rpc_client(rpc_addr, interrupt_addr, image_transfer_addr, scope._rpc_client.context)
+
+def client_main(host='127.0.0.1', subscribe_all=False):
+    context = zmq.Context()
     addresses = scope_configuration.get_addresses(host)
     scope = _make_rpc_client(addresses['rpc'], addresses['interrupt'], addresses['image_transfer_rpc'], context)
     scope_properties = property_client.ZMQClient(addresses['property'], context)

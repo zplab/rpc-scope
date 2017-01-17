@@ -12,15 +12,15 @@ from . import lamp_widget
 from . import scope_viewer_widget
 from . import microscope_widget
 from . import stage_pos_table_widget
-from . import joypad_input_widget
+from . import game_controller_input_widget
 
 WIDGETS = [
     dict(name='camera', cls=andor_camera_widget.AndorCameraWidget, start_visible=True, docked=True),
     dict(name='lamps', cls=lamp_widget.LampWidget, start_visible=True, docked=True),
     dict(name='microscope', cls=microscope_widget.MicroscopeWidget, start_visible=True, docked=True),
-    dict(name='game_controller', cls=joypad_input_widget.JoypadInputWidget, start_visible=True, docked=True),
-    dict(name='advanced_camera', cls=andor_camera_widget.AndorAdvancedCameraWidget, start_visible=False, docked=True),
-    dict(name='viewer', cls=scope_viewer_widget.ScopeViewerWidget, start_visible=True, docked=False),
+    dict(name='game_controller', cls=game_controller_input_widget.GameControllerInputWidget, start_visible=True, docked=True),
+    dict(name='advanced_camera', cls=andor_camera_widget.AndorAdvancedCameraWidget, start_visible=False, docked=False),
+    dict(name='viewer', cls=scope_viewer_widget.ScopeViewerWidgetQtObject, start_visible=True, docked=False),
     dict(name='stage_table', cls=stage_pos_table_widget.StagePosTableWidget, start_visible=False, docked=False)
 ]
 
@@ -45,12 +45,7 @@ def gui_main(host, desired_widgets=None):
             # keep widget order from WIDGETS list
             widgets = [widget for widget in WIDGETS if widget['name'] in desired_widgets]
 
-    main_window = scope_widgets.WidgetWindow(
-        host=host,
-        scope=scope,
-        scope_properties=scope_properties,
-        widgets=widgets
-    )
+    main_window = scope_widgets.WidgetWindow(scope, scope_properties, widgets)
     main_window.show()
 
     # install a custom signal handler so that when python receives control-c, QT quits

@@ -181,6 +181,7 @@ class BaseZMQClient(RPCClient):
         self.context = context if context is not None else zmq.Context()
         self.socket = self.context.socket(zmq.REQ)
         self.socket.connect(rpc_addr)
+        self.rpc_addr = rpc_addr
 
     def _send(self, command, args, kwargs):
         json = json_encode.encode_compact_to_bytes((command, args, kwargs))
@@ -198,7 +199,6 @@ class BaseZMQClient(RPCClient):
     def _send_interrupt(self, message):
         pass
 
-
 class ZMQClient(BaseZMQClient):
     def __init__(self, rpc_addr, interrupt_addr, context=None):
         """RPCClient subclass that uses ZeroMQ REQ/REP to communicate, and can
@@ -211,6 +211,7 @@ class ZMQClient(BaseZMQClient):
         super().__init__(rpc_addr, context)
         self.interrupt_socket = self.context.socket(zmq.PUSH)
         self.interrupt_socket.connect(interrupt_addr)
+        self.interrupt_addr = interrupt_addr
 
     def _send_interrupt(self, message):
         self.interrupt_socket.send(bytes(message, encoding='ascii'))
