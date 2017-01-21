@@ -267,14 +267,14 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.scope.camera.exposure_time = self.bf_exposure
         self.scope.tl.lamp.intensity = self.tl_intensity
         metadata = {}
-        with self.scope.tl.lamp.in_state(enabled=True), scope.camera.in_state(readout_rate='280 MHz', shutter_mode='Rolling'):
+        with self.scope.tl.lamp.in_state(enabled=True), self.scope.camera.in_state(readout_rate='280 MHz', shutter_mode='Rolling'):
             if self.DO_COARSE_FOCUS:
                 coarse_z, fine_z = autofocus.coarse_fine_autofocus(self.scope, z_start, z_max,
                     self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
                     self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS)
                 metadata['coarse_z'] = coarse_z
             else:
-                fine_z = autofocus(scope, z_start, z_max, self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS,
+                fine_z = autofocus.autofocus(self.scope, z_start, z_max, self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS,
                     speed=0.3, return_images=False)
             metadata['fine_z'] = fine_z
         t1 = time.time()
