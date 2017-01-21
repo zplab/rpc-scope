@@ -311,7 +311,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             self.run_autofocus(metadata)
             t1 = time.time()
             self.logger.debug('Autofocused ({:.1f} seconds)', t1-t0)
-            self.logger.info('Autofocus z: {}', fine_z)
+            self.logger.info('Autofocus z: {}', metadata['fine_z'])
         else:
             t1 = time.time()
         images = self.scope.camera.acquisition_sequencer.run()
