@@ -26,7 +26,7 @@ import string
 import pathlib
 import math
 
-from ..util import json_encode
+from zplib import util
 
 handler_template = string.Template(
 '''import pathlib
@@ -125,7 +125,7 @@ def create_metadata_file(data_dir, positions, z_max, reference_positions):
     metadata = dict(z_max=z_max, reference_positions=reference_positions,
         positions=named_positions)
     with (data_dir / 'experiment_metadata.json').open('w') as f:
-        json_encode.encode_legible_to_file(metadata, f)
+        util.json_encode_legible_to_file(metadata, f)
 
 def simple_get_positions(scope):
     """Return a list of interactively-obtained scope stage positions."""
