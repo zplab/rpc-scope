@@ -36,6 +36,14 @@ class Handler(timecourse_handler.BasicAcquisitionHandler):
     FILTER_CUBE = $filter_cube
     FLUORESCENCE_FLATFIELD_LAMP = $fl_flatfield_lamp
     OBJECTIVE = 10
+    REFOCUS_INTERVAL_MINS = 45 # re-run autofocus at least this often. Useful for not autofocusing every timepoint.
+    DO_COARSE_FOCUS = False
+    # 1 mm distance in 50 steps = 20 microns/step. So we should be somewhere within 20-40 microns of the right plane after coarse autofocus.
+    COARSE_FOCUS_RANGE = 1
+    COARSE_FOCUS_STEPS = 50
+    # We want to get within 2 microns, so sweep over 90 microns with 45 steps.
+    FINE_FOCUS_RANGE = 0.09
+    FINE_FOCUS_STEPS = 45
     PIXEL_READOUT_RATE = '100 MHz'
     USE_LAST_FOCUS_POSITION = True
     INTERVAL_MODE = 'scheduled start'
@@ -44,7 +52,7 @@ class Handler(timecourse_handler.BasicAcquisitionHandler):
     # Set the following to have the script set the microscope apertures as desired:
     TL_FIELD_DIAPHRAGM = None
     TL_APERTURE_DIAPHRAGM = None
-    IL_FIELD_WHEEL = None
+    IL_FIELD_WHEEL = None # 'circle:3' is a good choice.
     VIGNETTE_PERCENT = 5 # 5 is a good number when using a 1x optocoupler. If 0.7x, use 35.
 
     def configure_additional_acquisition_steps(self):
@@ -56,6 +64,28 @@ class Handler(timecourse_handler.BasicAcquisitionHandler):
                 self.scope.camera.acquisition_sequencer.add_step(exposure_ms=200,
                     lamp='cyan')
                 self.image_names.append('gfp.png')
+        """
+        pass
+
+    def post_acquisition_sequence(self, position_name, position_dir, position_metadata, current_timepoint_metadata, images, exposures, timestamps):
+        """Run any necessary inage acquisitions, etc, after the main acquisition
+        sequence finishes. (E.g. for light stimulus and post-stimulus recording.)
+
+        Parameters:
+            position_name: name of the position in the experiment metadata file.
+            position_dir: pathlib.Path object representing the directory where
+                position-specific data files and outputs are written. Useful for
+                reading previous image data.
+            position_metadata: list of all the stored position metadata from the
+                previous timepoints, in chronological order.
+            current_timepoint_metadata: the metatdata for the current timepoint.
+                It may be used to append to keys like 'image_timestamps' etc.
+            images: list of acquired images. Newly-acquired images should be
+                appended to this list.
+            exposures: list of exposure times for acquired images. If additional
+                images are acquired, their exposure times should be appended.
+            timestamps: list of camera timestamps for acquired images. If
+                additional images are acquired, their timestamps should be appended.
         """
         pass
 
