@@ -79,12 +79,13 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
 
     # Next: Potentially useful attributes to override
     OBJECTIVE = 10
+    DO_COARSE_FOCUS = False
     COARSE_FOCUS_RANGE = 1
     COARSE_FOCUS_STEPS = 50
     # 1 mm distance in 50 steps = 20 microns/step. So we should be somewhere within 20-40 microns of the right plane after the above autofocus.
-    # We want to get within 1-2 microns, so sweep over 100 microns with 75 steps.
-    FINE_FOCUS_RANGE = 0.1
-    FINE_FOCUS_STEPS = 75
+    # We want to get within 2 microns, so sweep over 90 microns with 45 steps.
+    FINE_FOCUS_RANGE = 0.09
+    FINE_FOCUS_STEPS = 45
     PIXEL_READOUT_RATE = '100 MHz'
     USE_LAST_FOCUS_POSITION = True
     INTERVAL_MODE = 'scheduled start'
@@ -253,6 +254,9 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             start = self.end_time
         return start + interval_seconds
 
+    def post_acquisition_sequence(self, position_name, position_dir, position_metadata, current_timepoint_metadata):
+        pass
+
     def acquire_images(self, position_name, position_dir, position_metadata):
         t0 = time.time()
         if self.USE_LAST_FOCUS_POSITION and position_metadata:
@@ -262,10 +266,17 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         z_max = self.experiment_metadata['z_max']
         self.scope.camera.exposure_time = self.bf_exposure
         self.scope.tl.lamp.intensity = self.tl_intensity
-        with self.scope.tl.lamp.in_state(enabled=True), self.scope.stage.in_state(z_speed=1):
-            coarse_z, fine_z = autofocus.coarse_fine_autofocus(self.scope, z_start, z_max,
-                self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
-                self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS)
+        metadata = {}
+        with self.scope.tl.lamp.in_state(enabled=True), scope.camera.in_state(readout_rate='280 MHz', shutter_mode='Rolling'):
+            if self.DO_COARSE_FOCUS:
+                coarse_z, fine_z = autofocus.coarse_fine_autofocus(self.scope, z_start, z_max,
+                    self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
+                    self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS)
+                metadata['coarse_z'] = coarse_z
+            else:
+                fine_z = autofocus(scope, z_start, z_max, self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS,
+                    speed=0.3, return_images=False)
+            metadata['fine_z'] = fine_z
         t1 = time.time()
         self.logger.debug('Autofocused ({:.1f} seconds)', t1-t0)
         self.logger.info('Autofocus z: {}', fine_z)
@@ -276,7 +287,8 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         images = [self.dark_corrector.correct(image, exposure) for image, exposure in zip(images, exposures)]
         timestamps = numpy.array(self.scope.camera.acquisition_sequencer.latest_timestamps)
         timestamps = (timestamps - timestamps[0]) / self.scope.camera.timestamp_hz
-        metadata = dict(coarse_z=coarse_z, fine_z=fine_z, image_timestamps=dict(zip(self.image_names, timestamps)))
+        metadata['image_timestamps']=dict(zip(self.image_names, timestamps))
+        self.post_acquisition_sequence(position_name, position_dir, position_metadata, metadata)
         if self.should_skip(position_dir, position_metadata, images):
             self.skip_positions.append(position_name)
         return images, self.image_names, metadata

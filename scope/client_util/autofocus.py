@@ -45,7 +45,7 @@ def coarse_fine_autofocus(scope, z_start, z_max, coarse_range_mm, coarse_steps, 
             (coarse_z, coarse_images), (fine_z, fine_images)
     """
     exposure_time = scope.camera.exposure_time
-    with scope.camera.in_state(readout_rate='280 MHz', shutter_mode='Rolling'):
+    with scope.camera.in_state(readout_rate='280 MHz', shutter_mode='Rolling'), self.scope.stage.in_state(z_speed=1):
         coarse_result = autofocus(scope, z_start, z_max, coarse_range_mm, coarse_steps, speed=0.8,
             binning='4x4', exposure_time=exposure_time/16, return_images=return_images)
         coarse_z = coarse_result[0] if return_images else coarse_result
