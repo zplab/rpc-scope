@@ -322,7 +322,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.post_acquisition_sequence(position_name, position_dir, position_metadata, metadata, images, exposures, timestamps)
         images = [self.dark_corrector.correct(image, exposure) for image, exposure in zip(images, exposures)]
         if None in timestamps:
-            logger.warning('None value found in timestamp! Timestapms = {}', timestamps)
+            logger.warning('None value found in timestamp! Timestamps = {}', timestamps)
         else:
             timestamps = (numpy.array(timestamps) - timestamps[0]) / self.scope.camera.timestamp_hz
             metadata['image_timestamps']=dict(zip(self.image_names, timestamps))
