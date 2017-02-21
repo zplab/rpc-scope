@@ -323,9 +323,9 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         images = [self.dark_corrector.correct(image, exposure) for image, exposure in zip(images, exposures)]
         if None in timestamps:
             logger.warning('None value found in timestamp! Timestamps = {}', timestamps)
-        else:
-            timestamps = (numpy.array(timestamps) - timestamps[0]) / self.scope.camera.timestamp_hz
-            metadata['image_timestamps']=dict(zip(self.image_names, timestamps))
+            timestamps = [t if t is not None else numpy.nan for t in timestamps]
+        timestamps = (numpy.array(timestamps) - timestamps[0]) / self.scope.camera.timestamp_hz
+        metadata['image_timestamps']=dict(zip(self.image_names, timestamps))
         if self.should_skip(position_name, position_dir, position_metadata, images):
             self.skip_positions.append(position_name)
         return images, self.image_names, metadata

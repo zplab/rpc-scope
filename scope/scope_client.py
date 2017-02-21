@@ -116,6 +116,16 @@ def clone_scope(scope):
     return _make_rpc_client(rpc_addr, interrupt_addr, image_transfer_addr, scope._rpc_client.context)
 
 def client_main(host='127.0.0.1', subscribe_all=False):
+    """Connect to the microscope on the specified host.
+
+    Parameters:
+        host: IP or hostname to connect to
+        subscribe_all: if True, the scope_properties object will subscribe to
+            all property updates from the scope server, so that its internal
+            'properties' dictionary will stay up-to-date.
+
+    Returns: scope, scope_properties
+    """
     context = zmq.Context()
     addresses = scope_configuration.get_addresses(host)
     scope = _make_rpc_client(addresses['rpc'], addresses['interrupt'], addresses['image_transfer_rpc'], context)

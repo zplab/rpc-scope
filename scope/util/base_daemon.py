@@ -30,7 +30,6 @@ import sys
 import shutil
 
 from daemon import daemon
-from daemon import runner
 from lockfile import pidlockfile
 
 from . import logging
@@ -51,7 +50,7 @@ DEFAULT_SIGNAL_MAP = {
 class Runner:
     def __init__(self, name, pidfile_path):
         self.name = name
-        self.pidfile = pidlockfile.PIDLockFile(os.path.realpath(str(pidfile_path)), timeout=10)
+        self._pidfile = pidlockfile.PIDLockFile(os.path.realpath(str(pidfile_path)), timeout=10)
 
     def initialize_daemon(self):
         pass
@@ -61,9 +60,6 @@ class Runner:
 
     def start(self, log_dir, verbose, **signal_map):
         """Start the daemon process."""
-        if runner.is_pidfile_stale(self.pidfile):
-            self.pidfile.break_lock()
-
         # Is it better to try to lock the pidfile here to avoid any race conditions?
         # Managing the release through potentially-failing detach_process_context()
         # calls sounds... tricky.
@@ -116,6 +112,15 @@ class Runner:
             except Exception:
                 logger.error('{} terminating due to unhandled exception:', self.name, exc_info=True)
 
+    @property
+    def pidfile(self):
+        pid = self._pidfile.read_pid()
+        if not (is_valid_pid(pid) and process_create_time_linux(pid) < os.stat(self._pidfile.path).st_mtime):
+            # if there's no such process, or if the process is newer than the pidfile,
+            # then the pidfile refers to a defunct process and we should get rid of the pidfile
+            self._pidfile.break_lock()
+        return self._pidfile
+
     def is_running(self):
         return self.pidfile.is_locked()
 
@@ -129,11 +134,7 @@ class Runner:
     def signal(self, sig):
         """Send a signal to the daemon process specified in the current PID file."""
         self.assert_daemon()
-
-        if runner.is_pidfile_stale(self.pidfile):
-            self.pidfile.break_lock()
-        else:
-            os.kill(self.get_pid(), sig)
+        os.kill(self.get_pid(), sig)
 
     def terminate(self):
         """Send SIGTERM to the daemon: a handle-able request to cease."""
@@ -147,10 +148,25 @@ def is_valid_pid(pid):
     try:
         os.kill(pid, signal.SIG_DFL)
         return True
-    except OSError as exc:
-        if exc.errno == errno.ESRCH:
-            # The specified PID does not exist
-            return False
+    except ProcessLookupError:
+        return False
+
+def process_create_time_linux(pid):
+    # adapted from https://github.com/giampaolo/psutil/blob/master/psutil/_pslinux.py
+    with open('/proc/stat') as f:
+        for line in f:
+            if line.startswith('btime'):
+                boot_time = float(line.strip().split()[1])
+                break
+    clock_ticks_per_sec = os.sysconf("SC_CLK_TCK")
+    with open('/proc/{}/stat'.format(pid)) as f:
+        stat = f.read()
+    # Process name is between parentheses. It can contain spaces and
+    # other parentheses. This is taken into account by looking for
+    # the last occurence of ")".
+    rpar = stat.rfind(')')
+    start_ticks = float(stat[rpar + 2:].split()[19])
+    return (start_ticks / clock_ticks_per_sec) + boot_time
 
 def detach_process_context():
     """Detach the process context from parent and session.

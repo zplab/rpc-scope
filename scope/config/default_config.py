@@ -7,7 +7,7 @@ scope_configuration = dict(
         #('nosepiece', 'leica.nosepiece.ManualNosepiece'), # dm6
         #('il', 'leica.illumination_axes.IL'), # dmi8
         #('il', 'leica.illumination_axes.FieldWheel_IL'), # dm6000 dm6
-        ('tl', 'leica.illumination_axes.TL'),
+        #('tl', 'leica.illumination_axes.TL'), # dm6000 dm6
         #('_shutter_watcher', 'leica.illumination_axes.ShutterWatcher'), # dm6000 dm6
         ('iotool', 'iotool.IOTool'),
         #('il.spectra', 'spectra.Spectra'), # dm6
