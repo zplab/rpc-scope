@@ -145,6 +145,8 @@ class Runner:
         self.signal(signal.SIGKILL)
 
 def is_valid_pid(pid):
+    if pid is None:
+        return False
     try:
         os.kill(pid, signal.SIG_DFL)
         return True
