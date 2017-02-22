@@ -109,7 +109,7 @@ class ZMQServer(PropertyServer):
     def __init__(self, port, context=None):
         """PropertyServer subclass that uses ZeroMQ PUB/SUB to send out updates.
         Parameters:
-            port: a string ZeroMQ port identifier, like ''tcp://127.0.0.1:5555''.
+            port: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
             context: a ZeroMQ context to share, if one already exists.
         """
         self.context = context if context is not None else zmq.Context()

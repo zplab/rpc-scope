@@ -190,7 +190,6 @@ class RPCServer(BaseRPCServer):
         super().__init__(namespace)
         self.interrupter = interrupter
 
-
     def call(self, command, args, kwargs):
         """Dispatch a command or deal with special keyword commands.
         Currently, only __DESCRIBE__ is supported.
@@ -291,7 +290,7 @@ class ZMQInterrupter(Interrupter):
     def __init__(self, port, context=None):
         """InterruptServer subclass that uses ZeroMQ PUSH/PULL to communicate with clients.
         Parameters:
-            port: a string ZeroMQ port identifier, like ''tcp://127.0.0.1:5555''.
+            port: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
             context: a ZeroMQ context to share, if one already exists.
         """
         self.context = context if context is not None else zmq.Context()

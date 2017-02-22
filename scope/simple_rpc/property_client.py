@@ -122,7 +122,7 @@ class ZMQClient(PropertyClient):
     def __init__(self, port, context=None, daemon=True):
         """PropertyClient subclass that uses ZeroMQ PUB/SUB to receive out updates.
         Parameters:
-            port: a string ZeroMQ port identifier, like ''tcp://127.0.0.1:5555''.
+            port: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
             context: a ZeroMQ context to share, if one already exists.
             daemon: exit the client when the foreground thread exits.
         """

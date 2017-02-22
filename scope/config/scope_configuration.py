@@ -33,18 +33,20 @@ import shutil
 CONFIG_DIR = pathlib.Path('/usr/local/scope')
 CONFIG_FILE = CONFIG_DIR / 'scope_configuration.py'
 
-def _make_tcp_host(host, port):
+def make_tcp_host(host, port):
     return 'tcp://{}:{}'.format(host, port)
 
-def get_addresses(host=None):
-    config = get_config()
+def get_addresses(host=None, config=None):
+    if config is None:
+        config = get_config()
     if host is None:
         host = config.server.LOCALHOST
     return dict(
-        rpc=_make_tcp_host(host, config.server.RPC_PORT),
-        interrupt=_make_tcp_host(host, config.server.RPC_INTERRUPT_PORT),
-        property=_make_tcp_host(host, config.server.PROPERTY_PORT),
-        image_transfer_rpc=_make_tcp_host(host, config.server.IMAGE_TRANSFER_RPC_PORT)
+        rpc=make_tcp_host(host, config.server.RPC_PORT),
+        interrupt=make_tcp_host(host, config.server.RPC_INTERRUPT_PORT),
+        property=make_tcp_host(host, config.server.PROPERTY_PORT),
+        image_transfer_rpc=make_tcp_host(host, config.server.IMAGE_TRANSFER_RPC_PORT),
+        heartbeat=make_tcp_host(host, config.server.HEARTBEAT_PORT)
      )
 
 _CONFIG = None

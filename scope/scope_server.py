@@ -44,7 +44,7 @@ class ScopeServer(base_daemon.Runner):
     def start(self):
         with self.arg_file.open('r') as f:
             args = json.load(f)
-        config = scope_configuration.get_config()
+        self.config = scope_configuration.get_config()
         self.host = config.server.PUBLICHOST if args['public'] else config.server.LOCALHOST
         super().start(self.log_dir, args['verbose'])
 
@@ -85,22 +85,22 @@ class ScopeServer(base_daemon.Runner):
 
         addresses = scope_configuration.get_addresses(self.host)
         self.context = zmq.Context()
-
+        self.heartbeat_server = heartbeat.ZMQServer(addresses['heartbeat'],
+            interval_sec=self.config.server.HEARTBEAT_INTERVAL_SEC, context=self.context)
         property_update_server = property_server.ZMQServer(addresses['property'], context=self.context)
         scope_controller = scope.Scope(property_update_server)
-        image_transfer_namespace = Namespace()
+        scope_controller._sleep = time.sleep # way to provide a no-op RPC call for testing...
 
+        image_transfer_namespace = Namespace()
         # add transfer_ism_buffer as hidden elements of the namespace, which RPC clients can use for seamless buffer sharing
         image_transfer_namespace._transfer_ism_buffer = transfer_ism_buffer
         if hasattr(scope_controller, 'camera'):
             image_transfer_namespace.latest_image=scope_controller.camera.latest_image
-
         image_transfer_server = rpc_server.BackgroundBaseZMQServer(image_transfer_namespace,
             addresses['image_transfer_rpc'], context=self.context)
         interrupter = rpc_server.ZMQInterrupter(addresses['interrupt'], context=self.context)
         self.scope_server = rpc_server.ZMQServer(scope_controller, interrupter,
             addresses['rpc'], context=self.context)
-
         logger.info('Scope Server Ready (Listening on {})', self.host)
 
     def run_daemon(self):

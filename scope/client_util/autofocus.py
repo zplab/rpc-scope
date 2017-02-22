@@ -72,8 +72,14 @@ def autofocus(scope, z_start, z_max, range_mm, steps, speed, return_images, **ca
     offset = range_mm / 2
     start = z_start - offset
     end = min(z_start + offset, z_max)
-    values = scope.camera.autofocus.autofocus_continuous_move(start, end, steps=steps,
-        max_speed=speed, metric='high pass + brenner', return_images=return_images, **camera_params)
+    # set a 45-minute timeout to allow for FFT calculation if necessary
+    old_timeout = scope._rpc_client.timeout_ms
+    scope._rpc_client.timeout_ms = 1000 * 60 * 45
+    try:
+        values = scope.camera.autofocus.autofocus_continuous_move(start, end, steps=steps,
+            max_speed=speed, metric='high pass + brenner', return_images=return_images, **camera_params)
+    finally:
+        scope._rpc_client.timeout_ms = old_timeout
     if return_images:
         return values[0], values[2] # z-positions and images
     else:

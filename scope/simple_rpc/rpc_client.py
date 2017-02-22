@@ -28,6 +28,8 @@ import contextlib
 
 from zplib import util
 
+from . import heartbeat
+
 class RPCClient:
     """Client for simple remote procedure calls. RPC calls can be dispatched
     in three ways, given a client object 'client', and the desire to call
@@ -171,50 +173,59 @@ class ClientNamespace:
 class RPCError(RuntimeError):
     pass
 
-class BaseZMQClient(RPCClient):
-    def __init__(self, rpc_addr, context=None):
+class ZMQClient(RPCClient):
+    def __init__(self, rpc_addr, timeout_ms=None, context=None):
         """RPCClient subclass that uses ZeroMQ REQ/REP to communicate.
         Parameters:
-            rpc_addr: a string ZeroMQ port identifier, like ''tcp://127.0.0.1:5555''.
+            rpc_addr: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
             context: a ZeroMQ context to share, if one already exists.
         """
         self.context = context if context is not None else zmq.Context()
         self.socket = self.context.socket(zmq.REQ)
+        # main timeout will be implemented with poll
+        self.timeout_ms = timeout_ms
+        self.socket.RCVTIMEO = 1000 # timeout receive after 1 sec, in case server dies after poll succeeds
+        self.socket.LINGER = 0
+        self.heartbeat_client = None
+        self.interrupt_socket = None
         self.socket.connect(rpc_addr)
-        self.rpc_addr = rpc_addr
+
+    def enable_interrupt(self, interrupt_addr):
+        self.interrupt_socket = self.context.socket(zmq.PUSH)
+        self.interrupt_socket.connect(interrupt_addr)
+
+    def enable_heartbeat(self, heartbeat_addr, heartbeat_interval_sec):
+        self.heartbeat_client = heartbeat.ZMQClient(heartbeat_addr, heartbeat_interval_sec,
+            max_missed=3, error_text='No response from server (is it running?)', context=self.context)
 
     def _send(self, command, args, kwargs):
         json = util.json_encode_compact_to_bytes((command, args, kwargs))
         self.socket.send(json)
 
     def _receive_reply(self):
-        reply_type = self.socket.recv_string()
-        assert(self.socket.getsockopt(zmq.RCVMORE))
-        if reply_type == 'bindata':
-            reply = self.socket.recv(copy=False, track=False).buffer
-        else:
-            reply = self.socket.recv_json()
-        return reply, reply_type == 'error'
+        try:
+            if self.heartbeat_client is not None:
+                # enable the absence of heartbeats to raise errors only while we're waiting for a reply
+                # at other times, we needn't care if the server is AWOL.
+                self.heartbeat_client.armed = True
+            if not self.socket.poll(self.timeout_ms):
+                raise RuntimeError('Timed out waiting for reply from server (is it running?)')
+            reply_type = self.socket.recv_string()
+            assert(self.socket.getsockopt(zmq.RCVMORE))
+            if reply_type == 'bindata':
+                reply = self.socket.recv(copy=False, track=False).buffer
+            else:
+                reply = self.socket.recv_json()
+            return reply, reply_type == 'error'
+        except zmq.error.Again:
+            raise RuntimeError('Timed out waiting for reply from server (is it running?)')
+        finally:
+            if self.heartbeat_client is not None:
+                self.heartbeat_client.armed = False
 
     def _send_interrupt(self, message):
-        pass
-
-class ZMQClient(BaseZMQClient):
-    def __init__(self, rpc_addr, interrupt_addr, context=None):
-        """RPCClient subclass that uses ZeroMQ REQ/REP to communicate, and can
-        send interrupts.
-
-        Parameters:
-            rpc_addr, interrupt_addr: a string ZeroMQ port identifier, like ''tcp://127.0.0.1:5555''.
-            context: a ZeroMQ context to share, if one already exists.
-        """
-        super().__init__(rpc_addr, context)
-        self.interrupt_socket = self.context.socket(zmq.PUSH)
-        self.interrupt_socket.connect(interrupt_addr)
-        self.interrupt_addr = interrupt_addr
-
-    def _send_interrupt(self, message):
-        self.interrupt_socket.send(bytes(message, encoding='ascii'))
+        if self.interrupt_socket is not None:
+            self.interrupt_socket.send(bytes(message, encoding='ascii'))
 
 def _rich_proxy_function(doc, argspec, name, rpc_client, rpc_function, client_wrap_function=None):
     """Using the docstring and argspec from the RPC __DESCRIBE__ command,

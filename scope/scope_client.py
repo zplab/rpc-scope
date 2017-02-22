@@ -52,12 +52,18 @@ def _replace_in_state(client, scope):
             obj = eval(parents, scope.__dict__)
         else:
             continue
-
         obj.in_state = _make_in_state_func(obj)
 
-def _make_rpc_client(rpc_addr, interrupt_addr, image_transfer_addr, context):
-    client = rpc_client.ZMQClient(rpc_addr, interrupt_addr, context)
-    image_transfer_client = rpc_client.BaseZMQClient(image_transfer_addr, context)
+def _make_rpc_client(host, rpc_port, context):
+    rpc_addr = scope_configuration.make_tcp_host(host, rpc_port)
+    client = rpc_client.ZMQClient(rpc_addr, timeout_ms=10000, context=context)
+
+    server_config = scope_configuration.ConfigDict(client('get_configuration'))
+    addresses = scope_configuration.get_addresses(host, server_config)
+    client.enable_interrupt(addresses['interrupt'])
+    client.enable_heartbeat(addresses['heartbeat'], server_config.server.HEARTBEAT_INTERVAL_SEC*1.5)
+    image_transfer_client = rpc_client.ZMQClient(addresses['image_transfer_rpc'],
+        timeout_ms=5000, context=context)
     is_local, get_data = transfer_ism_buffer.client_get_data_getter(image_transfer_client)
 
     # define additional client wrapper functions
@@ -73,11 +79,8 @@ def _make_rpc_client(rpc_addr, interrupt_addr, image_transfer_addr, context):
             return best_z, positions_and_scores, get_many_data(image_names)
         else:
             return best_z, positions_and_scores
-    def get_config(config_dict):
-        return scope_configuration.ConfigDict(config_dict)
 
     client_wrappers = {
-        'get_configuration': get_config,
         'camera.acquire_image': get_data,
         'camera.next_image': get_data,
         'camera.stream_acquire': get_stream_data,
@@ -104,22 +107,25 @@ def _make_rpc_client(rpc_addr, interrupt_addr, image_transfer_addr, context):
         scope.camera.set_network_compression = get_data.set_network_compression
     scope._rpc_client = client
     scope._image_transfer_client = image_transfer_client
+    scope.configuration = server_config
+    scope.host = host
+    scope._addresses = addresses
+    def clone():
+        """Create an identical client with distinct ZMQ sockets, so that it may be safely used
+        from a separate thread."""
+        return _make_rpc_client(host, rpc_port, context)
+    scope._clone = clone
     scope._lock_attrs() # prevent unwary users from setting new attributes that won't get communicated to the server
+    # now set a 60-second timeout to allow really long blocking operations (heartbeat client will address RPC server death in this interval)
+    client.timeout_ms = 1000 * 60
     return scope
 
-def clone_scope(scope):
-    """Create an identical client with distinct ZMQ sockets, so that it may be safely used
-    from a separate thread."""
-    rpc_addr = scope._rpc_client.rpc_addr
-    interrupt_addr = scope._rpc_client.interrupt_addr
-    image_transfer_addr = scope._image_transfer_client.rpc_addr
-    return _make_rpc_client(rpc_addr, interrupt_addr, image_transfer_addr, scope._rpc_client.context)
-
-def client_main(host='127.0.0.1', subscribe_all=False):
+def client_main(host='127.0.0.1', rpc_port=None, subscribe_all=False):
     """Connect to the microscope on the specified host.
 
     Parameters:
         host: IP or hostname to connect to
+        rpc_port: if not None, override default port number
         subscribe_all: if True, the scope_properties object will subscribe to
             all property updates from the scope server, so that its internal
             'properties' dictionary will stay up-to-date.
@@ -127,9 +133,10 @@ def client_main(host='127.0.0.1', subscribe_all=False):
     Returns: scope, scope_properties
     """
     context = zmq.Context()
-    addresses = scope_configuration.get_addresses(host)
-    scope = _make_rpc_client(addresses['rpc'], addresses['interrupt'], addresses['image_transfer_rpc'], context)
-    scope_properties = property_client.ZMQClient(addresses['property'], context)
+    if rpc_port is None:
+        rpc_port = scope_configuration.get_config().server.RPC_PORT
+    scope = _make_rpc_client(host, rpc_port, context)
+    scope_properties = property_client.ZMQClient(scope._addresses['property'], context)
     if subscribe_all:
         # have the property client subscribe to all properties. Even with a no-op callback,
         # this causes the client to keep its internal 'properties' dictionary up-to-date

@@ -29,7 +29,6 @@ import sdl2
 import sys
 import threading
 
-from scope import scope_client
 from scope.simple_rpc.rpc_client import RPCError
 
 SDL_SUBSYSTEMS = sdl2.SDL_INIT_JOYSTICK | sdl2.SDL_INIT_GAMECONTROLLER | sdl2.SDL_INIT_TIMER
@@ -248,7 +247,7 @@ class GameControllerInput:
         self.num_buttons = sdl2.SDL_JoystickNumButtons(self.jdevice)
         self.num_hats = sdl2.SDL_JoystickNumHats(self.jdevice)
         self.warnings_enabled = warnings_enabled
-        self.scope = scope_client.clone_scope(scope)
+        self.scope = scope._clone()
         self.event_loop_is_running = False
         self.quit_event_posted = False
         self.throttle_delay_command_time_ratio = 1 - self.MAX_AXIS_COMMAND_WALLCLOCK_TIME_PORTION
