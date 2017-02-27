@@ -45,7 +45,7 @@ class ScopeServer(base_daemon.Runner):
         with self.arg_file.open('r') as f:
             args = json.load(f)
         self.config = scope_configuration.get_config()
-        self.host = config.server.PUBLICHOST if args['public'] else config.server.LOCALHOST
+        self.host = self.config.server.PUBLICHOST if args['public'] else self.config.server.LOCALHOST
         super().start(self.log_dir, args['verbose'])
 
     # function is to be run only when NOT running as a daemon
@@ -81,6 +81,7 @@ class ScopeServer(base_daemon.Runner):
         from . import scope
         from .simple_rpc import rpc_server
         from .simple_rpc import property_server
+        from .simple_rpc import heartbeat
         from .util import transfer_ism_buffer
 
         addresses = scope_configuration.get_addresses(self.host)

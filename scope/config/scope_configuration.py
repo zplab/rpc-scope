@@ -79,7 +79,10 @@ class ConfigDict(dict):
         d.c.cc.ccc # 7
     """
     def __getattr__(self, name):
-        value = self[name]
+        try:
+            value = self[name]
+        except:
+            raise AttributeError(name)
         if isinstance(value, dict):
             value = ConfigDict(value)
         return value

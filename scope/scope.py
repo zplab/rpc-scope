@@ -44,8 +44,8 @@ class Scope(message_device.AsyncDeviceNamespace):
 
         self._components = []
 
-        self.get_configuration = scope_configuration.get_config
-        config = self.get_configuration()
+        self._get_configuration = scope_configuration.get_config
+        config = self._get_configuration()
         for attr_name, component_class_path in config.drivers:
             module_name, class_name = component_class_path.rsplit('.', 1)
             module = importlib.import_module('.device.'+module_name, __package__)

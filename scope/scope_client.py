@@ -58,7 +58,7 @@ def _make_rpc_client(host, rpc_port, context):
     rpc_addr = scope_configuration.make_tcp_host(host, rpc_port)
     client = rpc_client.ZMQClient(rpc_addr, timeout_ms=10000, context=context)
 
-    server_config = scope_configuration.ConfigDict(client('get_configuration'))
+    server_config = scope_configuration.ConfigDict(client('_get_configuration'))
     addresses = scope_configuration.get_addresses(host, server_config)
     client.enable_interrupt(addresses['interrupt'])
     client.enable_heartbeat(addresses['heartbeat'], server_config.server.HEARTBEAT_INTERVAL_SEC*1.5)

@@ -71,9 +71,9 @@ class Client(threading.Thread):
                 self.missed = 0
             else:
                 self.missed += 1
-            if self.armed and self.missed == self.max_missed:
+            if self.armed and self.missed >= self.max_missed:
                 os.kill(os.getpid(), self.error_signal)
-                break
+                self.armed = False
 
     def handler(self, sig, stackframe):
         if self.old_handler is not None:
@@ -86,7 +86,7 @@ class Client(threading.Thread):
 
 
 class ZMQClient(Client):
-    def __init__(self, port, interval_sec, max_missed, error_text=error_signal=signal.SIGUSR1, context=None):
+    def __init__(self, port, interval_sec, max_missed, error_text, error_signal=signal.SIGUSR1, context=None):
         """HeartbeatClient subclass that uses ZeroMQ PUB/SUB to receive beats.
 
         Parameters:
@@ -98,7 +98,7 @@ class ZMQClient(Client):
         """
         self.context = context if context is not None else zmq.Context()
         self.socket = self.context.socket(zmq.SUB)
-        self.socket.RCVTIMEO = 1000 * interval_sec
+        self.socket.RCVTIMEO = int(1000 * interval_sec)
         self.socket.LINGER = 0
         self.socket.SUBSCRIBE = ''
         self.socket.connect(port)
