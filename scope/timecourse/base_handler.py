@@ -93,8 +93,12 @@ class TimepointHandler:
         self.logger.addHandler(handler)
         self._job_thread = futures.ThreadPoolExecutor(max_workers=1)
 
+    def _heartbeat(self):
+        print('heartbeat') # write a line to stdout to serve as a heartbeat
+
     def run_timepoint(self, scheduled_start):
         try:
+            self._heartbeat()
             self.timepoint_prefix = time.strftime('%Y-%m-%dt%H%M')
             self.scheduled_start = scheduled_start
             self.start_time = time.time()
@@ -106,11 +110,14 @@ class TimepointHandler:
             self.experiment_metadata.setdefault('timepoints', []).append(self.timepoint_prefix)
             self.experiment_metadata.setdefault('timestamps', []).append(self.start_time)
             self.configure_timepoint()
+            self._heartbeat()
             for position_name, position_coords in sorted(self.positions.items()):
                 if position_name not in self.skip_positions:
                     self.run_position(position_name, position_coords)
+                    self._heartbeat()
             self.experiment_metadata['skip_positions'] = list(self.skip_positions)
             self.finalize_timepoint()
+            self._heartbeat()
             self.end_time = time.time()
             self.experiment_metadata.setdefault('durations', []).append(self.end_time - self.start_time)
             if self.write_files:
@@ -120,7 +127,11 @@ class TimepointHandler:
                 self.logger.debug('Waiting for background jobs')
                 t0 = time.time()
                 # wait for all queued background jobs to complete.
-                futures.wait(self._job_futures)
+                not_done = self._job_futures
+                while not_done:
+                    # send heartbeats while we wait for futures to finish
+                    done, not_done = futures.wait(not_done, timeout=60)
+                    self._heartbeat()
                 # now get the result() from each future, which will raise any errors encountered
                 # during the execution.
                 [f.result() for f in self._job_futures]
@@ -287,5 +298,5 @@ class TimepointHandler:
         handler = cls(timepoint_dir, **cls_init_args)
         next_run_time = handler.run_timepoint(scheduled_start)
         if next_run_time:
-            print(next_run_time)
+            print('next run:{}'.format(next_run_time))
 

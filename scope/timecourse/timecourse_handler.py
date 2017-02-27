@@ -70,6 +70,10 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     acquisition). The base class docstring shows an example of adding a 200 ms
     GFP exposure, which also requires adding the name of the image file to save
     out to the self.image_names attribute.
+
+    The subclass MUST call self._heartbeat() at least once a minute if any
+    overridden functions take more time than that. (The superclass calls
+    _heartbeat() between calls to these functions.)
     """
 
     # Attributes and functions subclasses MUST or MAY override are here:
@@ -213,6 +217,8 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.bf_exposure, self.tl_intensity = calibrate.meter_exposure_and_intensity(self.scope, self.scope.tl.lamp,
             max_exposure=32, min_intensity_fraction=0.2, max_intensity_fraction=0.5)
 
+        self._heartbeat()
+
         # calculate the BF flatfield image and reference intensity value
         self.scope.stage.position = ref_positions[0]
         with self.scope.tl.lamp.in_state(enabled=True):
@@ -227,6 +233,8 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         cal_image_names = ['vignette_mask.png', 'bf_flatfield.tiff']
         cal_images = [self.vignette_mask.astype(numpy.uint8)*255, bf_flatfield]
 
+        self._heartbeat()
+
         # calculate a fluorescent flatfield if requested
         if self.FLUORESCENCE_FLATFIELD_LAMP:
             self.scope.stage.position = ref_positions[0]
@@ -239,6 +247,8 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             fl_flatfield, fl_intensity = calibrate.get_flat_field(fl_avg, self.vignette_mask)
             cal_image_names.append('fl_flatfield.tiff')
             cal_images.append(fl_flatfield)
+
+        self._heartbeat()
 
         # save out calibration information
         calibration_dir = self.data_dir / 'calibrations'

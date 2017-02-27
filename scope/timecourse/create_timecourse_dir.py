@@ -87,6 +87,7 @@ class Handler(timecourse_handler.BasicAcquisitionHandler):
             timestamps: list of camera timestamps for acquired images. If
                 additional images are acquired, their timestamps should be appended.
         """
+        # remember to call self._heartbeat() at least once every minute or so
         pass
 
     def get_next_run_interval(self, experiment_hours):

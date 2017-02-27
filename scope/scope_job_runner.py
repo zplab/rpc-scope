@@ -2,7 +2,8 @@ import sys
 import time
 import subprocess
 import pathlib
-import os.path
+import os
+import select
 import signal
 import json
 import collections
@@ -13,7 +14,6 @@ import lockfile
 from zplib import util
 
 from .config import scope_configuration
-
 from .util import base_daemon
 from .util import logging
 logger = logging.get_logger(__name__)
@@ -24,6 +24,9 @@ STATUS_SUSPENDED = 'suspended'
 
 MAIL_RELAY = 'mailrelay.wustl.edu'
 MAIL_SENDER = 'scope-daemon@zplab.wustl.edu'
+
+HEARTBEAT_BYTES = b'\n'
+HEARTBEAT_TIMEOUT = 60 * 5 # in seconds
 
 def main(timepoint_function):
     """Example main function designed to interact with the job running daemon, which
@@ -289,24 +292,30 @@ class JobRunner(base_daemon.Runner):
     def _run_job(self, job):
         """Actually run a given job and interpret the output"""
         logger.info('Running job {}', job.exec_file)
-        args = [sys.executable, str(job.exec_file), str(job.next_run_time)]
+        # -u for unbuffered output -- necessary for _listen_for_heartbeats
+        args = [sys.executable, '-u', str(job.exec_file), str(job.next_run_time)]
         logger.debug('Parameters: {}', args)
         start_time = time.time()
-        sub = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-        stdout_data, stderr_data = sub.communicate()
+        sub = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        timed_out, retcode, stdout, stderr = _listen_for_heartbeats(sub)
         elapsed_time = time.time() - start_time
         logger.info('Job done (elapsed time: {:.0f} min)', elapsed_time/60)
-        logger.debug('Stdout {}', stdout_data)
-        logger.debug('Stderr {}', stderr_data)
-        logger.debug('Retcode {}', sub.returncode)
+        logger.debug('Stdout {}', stdout)
+        logger.debug('Stderr {}', stderr)
+        logger.debug('Retcode {}', retcode)
         if sub.returncode != 0:
-            self._job_broke(job, 'Calling: {}\nReturn code: {}\nStandard Error output:\n{}'.format(' '.join(args), sub.returncode, stderr_data))
+            error_text = 'Calling: {}\nReturn code: {}\nStandard Error output:\n{}'.format(' '.join(args), sub.returncode, stderr_data)
+            if timed_out:
+                error_text = 'Job timed out after {} seconds (timeout interval: {} sec)\n'.format(int(elapsed_time), HEARTBEAT_TIMEOUT) + error_text
+            self._job_broke(job, timed_out, error_text)
             return
-        if stdout_data:
+        lines = stdout.split('\n')
+        last = lines[-1]
+        if last.startswith('next run:'):
             try:
-                next_run_time = float(stdout_data)
+                next_run_time = float(last[9:])
             except Exception as e:
-                self._job_broke(job, 'Could not parse next run time from job response "{}": {}'.format(next_run_time, e))
+                self._job_broke(job, False, 'Could not parse next run time from job response "{}": {}'.format(last, e))
                 return
         else:
             next_run_time = None
@@ -315,8 +324,10 @@ class JobRunner(base_daemon.Runner):
         except ValueError:
             logger.info('Could not update job {}: perhaps it was removed while running?', job.exec_file)
 
-        log_run_time = 'in {:.0f} seconds'.format(next_run_time - time.time()) if next_run_time else 'never'
-        logger.info('Next run time: {}', log_run_time)
+        if next_run_time:
+            logger.info('Next run time in {:.0f} seconds'.format(next_run_time - time.time())
+        else:
+            logger.info('No further runs scheduled.')
 
     def _get_next_job(self):
         """Get the job that should be run next."""
@@ -324,23 +335,59 @@ class JobRunner(base_daemon.Runner):
             if job.status == STATUS_QUEUED and job.next_run_time is not None:
                 return job
 
-    def _job_broke(self, job, error_text, new_status=STATUS_ERROR):
+    def _job_broke(self, job, timed_out, error_text, new_status=STATUS_ERROR):
         """Alert the world that the job errored out."""
         self.jobs.update(job.exec_file, status=new_status)
-        logger.error('Could not run acquisition job in {}:\n {}\n', job.exec_file, error_text)
+        if timed_out:
+            logger.error('Acquisition job {} timed out:\n {}\n', job.exec_file, error_text)
+        else:
+            logger.error('Could not run acquisition job in {}:\n {}\n', job.exec_file, error_text)
         if job.alert_emails:
             message = mimetext.MIMEText(error_text)
             message['From'] = MAIL_SENDER
             message['To'] = ', '.join(job.alert_emails)
-            message['Subject'] = '[zplab-scope] Job {} failed.'.format(job.exec_file)
+            error = 'timed out' if timed_out else 'failed'
+            message['Subject'] = '[zplab-scope] Job {} {}.'.format(job.exec_file, error)
             try:
                 with smtplib.SMTP(MAIL_RELAY) as s:
                     s.sendmail(MAIL_SENDER, job.alert_emails, message.as_string())
             except:
                 logger.error('Could not send alert email.', exc_info=True)
 
-
 _Job = collections.namedtuple('Job', ('exec_file', 'alert_emails', 'next_run_time', 'status'))
+
+def _listen_for_heartbeats(sub):
+    stdout_fd = sub.stdout.fileno()
+    stderr_fd = sub.stderr.fileno()
+    open_fds = {stdout_fd, stderr_fd}
+    output = {fd: b'' for fd in open_fds}
+    last_heartbeat_end_pos = 0
+    last_heartbeat = time.time()
+    time_left = HEARTBEAT_TIMEOUT
+    timed_out = False
+    while open_fds:
+        ready = select.select(open_fds, [], [], time_left)[0]
+        for fd in ready:
+            out = os.read(fd, 2048)
+            if not out:
+                # closed fd reports as ready, but has no data
+                open_fds.remove(fd)
+                continue
+            output[fd] += out
+            if fd == stdout_fd:
+                pos = output[fd].rfind(HEARTBEAT_BYTES, last_heartbeat_end_pos)
+                if pos != -1:
+                    last_heartbeat_end_pos = pos + len(HEARTBEAT_BYTES)
+                    last_heartbeat = time.time()
+        time_left = last_heartbeat + HEARTBEAT_TIMEOUT - time.time()
+        if time_left < 0:
+            timed_out = True
+            sub.kill()
+            time_left = 1 # small timeout for last output to get buffered for select
+    retcode = sub.wait()
+    stdout = output[stdout_fd].decode()
+    stderr = output[stderr_fd].decode()
+    return timed_out, retcode, stdout, stderr
 
 def _validate_alert_emails(alert_emails):
     if alert_emails is None:
