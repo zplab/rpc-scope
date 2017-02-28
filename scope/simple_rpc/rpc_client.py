@@ -196,7 +196,7 @@ class ZMQClient(RPCClient):
 
     def enable_heartbeat(self, heartbeat_addr, heartbeat_interval_sec):
         self.heartbeat_client = heartbeat.ZMQClient(heartbeat_addr, heartbeat_interval_sec,
-            max_missed=3, error_text='No response from server (is it running?)', context=self.context)
+            max_missed=3, error_text='No "heartbeat" signal detected from server (is it still running?)', context=self.context)
 
     def _send(self, command, args, kwargs):
         json = util.json_encode_compact_to_bytes((command, args, kwargs))
