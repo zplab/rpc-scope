@@ -183,16 +183,18 @@ class ZMQClient(RPCClient):
             context: a ZeroMQ context to share, if one already exists.
         """
         self.context = context if context is not None else zmq.Context()
-        self.socket = self.context.socket(zmq.REQ)
-        # main timeout will be implemented with poll
-        self.timeout_sec = timeout_sec
-        self.socket.RCVTIMEO = 1000 # timeout receive after 1 sec, in case server dies after poll succeeds
-        self.socket.LINGER = False
-        self.socket.REQ_CORRELATE = True
-        self.socket.REQ_RELAXED = True
+        self.rpc_addr = rpc_addr
         self.heartbeat_client = None
         self.interrupt_socket = None
         self.heartbeat_error = False
+        # main timeout will be implemented with poll
+        self.timeout_sec = timeout_sec
+        self.reconnect()
+
+    def reconnect(self):
+        self.socket = self.context.socket(zmq.REQ)
+        self.socket.RCVTIMEO = 1000 # timeout receive after 1 sec, in case server dies after poll succeeds
+        self.socket.LINGER = False
         self.socket.connect(rpc_addr)
 
     def enable_interrupt(self, interrupt_addr):
@@ -216,9 +218,11 @@ class ZMQClient(RPCClient):
         while True:
             if time.time() > timeout_time:
                 self._send_interrupt()
+                self.reconnect()
                 raise RuntimeError(timeout_errtext)
             if self.heartbeat_error:
                 self._send_interrupt()
+                self.reconnect()
                 raise RuntimeError('No "heartbeat" signal detected from server (is it still running?)')
             if self.socket.poll(500): # 500 ms timeout
                 break
