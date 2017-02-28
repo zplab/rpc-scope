@@ -218,6 +218,8 @@ class ZMQClient(RPCClient):
         while True:
             if time.time() > timeout_time:
                 self._send_interrupt()
+                # TODO: test if pyzmq properly supports REQ_RELAXED so that we don't have to reconnect() every time after error
+                # (still a problem as of 2017-02-28)
                 self.reconnect()
                 raise RuntimeError(timeout_errtext)
             if self.heartbeat_error:
