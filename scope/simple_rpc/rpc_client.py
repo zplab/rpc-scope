@@ -209,18 +209,20 @@ class ZMQClient(RPCClient):
         self.socket.send(json)
 
     def _receive_reply(self):
+        timeout_time = time.time() + self.timeout_sec
+        timeout_errtext = 'Timed out waiting for reply from server (is it running?)'
+        while True:
+            if time.time() > timeout_time:
+                self._send_interrupt()
+                raise RuntimeError(timeout_errtext)
+            if self.heartbeat_error:
+                self._send_interrupt()
+                raise RuntimeError('No "heartbeat" signal detected from server (is it still running?)')
+            if self.socket.poll(500): # 500 ms timeout
+                break
         try:
-            timeout_time = time.time() + self.timeout_sec
-            timeout_errtext = 'Timed out waiting for reply from server (is it running?)'
-            while True:
-                if time.time() > timeout_time:
-                    raise RuntimeError(timeout_errtext)
-                if self.heartbeat_error:
-                    raise RuntimeError('No "heartbeat" signal detected from server (is it still running?)')
-                if self.socket.poll(500): # 500 ms timeout
-                    break
             reply_type = self.socket.recv_string()
-            assert(self.socket.getsockopt(zmq.RCVMORE))
+            assert(self.socket.RCVMORE)
             if reply_type == 'bindata':
                 reply = self.socket.recv(copy=False, track=False).buffer
             else:
