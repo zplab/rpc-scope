@@ -51,7 +51,7 @@ class RPCClient:
         try:
             retval, is_error = self._receive_reply()
         except KeyboardInterrupt:
-            self._send_interrupt('interrupt')
+            self._send_interrupt()
             retval, is_error = self._receive_reply()
         if is_error:
             raise RPCError(retval)
@@ -63,7 +63,7 @@ class RPCClient:
     def _receive_reply(self):
         raise NotImplementedError()
 
-    def _send_interrupt(self, message):
+    def _send_interrupt(self):
         raise NotImplementedError()
 
     def proxy_function(self, command):
@@ -231,9 +231,9 @@ class ZMQClient(RPCClient):
         except zmq.error.Again:
             raise RuntimeError(timeout_errtext)
 
-    def _send_interrupt(self, message):
+    def _send_interrupt(self):
         if self.interrupt_socket is not None:
-            self.interrupt_socket.send(bytes(message, encoding='ascii'))
+            self.interrupt_socket.send(b'interrupt')
 
 def _rich_proxy_function(doc, argspec, name, rpc_client, rpc_function, client_wrap_function=None):
     """Using the docstring and argspec from the RPC __DESCRIBE__ command,
