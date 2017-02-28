@@ -67,7 +67,7 @@ class Client(threading.Thread):
                 self.missed = 0
             else:
                 self.missed += 1
-            if self.missed >= self.max_missed and not callback_called:
+            if self.missed >= self.max_missed and not self.callback_called:
                 self.error_callback()
 
     def _receive_beat(self):

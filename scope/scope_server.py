@@ -119,8 +119,11 @@ class ScopeClientTester(threading.Thread):
 
     def run(self):
         from . import scope_client
-        scope_client.client_main()
-        self.connected = True
+        try:
+            scope_client.client_main()
+            self.connected = True
+        except:
+            pass
 
 class Namespace:
     pass
