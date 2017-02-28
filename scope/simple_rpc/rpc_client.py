@@ -187,7 +187,9 @@ class ZMQClient(RPCClient):
         # main timeout will be implemented with poll
         self.timeout_sec = timeout_sec
         self.socket.RCVTIMEO = 1000 # timeout receive after 1 sec, in case server dies after poll succeeds
-        self.socket.LINGER = 0
+        self.socket.LINGER = False
+        self.socket.REQ_CORRELATE = True
+        self.socket.REQ_RELAXED = True
         self.heartbeat_client = None
         self.interrupt_socket = None
         self.heartbeat_error = False
@@ -214,11 +216,9 @@ class ZMQClient(RPCClient):
         while True:
             if time.time() > timeout_time:
                 self._send_interrupt()
-                self._timeout_recv()
                 raise RuntimeError(timeout_errtext)
             if self.heartbeat_error:
                 self._send_interrupt()
-                self._timeout_recv()
                 raise RuntimeError('No "heartbeat" signal detected from server (is it still running?)')
             if self.socket.poll(500): # 500 ms timeout
                 break
@@ -236,16 +236,6 @@ class ZMQClient(RPCClient):
     def _send_interrupt(self):
         if self.interrupt_socket is not None:
             self.interrupt_socket.send(b'interrupt')
-
-    def _timeout_recv(self):
-        timeout = self.socket.RCVTIMEO
-        self.socket.RCVTIMEO = 0
-        try:
-            self.socket.recv()
-        except zmq.error.Again:
-            pass
-        finally:
-            self.socket.RCVTIMEO = timeout
 
 def _rich_proxy_function(doc, argspec, name, rpc_client, rpc_function, client_wrap_function=None):
     """Using the docstring and argspec from the RPC __DESCRIBE__ command,
