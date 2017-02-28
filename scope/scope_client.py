@@ -43,8 +43,8 @@ def _make_in_state_func(obj):
         return state_stack.in_state(obj, **state)
     return in_state
 
-def _replace_in_state(client, scope):
-    for qualname, doc, argspec in client('__DESCRIBE__'):
+def _replace_in_state(scope):
+    for qualname in scope._functions_proxied:
         if qualname == 'in_state':
             obj = scope
         elif qualname.endswith('.in_state'):
@@ -100,7 +100,7 @@ def _make_rpc_client(host, rpc_port, context):
         latest_image.__doc__ = scope.camera.latest_image.__doc__
         scope.camera.latest_image = latest_image
 
-    _replace_in_state(client, scope)
+    _replace_in_state(scope)
     scope._get_data = get_data
     scope._is_local = is_local
     if not is_local:

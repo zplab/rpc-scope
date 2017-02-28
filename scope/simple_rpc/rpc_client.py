@@ -92,7 +92,7 @@ class RPCClient:
         # group functions by their namespace
         server_namespaces = collections.defaultdict(list)
         functions_proxied = set()
-        for qualname, doc, argspec in self('__DESCRIBE__'):
+        for qualname, doc, argspec in  self('__DESCRIBE__'):
             functions_proxied.add(qualname)
             *parents, name = qualname.split('.')
             parents = tuple(parents)
@@ -214,9 +214,11 @@ class ZMQClient(RPCClient):
         while True:
             if time.time() > timeout_time:
                 self._send_interrupt()
+                self._timeout_recv()
                 raise RuntimeError(timeout_errtext)
             if self.heartbeat_error:
                 self._send_interrupt()
+                self._timeout_recv()
                 raise RuntimeError('No "heartbeat" signal detected from server (is it still running?)')
             if self.socket.poll(500): # 500 ms timeout
                 break
@@ -234,6 +236,16 @@ class ZMQClient(RPCClient):
     def _send_interrupt(self):
         if self.interrupt_socket is not None:
             self.interrupt_socket.send(b'interrupt')
+
+    def _timeout_recv(self):
+        timeout = self.socket.RCVTIMEO
+        self.socket.RCVTIMEO = 0
+        try:
+            self.socket.recv()
+        except zmq.error.Again:
+            pass
+        finally:
+            self.socket.RCVTIMEO = timeout
 
 def _rich_proxy_function(doc, argspec, name, rpc_client, rpc_function, client_wrap_function=None):
     """Using the docstring and argspec from the RPC __DESCRIBE__ command,
