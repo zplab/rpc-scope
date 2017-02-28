@@ -55,11 +55,22 @@ class ScopeServer(base_daemon.Runner):
             print('Microscope server is NOT running.')
         else:
             print('Microscope server is running (PID {}).'.format(self.get_pid()))
-            client_tester = ScopeClientTester()
-            connected = lambda: client_tester.connected # wait for connection to be established
-            if _wait_for_it(connected, 'Establishing connection to scope server'):
+            from . import scope_client
+            connected = False
+            is_connected = lambda: connected
+            # slightly ugly hack: print status messages from bg thread while waiting
+            # in main thread for connection to be made or time out.
+            # (This is because we can't construct scope_client in background thread.)
+            t = threading.Thread(target=_wait_for_it, args=(is_connected, 'Establishing connection to scope server'), daemon=True)
+            t.start()
+            try:
+                scope_client.client_main()
+                connected = True
+                t.join()
                 print('Microscope server is responding to new connections.')
-            else:
+            except:
+                connected = True # required to stop the thread
+                t.join()
                 raise RuntimeError('Could not communicate with microscope server')
 
     def stop(self, force=False):
@@ -109,17 +120,6 @@ class ScopeServer(base_daemon.Runner):
             self.scope_server.run()
         finally:
             self.context.term()
-
-class ScopeClientTester(threading.Thread):
-    def __init__(self):
-        self.connected = False
-        super().__init__(daemon=True)
-        self.start()
-
-    def run(self):
-        from . import scope_client
-        scope_client.client_main()
-        self.connected = True
 
 class Namespace:
     pass
