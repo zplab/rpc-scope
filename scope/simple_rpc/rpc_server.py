@@ -67,12 +67,13 @@ class BaseRPCServer:
             return
         try:
             response = self.run_command(py_command, args, kwargs)
-            logger.debug('Sending response: {}', response)
 
         except (Exception, KeyboardInterrupt) as e:
             exception_str = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
+            logger.debug('Exception caught: {}', exception_str)
             self._reply(exception_str, error=True)
         else:
+            logger.debug('Sending response: {}', response)
             self._reply(response)
 
     def run_command(self, py_command, args, kwargs):
