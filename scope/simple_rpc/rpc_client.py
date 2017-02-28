@@ -195,7 +195,7 @@ class ZMQClient(RPCClient):
         self.socket = self.context.socket(zmq.REQ)
         self.socket.RCVTIMEO = 1000 # timeout receive after 1 sec, in case server dies after poll succeeds
         self.socket.LINGER = False
-        self.socket.connect(rpc_addr)
+        self.socket.connect(self.rpc_addr)
 
     def enable_interrupt(self, interrupt_addr):
         self.interrupt_socket = self.context.socket(zmq.PUSH)
