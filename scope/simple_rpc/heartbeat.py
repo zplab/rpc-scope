@@ -1,8 +1,6 @@
 import threading
 import zmq
 import time
-import os
-import signal
 
 class Server(threading.Thread):
     """Server for publishing heartbeats.
@@ -53,16 +51,14 @@ class Client(threading.Thread):
         error_signal: signal number to use to produce an error in the foreground thread.
         error_text: text of error to raise when no heartbeat was detected.
     """
-    def __init__(self, interval_sec, max_missed, error_signal=signal.SIGUSR1, error_text='Heartbeat not detected'):
+    def __init__(self, interval_sec, max_missed, error_callback):
         super().__init__(daemon=True)
         self.interval_sec = interval_sec
         self.max_missed = max_missed
         self.missed = 0
-        self.error_signal = error_signal
-        self.error_text = error_text
-        self.old_handler = signal.signal(error_signal, self.handler)
+        self.error_callback = error_callback
+        self.callback_called = False
         self.running = True
-        self.armed = False
         self.start()
 
     def run(self):
@@ -71,14 +67,8 @@ class Client(threading.Thread):
                 self.missed = 0
             else:
                 self.missed += 1
-            if self.armed and self.missed >= self.max_missed:
-                os.kill(os.getpid(), self.error_signal)
-                self.armed = False
-
-    def handler(self, sig, stackframe):
-        if self.old_handler is not None:
-            signal.signal(self.error_signal, self.old_handler)
-        raise RuntimeError(self.error_text)
+            if self.missed >= self.max_missed and not callback_called:
+                self.error_callback()
 
     def _receive_beat(self):
         "if a heartbeat is received within self.interval_sec, return True, otherwise False"
@@ -86,7 +76,7 @@ class Client(threading.Thread):
 
 
 class ZMQClient(Client):
-    def __init__(self, port, interval_sec, max_missed, error_text, error_signal=signal.SIGUSR1, context=None):
+    def __init__(self, port, interval_sec, max_missed, error_callback, context=None):
         """HeartbeatClient subclass that uses ZeroMQ PUB/SUB to receive beats.
 
         Parameters:
@@ -102,7 +92,7 @@ class ZMQClient(Client):
         self.socket.LINGER = 0
         self.socket.SUBSCRIBE = ''
         self.socket.connect(port)
-        super().__init__(interval_sec, max_missed, error_signal, error_text)
+        super().__init__(interval_sec, max_missed, error_callback)
 
     def run(self):
         try:

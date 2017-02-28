@@ -55,22 +55,11 @@ class ScopeServer(base_daemon.Runner):
             print('Microscope server is NOT running.')
         else:
             print('Microscope server is running (PID {}).'.format(self.get_pid()))
-            from . import scope_client
-            connected = False
-            is_connected = lambda: connected
-            # slightly ugly hack: print status messages from bg thread while waiting
-            # in main thread for connection to be made or time out.
-            # (This is because we can't construct scope_client in background thread.)
-            t = threading.Thread(target=_wait_for_it, args=(is_connected, 'Establishing connection to scope server'), daemon=True)
-            t.start()
-            try:
-                scope_client.client_main()
-                connected = True
-                t.join()
+            client_tester = ScopeClientTester()
+            connected = lambda: client_tester.connected # wait for connection to be established
+            if _wait_for_it(connected, 'Establishing connection to scope server'):
                 print('Microscope server is responding to new connections.')
-            except:
-                connected = True # required to stop the thread
-                t.join()
+            else:
                 raise RuntimeError('Could not communicate with microscope server')
 
     def stop(self, force=False):
@@ -121,6 +110,18 @@ class ScopeServer(base_daemon.Runner):
         finally:
             self.context.term()
 
+
+class ScopeClientTester(threading.Thread):
+    def __init__(self):
+        self.connected = False
+        super().__init__(daemon=True)
+        self.start()
+
+    def run(self):
+        from . import scope_client
+        scope_client.client_main()
+        self.connected = True
+
 class Namespace:
     pass
 
@@ -128,7 +129,7 @@ def _wait_for_it(wait_condition, message, wait_time=15, output_interval=0.5, sle
     wait_iters = int(wait_time // sleep_time)
     output_iters = int(output_interval // sleep_time)
     condition_true = False
-    print('(' + message + '...', end='', flush=True)
+    print('(' + message + '.', end='', flush=True)
     for i in range(wait_iters):
         condition_true = wait_condition()
         if condition_true:

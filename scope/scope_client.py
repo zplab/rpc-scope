@@ -56,14 +56,14 @@ def _replace_in_state(client, scope):
 
 def _make_rpc_client(host, rpc_port, context):
     rpc_addr = scope_configuration.make_tcp_host(host, rpc_port)
-    client = rpc_client.ZMQClient(rpc_addr, timeout_ms=10000, context=context)
+    client = rpc_client.ZMQClient(rpc_addr, timeout_sec=10, context=context)
 
     server_config = scope_configuration.ConfigDict(client('_get_configuration'))
     addresses = scope_configuration.get_addresses(host, server_config)
     client.enable_interrupt(addresses['interrupt'])
     client.enable_heartbeat(addresses['heartbeat'], server_config.server.HEARTBEAT_INTERVAL_SEC*1.5)
     image_transfer_client = rpc_client.ZMQClient(addresses['image_transfer_rpc'],
-        timeout_ms=5000, context=context)
+        timeout_sec=5, context=context)
     is_local, get_data = transfer_ism_buffer.client_get_data_getter(image_transfer_client)
 
     # define additional client wrapper functions
@@ -117,7 +117,7 @@ def _make_rpc_client(host, rpc_port, context):
     scope._clone = clone
     scope._lock_attrs() # prevent unwary users from setting new attributes that won't get communicated to the server
     # now set a 60-second timeout to allow really long blocking operations (heartbeat client will address RPC server death in this interval)
-    client.timeout_ms = 1000 * 60
+    client.timeout_sec = 60
     return scope
 
 def client_main(host='127.0.0.1', rpc_port=None, subscribe_all=False):
