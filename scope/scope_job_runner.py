@@ -8,6 +8,7 @@ import signal
 import json
 import collections
 import smtplib
+import platform
 import email.mime.text as mimetext
 
 import lockfile
@@ -26,7 +27,7 @@ MAIL_RELAY = 'mailrelay.wustl.edu'
 MAIL_SENDER = 'scope-daemon@zplab.wustl.edu'
 
 HEARTBEAT_BYTES = b'\n'
-HEARTBEAT_TIMEOUT = 60 * 5 # in seconds
+HEARTBEAT_TIMEOUT = 5*60 # in seconds
 
 def main(timepoint_function):
     """Example main function designed to interact with the job running daemon, which
@@ -304,12 +305,12 @@ class JobRunner(base_daemon.Runner):
         logger.debug('Stderr {}', stderr)
         logger.debug('Retcode {}', retcode)
         if sub.returncode != 0:
-            error_text = 'Calling: {}\nReturn code: {}\nStandard Error output:\n{}'.format(' '.join(args), sub.returncode, stderr_data)
+            error_text = 'Calling: {}\nReturn code: {}\nStandard Error output:\n{}'.format(' '.join(args), sub.returncode, stderr)
             if timed_out:
                 error_text = 'Job timed out after {} seconds (timeout interval: {} sec)\n'.format(int(elapsed_time), HEARTBEAT_TIMEOUT) + error_text
             self._job_broke(job, timed_out, error_text)
             return
-        lines = stdout.split('\n')
+        lines = stdout.rstrip().split('\n')
         last = lines[-1]
         if last.startswith('next run:'):
             try:
@@ -325,7 +326,7 @@ class JobRunner(base_daemon.Runner):
             logger.info('Could not update job {}: perhaps it was removed while running?', job.exec_file)
 
         if next_run_time:
-            logger.info('Next run time in {:.0f} seconds'.format(next_run_time - time.time())
+            logger.info('Next run time in {:.0f} seconds'.format(next_run_time - time.time()))
         else:
             logger.info('No further runs scheduled.')
 
@@ -347,7 +348,7 @@ class JobRunner(base_daemon.Runner):
             message['From'] = MAIL_SENDER
             message['To'] = ', '.join(job.alert_emails)
             error = 'timed out' if timed_out else 'failed'
-            message['Subject'] = '[zplab-scope] Job {} {}.'.format(job.exec_file, error)
+            message['Subject'] = '[{}] Job {} {}.'.format(platform.node(), job.exec_file, error)
             try:
                 with smtplib.SMTP(MAIL_RELAY) as s:
                     s.sendmail(MAIL_SENDER, job.alert_emails, message.as_string())
