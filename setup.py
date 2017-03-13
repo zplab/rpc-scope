@@ -6,5 +6,5 @@ setuptools.setup(
     description = 'zplab microscope package',
     packages = setuptools.find_packages(),
     package_data = {'scope.gui':['limit_icons/*.svg']},
-    scripts = ['scripts/scope_gui', 'scripts/scope_job_runner', 'scripts/scope_server']
+    scripts = ['scripts/scope_gui', 'scripts/scope_job_runner', 'scripts/scope_server', 'scripts/incubator_check']
 )

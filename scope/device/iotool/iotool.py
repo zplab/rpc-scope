@@ -93,7 +93,7 @@ class IOTool:
 
     def _assert_empty_buffer(self):
         """Verify that there is no IOTool output that should have been read previously."""
-        buffered = self._serial_port.read_all_buffered()
+        buffered = self._serial_port.read_all()
         if buffered:
             raise RuntimeError('Unexpected IOTool output: {}'.format(buffered.decode('ascii')))
 
@@ -154,5 +154,5 @@ class IOTool:
         # wait a bit to see if a second prompt is going to appear,
         # and then clear the buffer. If
         time.sleep(0.1)
-        buffered = self._serial_port.read_all_buffered()
+        buffered = self._serial_port.read_all()
         assert buffered in {b'', b'>'} # we should have either gotten nothing or the second ready prompt

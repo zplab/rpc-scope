@@ -23,6 +23,7 @@
 # Authors: Zach Pincus
 
 import threading
+import collections
 import time
 
 from ..util import smart_serial
@@ -51,6 +52,8 @@ def encode_hex_rh(value):
 class HumidityController(property_device.PropertyDevice):
     _DESCRIPTION = 'humidity controller'
     _EXPECTED_INIT_ERRORS = (smart_serial.SerialException,)
+    _UPDATE_INTERVAL = 10
+    _RECORD_DAYS = 14
 
     def __init__(self, property_server=None, property_prefix=''):
         super().__init__(property_server, property_prefix)
@@ -63,9 +66,11 @@ class HumidityController(property_device.PropertyDevice):
         except smart_serial.SerialTimeout:
             # explicitly clobber traceback from SerialTimeout exception
             raise smart_serial.SerialException('Could not read data from humidity controller -- is it turned on?')
-        self._reset_thread = timer.timer(self.reset, interval=24*60*60, run_immediately=False) # reset controller daily
-        if property_server:
-            self._update_thread = timer.Timer(self._update_properties, interval=10)
+        self._reset_thread = timer.Timer(self.reset, interval=24*60*60, run_immediately=False) # reset controller daily
+
+        num_data_to_log = int(self._RECORD_DAYS*24*60*60 / self._UPDATE_INTERVAL)
+        self._logged_data = collections.deque(maxlen=num_data_to_log)
+        self._update_thread = timer.Timer(self._update_properties, interval=self._UPDATE_INTERVAL)
 
     def _call(self, val):
         with self._serial_port_lock:
@@ -73,12 +78,14 @@ class HumidityController(property_device.PropertyDevice):
             out = self._serial_port.read_until(b'\r')[:-1].decode('ascii')
         if out.startswith('?'):
             raise ValueError('Command "{}" produced error "{}".'.format(val, out))
-        assert out.startswith(val[:3])
+        if not out[:3] == val[:3]:
+            raise ValueError('Unexpected output of command "{}": "{}".'.format(val, out))
         return out[3:]
 
     def _update_properties(self):
-            self.get_data()
+            humidity, temperature = self.get_data()
             self.get_target_humidity()
+            self._logged_data.append((time.time(), humidity, temperature))
 
     def full_reset(self):
         with self._serial_port_lock:
@@ -98,7 +105,20 @@ class HumidityController(property_device.PropertyDevice):
     def reset(self):
         with self._serial_port_lock:
             self._call('Z02')
-            time.sleep(0.5)
+            retries = 0
+            timeout = self._serial_port.timeout
+            self._serial_port.timeout = 0.25
+            while True:
+                self._serial_port.write(COMMAND_CHAR + b'U03\r')
+                try:
+                    self._serial_port.read_until(b'\r')
+                    break
+                except smart_serial.SerialTimeout:
+                    retries += 1
+                    if retries > 20: # 5 seconds to timeout
+                        raise RuntimeError('Could not reestablish connection to humidifier after reset.')
+            self._serial_port.timeout = timeout
+            self._serial_port.clear_input_buffer()
             self._call('E03') # enable run mode
             self._call('D04') # disable self-control mode
 
@@ -113,10 +133,13 @@ class HumidityController(property_device.PropertyDevice):
         return humidity
 
     def get_data(self):
-        humidity, temperature = map(float, self._call('V01').split(' '))
+        humidity, temperature = map(float, self._call('V01')[1:].split(' '))
         self._update_property('humidity', humidity)
         self._update_property('temperature', temperature)
         return humidity, temperature
+
+    def get_logged_data(self):
+        return list(self._logged_data)
 
     def get_target_humidity(self):
         return decode_hex_rh(self._call('R01'))

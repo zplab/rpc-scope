@@ -19,12 +19,12 @@ from .util import base_daemon
 from .util import logging
 logger = logging.get_logger(__name__)
 
+
+MAIL_RELAY = 'mailrelay.wustl.edu'
+
 STATUS_QUEUED = 'queued'
 STATUS_ERROR = 'error'
 STATUS_SUSPENDED = 'suspended'
-
-MAIL_RELAY = 'mailrelay.wustl.edu'
-MAIL_SENDER = 'scope-daemon@zplab.wustl.edu'
 
 HEARTBEAT_BYTES = b'\n'
 HEARTBEAT_TIMEOUT = 5*60 # in seconds
@@ -344,16 +344,28 @@ class JobRunner(base_daemon.Runner):
         else:
             logger.error('Could not run acquisition job in {}:\n {}\n', job.exec_file, error_text)
         if job.alert_emails:
-            message = mimetext.MIMEText(error_text)
-            message['From'] = MAIL_SENDER
-            message['To'] = ', '.join(job.alert_emails)
             error = 'timed out' if timed_out else 'failed'
-            message['Subject'] = '[{}] Job {} {}.'.format(platform.node(), job.exec_file, error)
-            try:
-                with smtplib.SMTP(MAIL_RELAY) as s:
-                    s.sendmail(MAIL_SENDER, job.alert_emails, message.as_string())
-            except:
-                logger.error('Could not send alert email.', exc_info=True)
+            subject = '[{}] Job {} {}.'.format(platform.node(), job.exec_file, error)
+            self._send_error_email(job.alert_emails, subject, error_text)
+
+    @staticmethod
+    def _send_error_email(emails, subject, text):
+        try:
+            host = platform.node().split('.')[0]
+        except:
+            host = 'scope_job_runner'
+        sender = '{}@zplab.wustl.edu'.format(host)
+        config = scope_configuration.get_config()
+        message = mimetext.MIMEText(text)
+        message['From'] = sender
+        message['To'] = ', '.join(emails)
+        message['Subject'] = subject
+        try:
+            with smtplib.SMTP(MAIL_RELAY) as s:
+                s.sendmail(sender, emails, message.as_string())
+        except:
+            logger.error('Could not send alert email.', exc_info=True)
+
 
 _Job = collections.namedtuple('Job', ('exec_file', 'alert_emails', 'next_run_time', 'status'))
 

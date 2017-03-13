@@ -124,6 +124,6 @@ scope_configuration = dict(
     #     SERIAL_ARGS = dict(
     #         baudrate=19200
     #     )
-    # )
+    # ),
 
 )

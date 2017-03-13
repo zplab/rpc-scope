@@ -45,5 +45,5 @@ class Timer(threading.Thread):
     def run(self):
         if self.run_immediately:
             self.callback()
-        while not self.stopped.wait(self.interval):
+        while not self._stopped.wait(self.interval):
             self.callback()

@@ -1,0 +1,6 @@
+#!/usr/bin/env python
+
+import sys
+from scope.client_util import incubator_check
+
+incubator_check.main(*sys.argv[1:])

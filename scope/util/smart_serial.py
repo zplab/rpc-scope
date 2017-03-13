@@ -109,12 +109,9 @@ class Serial(serialposix.Serial):
             self.read_buffer = read_buffer
             raise k
 
-    def read_all_buffered(self):
-        return self.read(self.in_waiting)
-
     def clear_input_buffer(self):
         while self.in_waiting:
-            if len(self.read_all_buffered()) > 0:
+            if len(self.read_all()) > 0:
                 time.sleep(0.01)
 
     def read_until(self, match):
