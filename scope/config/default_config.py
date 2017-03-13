@@ -16,8 +16,8 @@ scope_configuration = dict(
         ('camera', 'andor.Camera'),
         ('camera.acquisition_sequencer', 'acquisition_sequencer.AcquisitionSequencer'),
         ('camera.autofocus', 'autofocus.Autofocus'),
-        #('temperature_controller', 'temp_control.Peltier') # dm6000
-        #('temperature_controller', 'temp_control.Circulator') # dm6
+        #('temperature_controller', 'temp_control.Peltier'), # dm6000
+        #('temperature_controller', 'temp_control.Circulator'), # dm6
         #('humidity_controller', 'humidity_control.HumidityController') # dm6, dm6000
     ),
 
