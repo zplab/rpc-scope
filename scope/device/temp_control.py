@@ -23,10 +23,10 @@
 # Authors: Zach Pincus
 
 import threading
-import time
 
 from ..util import smart_serial
 from ..util import property_device
+from ..util import timer
 from ..config import scope_configuration
 
 class TemperatureController(property_device.PropertyDevice):
@@ -37,29 +37,26 @@ class TemperatureController(property_device.PropertyDevice):
         super().__init__(property_server, property_prefix)
         self._serial_port = smart_serial.Serial(serial_config.SERIAL_PORT, timeout=1, **serial_config.SERIAL_ARGS)
         self._serial_port.clear_input_buffer() # bad configurations can leave garbage in the Anova input buffer
+        self._serial_port_lock = threading.RLock()
         try:
             self.get_temperature()
         except smart_serial.SerialTimeout:
             # explicitly clobber traceback from SerialTimeout exception
             raise smart_serial.SerialException('Could not read data from temperature controller -- is it turned on?')
         if property_server:
-            self._update_property('temperature', self.get_temperature())
-            self._update_property('target_temperature', self.get_target_temperature())
-            self._sleep_time = 10
-            self._timer_running = True
-            self._timer_thread = threading.Thread(target=self._timer_update_temp, daemon=True)
-            self._timer_thread.start()
+            self._timer_thread = timer.Timer(self._update_properties, interval=10)
 
     def _read(self):
-        return self._serial_port.read_until(b'\r')[:-1].decode('ascii')
+        with self._serial_port_lock:
+            return self._serial_port.read_until(b'\r')[:-1].decode('ascii')
 
     def _write(self, val):
-        self._serial_port.write(val.encode('ascii') + b'\r')
+        with self._serial_port_lock:
+            self._serial_port.write(val.encode('ascii') + b'\r')
 
-    def _timer_update_temp(self):
-        while self._timer_running:
-            self._update_property('temperature', self.get_temperature())
-            time.sleep(self._sleep_time)
+    def _update_properties(self):
+        self.get_temperature()
+        self.get_target_temperature()
 
     def get_temperature(self):
         temp = self._get_temperature()
@@ -70,6 +67,10 @@ class TemperatureController(property_device.PropertyDevice):
         temp_out = self._set_target_temperature(temp)
         self._update_property('target_temperature', temp_out)
 
+    def get_target_temperature(self):
+        temp = self._get_target_temperature()
+        self._update_property('target_temperature', temp)
+
 
 class Peltier(TemperatureController):
     _DESCRIPTION = 'Peltier controller'
@@ -79,20 +80,22 @@ class Peltier(TemperatureController):
         super().__init__(serial_config, property_server, property_prefix)
 
     def _call_response(self, val):
-        self._write(val)
-        return self._read()
+        with self._serial_port_lock:
+            self._write(val)
+            return self._read()
 
     def _call(self, val, param=''):
         if param:
             val = val + ' ' + param
-        self._write(val)
-        if not self._read().endswith('OK'):
-            raise ValueError('Invalid command to incubator.')
+        with self._serial_port_lock:
+            self._write(val)
+            if not self._read().endswith('OK'):
+                raise ValueError('Invalid command to incubator.')
 
     def _get_temperature(self):
         return float(self._call_response('a'))
 
-    def get_target_temperature(self):
+    def _get_target_temperature(self):
         """return target temp as a float or None if no target is set."""
         temp = self._call_response('d')
         if temp == 'no target set':
@@ -125,18 +128,18 @@ class Circulator(TemperatureController):
         super().__init__(serial_config, property_server, property_prefix)
 
     def _call_response(self, val):
-        self._write(val)
-        echo = self._read()
-        if echo != val: # read back echo
-            raise RuntimeError('unexpected serial response: "{}"'.format(echo))
-        return self._read()
+        with self._serial_port_lock:
+            self._write(val)
+            echo = self._read()
+            if echo != val: # read back echo
+                raise RuntimeError('unexpected serial response: "{}"'.format(echo))
+            return self._read()
 
     def _get_temperature(self):
         return float(self._call_response('temp'))
 
-    def get_target_temperature(self):
-        temp = self._call_response('get temp setting')
-        return float(temp)
+    def _get_target_temperature(self):
+        return float(self._call_response('get temp setting'))
 
     def _set_target_temperature(self, temp):
         ret = self._call_response('set temp {:.2f}'.format(temp))

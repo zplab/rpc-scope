@@ -18,6 +18,7 @@ scope_configuration = dict(
         ('camera.autofocus', 'autofocus.Autofocus'),
         #('temperature_controller', 'temp_control.Peltier') # dm6000
         #('temperature_controller', 'temp_control.Circulator') # dm6
+        #('humidity_controller', 'humidity_control.HumidityController') # dm6, dm6000
     ),
 
     server = dict(
@@ -116,5 +117,13 @@ scope_configuration = dict(
     #     SERIAL_ARGS = dict(
     #         baudrate=9600
     #     )
+    # ),
+    #
+    # humidifier = dict(
+    #     SERIAL_PORT = '/dev/ttyHumidifier',
+    #     SERIAL_ARGS = dict(
+    #         baudrate=19200
+    #     )
     # )
+
 )
