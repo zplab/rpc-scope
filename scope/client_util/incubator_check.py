@@ -29,8 +29,8 @@ def main(scope_host='127.0.0.1'):
         now = datetime.datetime.now()
         now = now.replace(microsecond=0)
         now = now.isoformat(' ')
-        message = '{}\nMachine: {}\n\nActual temperature: {}°C\nTarget temperature: {}°C\n\nActual humidity: {}%\nTarget humidity: {}%\n'
-        message = message.format(now, host, temperature, target_temperature, humidity, target_humidity)
+        message = 'Machine: {}\nTime: {}\n\nActual temperature: {}°C\nTarget temperature: {}°C\n\nActual humidity: {}%\nTarget humidity: {}%\n'
+        message = message.format(host, now, temperature, target_temperature, humidity, target_humidity)
         print(message)
 
         errors = []
@@ -60,9 +60,3 @@ def main(scope_host='127.0.0.1'):
 
     # ask to run again in 20 mins
     print('next run:{}'.format(time.time() + 20*60))
-
-
-
-if __name__ == '__main__':
-    import sys
-    main(*sys.argv[1:])
