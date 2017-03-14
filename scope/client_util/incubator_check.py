@@ -33,13 +33,14 @@ def main(scope_host='127.0.0.1'):
         print(message)
 
         errors = []
-        if humidity > 96 or humidity > target_humidity + 5 or humidity < target_humidity - 10:
+        if humidity > 95 or abs(humidity - target_humidity) >= 10:
             errors.append('HUMIDITY DEVIATION')
-        if temperature > target_temperature + 2 or temperature < target_temperature - 2:
+        if abs(temperature - target_temperature) >= 2:
             errors.append('TEMPERATURE DEVIATION')
         if errors:
             subject = '{}: {}'.format(host, ' AND '.join(errors))
-            runner._send_error_email(sorted(to_email), subject, error_text)
+            print('sending email: {}'.format(subject))
+            runner._send_error_email(sorted(to_email), subject, message)
 
     # ask to run again in 20 mins
     print('next run:{}'.format(time.time() + 20*60))
