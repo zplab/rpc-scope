@@ -28,7 +28,7 @@ def main(scope_host='127.0.0.1'):
         now = datetime.datetime.now()
         now = now.replace(microsecond=0)
         now = now.isoformat(' ')
-        message = '{}\nMachine: {}\nCurrent temperature: {}°C\n Target temperature: {}°C\nCurrent humidity: {}%\n Target humidity: {}%\n'
+        message = '{}\nMachine: {}\n\nActual temperature: {}°C\nTarget temperature: {}°C\n\nActual humidity: {}%\nTarget humidity: {}%\n'
         message = message.format(now, host, temperature, target_temperature, humidity, target_humidity)
         print(message)
 
