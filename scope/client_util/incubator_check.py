@@ -21,26 +21,41 @@ def main(scope_host='127.0.0.1'):
     if to_email:
         # there's someone to alert, so let's see if there's an alert to send:
         scope, scope_properties = scope_client.client_main(scope_host)
-        humidity, temperature = scope.humidity_controller.data
-        target_humidity = scope.humidity_controller.target_humidity
-        target_temperature = scope.temperature_controller.target_temperature
+
+        errors = []
+        has_humidity = has_temperature = False
+        try:
+            humidity, temperature = scope.humidity_controller.data
+            target_humidity = scope.humidity_controller.target_humidity
+            has_humidity = True
+        except:
+            humidity = temperature = target_humidity = 'NO DATA'
+            errors.append('HUMIDITY CONTROLLER NOT AVAILABLE')
+        try:
+            target_temperature = scope.temperature_controller.target_temperature
+            has_temperature = True
+        except:
+            target_temperature = 'NO DATA'
+            errors.append('TEMPERATURE CONTROLLER NOT AVAILABLE')
+
+        if has_humidity and (humidity > 95 or abs(humidity - target_humidity) >= 10):
+            errors.append('HUMIDITY DEVIATION')
+        if has_humidity and has_temperature and abs(temperature - target_temperature) >= 2:
+            errors.append('TEMPERATURE DEVIATION')
 
         host = platform.node().split('.')[0]
         now = datetime.datetime.now()
         now = now.replace(microsecond=0)
         now = now.isoformat(' ')
-        message = 'Machine: {}\nTime: {}\n\nActual temperature: {}°C\nTarget temperature: {}°C\n\nActual humidity: {}%\nTarget humidity: {}%\n'
-        message = message.format(host, now, temperature, target_temperature, humidity, target_humidity)
+        err_text = '\n'.join(errors)
+        if errors:
+            err_text += '\n\n'
+        message = 'Machine: {}\nTime: {}\n\n{}Actual temperature: {}°C\nTarget temperature: {}°C\n\nActual humidity: {}%\nTarget humidity: {}%\n'
+        message = message.format(host, now, err_text, temperature, target_temperature, humidity, target_humidity)
         print(message)
 
-        errors = []
-        if humidity > 95 or abs(humidity - target_humidity) >= 10:
-            errors.append('HUMIDITY DEVIATION')
-        if abs(temperature - target_temperature) >= 2:
-            errors.append('TEMPERATURE DEVIATION')
         if errors:
             subject = '{}: {}'.format(host, ' AND '.join(errors))
-
             last_email_file = scope_configuration.CONFIG_DIR / '.last_incubator_error_email_time'
             send_email = False
             if not last_email_file.exists():
