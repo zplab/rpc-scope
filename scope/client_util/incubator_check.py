@@ -6,6 +6,7 @@ import time
 
 from .. import scope_client
 from .. import scope_job_runner
+from ..config import scope_configuration
 
 def main(scope_host='127.0.0.1'):
     runner = scope_job_runner.JobRunner()
@@ -39,8 +40,23 @@ def main(scope_host='127.0.0.1'):
             errors.append('TEMPERATURE DEVIATION')
         if errors:
             subject = '{}: {}'.format(host, ' AND '.join(errors))
-            print('sending email: {}'.format(subject))
-            runner._send_error_email(sorted(to_email), subject, message)
+
+            last_email_file = scope_configuration.CONFIG_DIR / '.last_incubator_error_email_time'
+            send_email = False
+            if not last_email_file.exists():
+                send_email = True
+            else:
+                with last_email_file.open() as f:
+                    last_email = float(f.read())
+                if time.time() > last_email + 6*60*60: # email every 6h at most
+                    send_email = True
+            if send_email:
+                print('sending email: {}'.format(subject))
+                runner._send_error_email(sorted(to_email), subject, message)
+                with last_email_file.open('w') as f:
+                    f.write(str(time.time()))
+            else:
+                print('not sending email (previous alert too recent)')
 
     # ask to run again in 20 mins
     print('next run:{}'.format(time.time() + 20*60))
