@@ -70,6 +70,7 @@ class TemperatureController(property_device.PropertyDevice):
     def get_target_temperature(self):
         temp = self._get_target_temperature()
         self._update_property('target_temperature', temp)
+        return temp
 
 
 class Peltier(TemperatureController):
