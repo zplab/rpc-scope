@@ -34,14 +34,18 @@ class IncubatorWidget(device_widget.DeviceWidget):
     def __init__(self, scope, scope_properties, parent=None):
         super().__init__(scope, scope_properties, parent)
         self.setWindowTitle('Incubator')
-        self.setLayout(Qt.QGridLayout())
+        layout = Qt.QGridLayout()
+        self.setLayout(layout)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setVerticalSpacing(4)
         self.add_row(0, 'Temperature', '°C', 'scope.humidity_controller.temperature', 'scope.temperature_controller.target_temperature', 10, 40)
         self.add_row(1, 'Humidity', '%', 'scope.humidity_controller.humidity', 'scope.humidity_controller.target_humidity', 0, 99)
 
     def add_row(self, row, name, unit, value_property, target_property, range_low, range_high):
         layout = self.layout()
         target_label = Qt.QLabel('Target {}:'.format(name))
-        target_label.setAlignment(Qt.Qt.AlignRight)
+        target_label.setAlignment(Qt.Qt.AlignRight | Qt.Qt.AlignVCenter)
+        #target_label.setSizePolicy(Qt.QSizePolicy.Expanding, Qt.QSizePolicy.Expanding)
         layout.addWidget(target_label, row, 0)
         target = Qt.QLineEdit()
         target.setValidator(Qt.QDoubleValidator(range_low, range_high, 1, parent=self))

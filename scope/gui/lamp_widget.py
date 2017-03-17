@@ -25,68 +25,61 @@
 from . import device_widget
 from PyQt5 import Qt
 
-class SpectraXWidget(device_widget.DeviceWidget):
-    PROPERTY_ROOT = 'scope.il.spectra.'
+class LampWidget(device_widget.DeviceWidget):
+    @staticmethod
+    def can_run(scope):
+        return device_widget.has_component(scope, 'scope.tl.lamp') or device_widget.has_component(scope, 'scope.il.spectra')
 
     def __init__(self, scope, scope_properties, parent=None):
         super().__init__(scope, scope_properties, parent)
-        self.setWindowTitle('Spectra X')
+        self.setWindowTitle('Lamps')
         container_layout = Qt.QVBoxLayout()
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(0)
         self.setLayout(container_layout)
 
         grid_layout = Qt.QGridLayout()
+        grid_layout.setContentsMargins(0, 0, 0, 0)
+        grid_layout.setVerticalSpacing(4)
+        grid_layout.setHorizontalSpacing(4)
         container_layout.addLayout(grid_layout)
 
-        lamp_specs = scope.il.spectra.lamp_specs
-        # sort lamp names by the values of the lamp_specs dict; to wit, the center wavelengths
-        lamps = sorted(lamp_specs.keys(), key=lamp_specs.get)
-        self.lamp_controllers = [LampController(self, self.PROPERTY_ROOT+lamp, grid_layout, i) for i, lamp in enumerate(lamps)]
+        self.lamp_controllers = []
+        if device_widget.has_component(scope, 'scope.tl.lamp'):
+            self.lamp_controllers.append(LampController(self, 'scope.tl.lamp', grid_layout))
+
+        if device_widget.has_component(scope, 'scope.il.spectra'):
+            lamp_specs = scope.il.spectra.lamp_specs
+            # sort lamp names by the values of the lamp_specs dict; to wit, the center wavelengths
+            lamps = sorted(lamp_specs.keys(), key=lamp_specs.get)
+            self.lamp_controllers += [LampController(self, 'scope.il.spectra.'+lamp, grid_layout) for lamp in lamps]
 
         bottom_layout = Qt.QHBoxLayout()
+        bottom_layout.setContentsMargins(0, 0, 0, 0)
+        grid_layout.setSpacing(10)
         container_layout.addLayout(bottom_layout)
         disable_all_button = Qt.QPushButton('Disable All')
         bottom_layout.addWidget(disable_all_button)
         disable_all_button.clicked.connect(self.disable_all)
-        temperature_label = Qt.QLabel('Temperature: -')
-        bottom_layout.addWidget(temperature_label)
-        self.subscribe(self.PROPERTY_ROOT + 'temperature',
-           callback=lambda temp: temperature_label.setText('Temperature: {}°C'.format(temp)))
+        bottom_layout.addWidget(Qt.QWidget())
+        if device_widget.has_component(scope, 'scope.il.spectra'):
+            temperature_label = Qt.QLabel('Temperature: -')
+            temperature_label.setAlignment(Qt.Qt.AlignRight)
+            bottom_layout.addWidget(temperature_label)
+            self.subscribe('scope.il.spectra.temperature',
+               callback=lambda temp: temperature_label.setText('Temperature: {}°C'.format(temp)))
+        else:
+            bottom_layout.addWidget(Qt.QWidget())
 
     def disable_all(self):
         for lamp_controller in self.lamp_controllers:
             lamp_controller.toggle.setChecked(False)
 
-class TLLampWidget(device_widget.DeviceWidget):
-    PROPERTY_ROOT = 'scope.tl.lamp.'
-
-    def __init__(self, scope, scope_properties, parent=None):
-        super().__init__(scope, scope_properties, parent)
-        self.setWindowTitle('TL Lamp')
-        grid_layout = Qt.QGridLayout()
-        self.setLayout(grid_layout)
-        self.lamp_controller = LampController(self, self.PROPERTY_ROOT[:-1], grid_layout, 0)
-
-class LampWidget(Qt.QWidget):
-    @staticmethod
-    def can_run(scope):
-        return SpectraXWidget.can_run(scope) or TLLampWidget.can_run(scope)
-
-    def __init__(self, scope, scope_properties, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle('Lamp Controller')
-        container_layout = Qt.QVBoxLayout()
-        self.setLayout(container_layout)
-        if TLLampWidget.can_run(scope):
-            tl = TLLampWidget(scope, scope_properties, self)
-            container_layout.addWidget(tl)
-        if SpectraXWidget.can_run(scope):
-            spx = SpectraXWidget(scope, scope_properties, self)
-            container_layout.addWidget(spx)
-
 class LampController:
-    def __init__(self, widget, name, layout, row):
+    def __init__(self, widget, name, layout):
         display_name = name.split('.', 1)[1] # strip off leading 'scope.'
         toggle = Qt.QCheckBox(display_name)
+        row = layout.rowCount()
         layout.addWidget(toggle, row, 0)
         toggle_update = widget.subscribe(name + '.enabled', callback=toggle.setChecked)
         toggle.toggled.connect(toggle_update)

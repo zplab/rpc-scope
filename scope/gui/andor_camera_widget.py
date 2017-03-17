@@ -82,20 +82,26 @@ class AndorCameraWidget(device_widget.DeviceWidget):
         self.add_property_rows(properties, property_types)
 
     def add_property_rows(self, properties, property_types):
-        self.setLayout(Qt.QGridLayout())
+        form = Qt.QFormLayout()
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setVerticalSpacing(6)
+        form.setLabelAlignment(Qt.Qt.AlignRight)
+        form.setFieldGrowthPolicy(Qt.QFormLayout.ExpandingFieldsGrow)
+        self.setLayout(form)
         for row, property in enumerate(properties):
             type, readonly = property_types.get(property, ('String', True)) # if the property type isn't in the dict, assume its a readonly string
             self.make_widgets_for_property(row, property, type, readonly)
 
     def make_widgets_for_property(self, row, property, type, readonly):
         label = Qt.QLabel(property + ':')
-        label.setAlignment(Qt.Qt.AlignRight)
-        self.layout().addWidget(label, row, 0)
         widget = self.make_widget(property, type, readonly)
-        self.layout().addWidget(widget, row, 1)
         if property in self.UNITS:
             unit_label = Qt.QLabel(self.UNITS[property])
-            self.layout().addWidget(unit_label, row, 2)
+            layout = Qt.QHBoxLayout()
+            layout.addWidget(widget)
+            layout.addWidget(unit_label)
+            widget = layout
+        self.layout().addRow(property + ':', widget)
 
     def make_widget(self, property, type, readonly):
         if readonly:

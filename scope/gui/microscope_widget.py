@@ -47,8 +47,8 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         ('tl.aperture_diaphragm', 'int', 'tl.aperture_diaphragm_range', 'nosepiece.position'),
         ('tl.field_diaphragm', 'int', 'tl.field_diaphragm_range', 'nosepiece.position'),
         ('tl.condenser_retracted', 'bool'),
-        ('stage.xy_fine_manual_control', 'bool'),
-        ('stage.z_fine_manual_control', 'bool'),
+        ('stage.xy_fine_control', 'bool'),
+        ('stage.z_fine_control', 'bool'),
         # TODO: use hard max values read from scope, if possible
         # TODO: If not possible, verify that hard max values are identical across all scopes
         # otherwise make this a config parameter.
@@ -75,14 +75,15 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         super().__init__(scope, scope_properties, parent)
         self.limit_pixmaps_and_tooltips = LimitPixmapsAndToolTips()
         self.setWindowTitle('Microscope')
-        self.setLayout(Qt.QGridLayout())
+        form = Qt.QFormLayout()
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setVerticalSpacing(4)
+        form.setLabelAlignment(Qt.Qt.AlignRight | Qt.Qt.AlignVCenter)
+        form.setFieldGrowthPolicy(Qt.QFormLayout.ExpandingFieldsGrow)
+        self.setLayout(form)
         self.scope = scope
         for property, widget_type, *widget_args in self.PROPERTIES:
             self.make_widgets_for_property(self.PROPERTY_ROOT + property, widget_type, widget_args)
-        self.layout().addItem(Qt.QSpacerItem(
-            0, 0, Qt.QSizePolicy.MinimumExpanding, Qt.QSizePolicy.MinimumExpanding), self.layout().rowCount(), 0,
-            1,  # Spacer is just one logical row tall (that row stretches vertically to occupy all available space)...
-            -1) # ... and, it spans all the columns in its row
 
     def get_scope_attr(self, property):
         """look up an attribute on the scope object by property name, which is
@@ -99,16 +100,13 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         except AttributeError:
             # The property isn't available for this scope object, so don't
             # make a widget for it.
-            # e = 'Failed to read value of "{}", so this property will not be presented in the GUI.'.format(property)
-            # Qt.qDebug(e)
             return
         layout = self.layout()
-        row = layout.rowCount()
         label = Qt.QLabel(property[len(self.PROPERTY_ROOT):] + ':') # strip the 'scope.' off
-        label.setAlignment(Qt.Qt.AlignRight)
-        layout.addWidget(label, row, 0)
+        label.setSizePolicy(Qt.QSizePolicy.Expanding, Qt.QSizePolicy.Expanding)
         widget = getattr(self, 'make_{}_widget'.format(widget_type))(property, *widget_args)
-        layout.addWidget(widget, row, 1)
+        widget.setSizePolicy(Qt.QSizePolicy.Expanding, Qt.QSizePolicy.Expanding)
+        layout.addRow(label, widget)
 
     def make_bool_widget(self, property):
         widget = Qt.QCheckBox()
@@ -128,6 +126,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
     def make_int_widget(self, property, range_property, range_depends_on_property):
         widget = Qt.QWidget()
         layout = Qt.QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
         widget.setLayout(layout)
         slider = Qt.QSlider(Qt.Qt.Horizontal)
         slider.setTickInterval(1)
@@ -212,26 +211,32 @@ class MicroscopeWidget(device_widget.DeviceWidget):
     def make_stage_axis_pos_widget(self, property, axis_max_val):
         widget = Qt.QWidget()
         vlayout = Qt.QVBoxLayout()
+        vlayout.setSpacing(0)
+        vlayout.setContentsMargins(0, 0, 0, 0)
         widget.setLayout(vlayout)
         axis_name = property.split('.')[-1]
         props = self.scope_properties.properties # dict of tracked properties, updated by property client
 
         # [low limits status indicator] [-------<slider>-------] [high limits status indicator]
-        hlayout = Qt.QHBoxLayout()
+        slider_layout = Qt.QHBoxLayout()
+        l, t, r, b = slider_layout.getContentsMargins()
+        slider_layout.setContentsMargins(l, 0, r, 0)
+        slider_layout.setSpacing(5)
         low_limit_status_label = Qt.QLabel()
         # NB: *_limit_status_label pixmaps are set here so that layout does not jump when limit status RPC property updates
         # are first received
         low_limit_status_label.setPixmap(self.limit_pixmaps_and_tooltips.low_no_limit_pm)
-        hlayout.addWidget(low_limit_status_label)
-        pos_slider_factor = 1e5
+        slider_layout.addWidget(low_limit_status_label)
+        pos_slider_factor = 1e3
         pos_slider = Qt.QSlider(Qt.Qt.Horizontal)
         pos_slider.setEnabled(False)
         pos_slider.setRange(0, pos_slider_factor * axis_max_val)
-        hlayout.addWidget(pos_slider)
+        pos_slider.setValue(0)
+        slider_layout.addWidget(pos_slider)
         high_limit_status_label = Qt.QLabel()
         high_limit_status_label.setPixmap(self.limit_pixmaps_and_tooltips.high_no_limit_pm)
-        hlayout.addWidget(high_limit_status_label)
-        vlayout.addLayout(hlayout)
+        slider_layout.addWidget(high_limit_status_label)
+        vlayout.addLayout(slider_layout)
 
         at_ls_property = self.PROPERTY_ROOT + 'stage.at_{}_low_soft_limit'.format(axis_name)
         at_lh_property = self.PROPERTY_ROOT + 'stage.at_{}_low_hard_limit'.format(axis_name)
@@ -284,34 +289,38 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         self.subscribe(at_hh_property, at_high_limit_prop_changed)
 
         # [stop] [low soft limit text edit] [position text edit] [high soft limit text edit] [reset high soft limit button]
-        hlayout = Qt.QHBoxLayout()
+        buttons_layout = Qt.QHBoxLayout()
+        l, t, r, b = buttons_layout.getContentsMargins()
+        buttons_layout.setSpacing(5)
+        buttons_layout.setContentsMargins(l, 0, r, 0)
+
         stop_button = Qt.QPushButton(widget.style().standardIcon(Qt.QStyle.SP_BrowserStop), '')
         stop_button.setToolTip('Stop movement along {} axis.'.format(axis_name))
         stop_button.setEnabled(False)
-        hlayout.addWidget(stop_button)
+        buttons_layout.addWidget(stop_button)
         low_limit_text_widget = FocusLossSignalingLineEdit()
         low_limit_text_widget.setMaxLength(8)
         low_limit_text_validator = Qt.QDoubleValidator()
         low_limit_text_validator.setBottom(0)
         low_limit_text_widget.setValidator(low_limit_text_validator)
-        hlayout.addWidget(low_limit_text_widget)
+        buttons_layout.addWidget(low_limit_text_widget)
         pos_text_widget = FocusLossSignalingLineEdit()
         pos_text_widget.setMaxLength(8)
         pos_text_validator = Qt.QDoubleValidator()
         pos_text_widget.setValidator(pos_text_validator)
-        hlayout.addWidget(pos_text_widget)
+        buttons_layout.addWidget(pos_text_widget)
         high_limit_text_widget = FocusLossSignalingLineEdit()
         high_limit_text_widget.setMaxLength(8)
         high_limit_text_validator = Qt.QDoubleValidator()
         high_limit_text_validator.setTop(axis_max_val)
         high_limit_text_widget.setValidator(high_limit_text_validator)
-        hlayout.addWidget(high_limit_text_widget)
+        buttons_layout.addWidget(high_limit_text_widget)
         reset_limits_button = Qt.QPushButton('Reset limits')
         reset_limits_button.setToolTip(
             'Reset {} soft min and max to the smallest \n and largest acceptable values, respectively.'.format(axis_name)
         )
-        hlayout.addWidget(reset_limits_button)
-        vlayout.addLayout(hlayout)
+        buttons_layout.addWidget(reset_limits_button)
+        vlayout.addLayout(buttons_layout)
 
         def moving_along_axis_changed(value):
             stop_button.setEnabled(value)
@@ -369,7 +378,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 return
             with handling_pos_change:
                 pos_text_widget.setText(str(value))
-                pos_slider.setValue(value * pos_slider_factor)
+                pos_slider.setValue(int(value * pos_slider_factor))
 
         self.subscribe(property, position_changed)
         get_pos = getattr(self.scope.stage, '_get_{}'.format(axis_name))

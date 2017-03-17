@@ -125,7 +125,7 @@ class Stage(stand.LeicaComponent):
         self.register_event_callback(GET_XY_STEP_MODE, self._on_xy_step_mode_event)
         self.register_event_callback(GET_X1_LIMIT, self._on_x_low_soft_limit_event)
         self.register_event_callback(GET_X2_LIMIT, self._on_x_high_soft_limit_event)
-        self._update_property('xy_fine_manual_control', self.get_xy_fine_manual_control())
+        self._update_property('xy_fine_control', self.get_xy_fine_control())
         self._update_property('x_low_soft_limit', self.get_x_low_soft_limit())
         self._update_property('x_high_soft_limit', self.get_x_high_soft_limit())
         self._on_status_x_event(self.send_message(GET_STATUS_X, async=False))
@@ -165,7 +165,7 @@ class Stage(stand.LeicaComponent):
         self.register_event_callback(GET_POS_Z, self._on_pos_z_event)
         self.register_event_callback(GET_Z_STEP_MODE, self._on_z_step_mode_event)
         self.register_event_callback(GET_LOW_LIMIT, self._on_z_low_soft_limit_event)
-        self._update_property('z_fine_manual_control', self.get_z_fine_manual_control())
+        self._update_property('z_fine_control', self.get_z_fine_control())
         self._update_property('z_low_soft_limit', self.get_z_low_soft_limit())
         self._update_property('z_high_soft_limit', self.get_z_high_soft_limit())
         self._on_status_z_event(self.send_message(GET_STATUS_Z, async=False))
@@ -495,23 +495,23 @@ class Stage(stand.LeicaComponent):
         """Reinitialize z axis to correct for drift or "stuck" stage. Executes synchronously."""
         self.send_message(INIT_RANGE_Z, async=False, intent="init stage z axis")
 
-    def set_xy_fine_manual_control(self, fine):
+    def set_xy_fine_control(self, fine):
         self.send_message(SET_XY_STEP_MODE, int(not fine), async=False)
 
-    def set_z_fine_manual_control(self, fine):
+    def set_z_fine_control(self, fine):
         self.send_message(SET_Z_STEP_MODE, int(not fine), async=False)
 
-    def get_xy_fine_manual_control(self):
+    def get_xy_fine_control(self):
         return not bool(int(self.send_message(GET_XY_STEP_MODE, async=False).response))
 
-    def get_z_fine_manual_control(self):
+    def get_z_fine_control(self):
         return not bool(int(self.send_message(GET_Z_STEP_MODE, async=False).response))
 
     def _on_xy_step_mode_event(self, response):
-        self._update_property('xy_fine_manual_control', not bool(int(response.response)))
+        self._update_property('xy_fine_control', not bool(int(response.response)))
 
     def _on_z_step_mode_event(self, response):
-        self._update_property('z_fine_manual_control', not bool(int(response.response)))
+        self._update_property('z_fine_control', not bool(int(response.response)))
 
     def get_z_ramp_range(self):
         """Return min, max z ramp values in mm/second^2"""

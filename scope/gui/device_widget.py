@@ -26,21 +26,24 @@ from PyQt5 import Qt
 import collections
 from ..simple_rpc import rpc_client
 
+def has_component(scope, component):
+    property_path = component.strip('.').split('.')[1:] # skip the leading 'scope.'
+    container = scope
+    try:
+        for element in property_path:
+            container = getattr(container, element)
+    except AttributeError:
+        return False
+    else:
+        return True
+
 class DeviceWidget(Qt.QWidget):
     _PropertyChangeSignal = Qt.pyqtSignal(str, object)
 
     @classmethod
     def can_run(cls, scope):
         """Report on whether the current scope object supports a given widget."""
-        property_path = cls.PROPERTY_ROOT.strip('.').split('.')[1:] # skip the leading 'scope.'
-        container = scope
-        try:
-            for element in property_path:
-                container = getattr(container, element)
-        except AttributeError:
-            return False
-        else:
-            return True
+        return has_component(scope, cls.PROPERTY_ROOT)
 
     def __init__(self, scope, scope_properties, parent):
         super().__init__(parent)

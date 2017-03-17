@@ -56,7 +56,6 @@ class ScopeViewerWidgetQtObject(ris_widget.ris_widget.RisWidgetQtObject):
             window_title='Scope Viewer',
             parent=None,
             window_flags=Qt.Qt.WindowFlags(0),
-            msaa_sample_count=2,
             show=True,
             layers = tuple(),
             **kw):
@@ -67,7 +66,6 @@ class ScopeViewerWidgetQtObject(ris_widget.ris_widget.RisWidgetQtObject):
             window_title=window_title,
             parent=parent,
             window_flags=window_flags,
-            msaa_sample_count=msaa_sample_count,
             layers=layers,
             **kw)
         hh = self.layer_table_view.horizontalHeader()
@@ -130,30 +128,5 @@ class ScopeViewerWidgetQtObject(ris_widget.ris_widget.RisWidgetQtObject):
 
 class ScopeViewerWidget(ris_widget.ris_widget.RisWidget):
     APP_PREFS_NAME = "ScopeViewerWidget"
-    COPY_REFS = ris_widget.ris_widget.RisWidget.COPY_REFS + [
-        #'something'
-    ]
     QT_OBJECT_CLASS = ScopeViewerWidgetQtObject
 
-    def __init__(
-            self,
-            scope,
-            scope_properties,
-            window_title='Scope Viewer',
-            parent=None,
-            window_flags=Qt.Qt.WindowFlags(0),
-            msaa_sample_count=2,
-            show=True,
-            layers = tuple(),
-            **kw):
-        super().__init__(
-            window_title=window_title,
-            parent=parent,
-            window_flags=window_flags,
-            msaa_sample_count=msaa_sample_count,
-            show=show,
-            layers=layers,
-            scope=scope,
-            scope_properties=scope_properties,
-            **kw)
-    #fooprop = ProxyProperty('fooprop', 'qt_object', ScopeViewerWidgetQtObject)

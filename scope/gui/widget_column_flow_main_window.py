@@ -29,7 +29,7 @@ class WidgetColumnFlowMainWindow(Qt.QMainWindow):
         super().__init__(parent)
         self.containers = []
         self._w = Qt.QWidget()
-        self._w.setLayout(FlowLayout())
+        self._w.setLayout(FlowLayout(vSpacing=0))
         self.setCentralWidget(self._w)
         self.visibility_toolbar = self.addToolBar('Visibility')
 
@@ -53,8 +53,10 @@ class HideableWidgetContainer(Qt.QWidget):
     def __init__(self, contained_widget, docked):
         super().__init__()
         self.contained_widget = contained_widget
-        l = Qt.QVBoxLayout()
-        self.setLayout(l)
+        layout = Qt.QVBoxLayout()
+        layout.setContentsMargins(-1, 0, -1, 6)
+        layout.setSpacing(5)
+        self.setLayout(layout)
         self.docked = docked
         if docked:
             self.title_label = Qt.QLabel()
@@ -64,8 +66,8 @@ class HideableWidgetContainer(Qt.QWidget):
             self.title_label.setFont(f)
             self.title_label.setBackgroundRole(Qt.QPalette.Shadow)
             self.title_label.setAutoFillBackground(True)
-            l.addWidget(self.title_label)
-        l.addWidget(contained_widget)
+            layout.addWidget(self.title_label)
+        layout.addWidget(contained_widget)
         self.visibility_change_action = Qt.QAction(contained_widget.windowTitle(), self)
         self.visibility_change_action.setCheckable(True)
         self.visibility_change_action.setChecked(False)
