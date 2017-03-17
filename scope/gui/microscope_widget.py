@@ -105,6 +105,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         layout = self.layout()
         row = layout.rowCount()
         label = Qt.QLabel(property[len(self.PROPERTY_ROOT):] + ':') # strip the 'scope.' off
+        label.setAlignment(Qt.Qt.AlignRight)
         layout.addWidget(label, row, 0)
         widget = getattr(self, 'make_{}_widget'.format(widget_type))(property, *widget_args)
         layout.addWidget(widget, row, 1)

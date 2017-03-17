@@ -43,9 +43,9 @@ def decode_hex_rh(value):
     return value
 
 def encode_hex_rh(value):
-    if not 100 > value > 0:
+    if not 100 >= value >= 0:
         raise ValueError('RH value must be between 0 and 100%.')
-    value = hex(value*10 + (2<<20))[2:].upper()
+    value = hex(int(round(value*10)) + (2<<20))[2:].upper()
     assert len(value) == 6
     return value
 
@@ -142,7 +142,9 @@ class HumidityController(property_device.PropertyDevice):
         return list(self._logged_data)
 
     def get_target_humidity(self):
-        return decode_hex_rh(self._call('R01'))
+        humidity = decode_hex_rh(self._call('R01'))
+        self._update_property('target_humidity', humidity)
+        return humidity
 
     def set_target_humidity(self, humidity):
         hexval = encode_hex_rh(humidity)

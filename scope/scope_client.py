@@ -221,15 +221,11 @@ class LiveStreamer:
 
     def _image_update(self, frame_number):
         # called in property client's thread: note we can't do RPC calls...
-        # Note: if we've already received an image, but nobody on the main thread
-        # has called get_image() to retrieve it, then just ignore subsequent
-        # updates.
-        if frame_number is -1:
+        if frame_number == -1:
             return
-        if not self.image_received.is_set():
-            self.image_received.set()
-            if self.image_ready_callback is not None:
-                self.image_ready_callback()
+        self.image_received.set()
+        if self.image_ready_callback is not None:
+            self.image_ready_callback()
 
     def _depth_update(self, depth):
         self.bit_depth = depth

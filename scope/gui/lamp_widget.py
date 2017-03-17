@@ -85,7 +85,8 @@ class LampWidget(Qt.QWidget):
 
 class LampController:
     def __init__(self, widget, name, layout, row):
-        toggle = Qt.QCheckBox(name)
+        display_name = name.split('.', 1)[1] # strip off leading 'scope.'
+        toggle = Qt.QCheckBox(display_name)
         layout.addWidget(toggle, row, 0)
         toggle_update = widget.subscribe(name + '.enabled', callback=toggle.setChecked)
         toggle.toggled.connect(toggle_update)

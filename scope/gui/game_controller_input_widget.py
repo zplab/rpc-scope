@@ -23,21 +23,25 @@
 # Authors: Erik Hvatum <ice.rikh@gmail.com>, Zach Pincus <zpincus@wustl.edu>
 
 from PyQt5 import Qt
-import sdl2
-from ..client_util import game_controller_input
 
-class _GameControllerInput(game_controller_input.GameControllerInput):
-    # define an adapter thread class that's a QThread but works like threading.thread
-    class THREAD_TYPE(Qt.QThread):
-        def __init__(self, target, parent=None):
-            super().__init__(parent)
-            self.target = target
+try:
+    from ..client_util import game_controller_input
+    has_game_controller_input = True
 
-        def run(self):
-            self.target()
+    class _GameControllerInput(game_controller_input.GameControllerInput):
+        # define an adapter thread class that's a QThread but works like threading.thread
+        class THREAD_TYPE(Qt.QThread):
+            def __init__(self, target, parent=None):
+                super().__init__(parent)
+                self.target = target
 
-        def join(self):
-            self.wait()
+            def run(self):
+                self.target()
+
+            def join(self):
+                self.wait()
+except ModuleNotFoundError:
+    has_game_controller_input = False
 
 # GameControllerInputWidget is actually just a QAction. QAction provides all the functionality required while avoiding
 # the need to make and lay out a QPushButton.
@@ -46,7 +50,7 @@ class GameControllerInputWidget(Qt.QAction):
 
     @staticmethod
     def can_run(scope):
-        return hasattr(scope, 'stage')
+        return has_game_controller_input and hasattr(scope, 'stage')
 
     def __init__(self, scope, scope_properties, device=-1, parent=None):
         """If -1 (the default) is supplied for device_id, GameControllerInputWidget attempts to use the gamepad/joystick with

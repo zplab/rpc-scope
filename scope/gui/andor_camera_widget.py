@@ -89,6 +89,7 @@ class AndorCameraWidget(device_widget.DeviceWidget):
 
     def make_widgets_for_property(self, row, property, type, readonly):
         label = Qt.QLabel(property + ':')
+        label.setAlignment(Qt.Qt.AlignRight)
         self.layout().addWidget(label, row, 0)
         widget = self.make_widget(property, type, readonly)
         self.layout().addWidget(widget, row, 1)

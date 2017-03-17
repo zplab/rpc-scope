@@ -30,6 +30,8 @@ import runpy
 import pathlib
 import shutil
 
+from . import default_config
+
 CONFIG_DIR = pathlib.Path('/usr/local/scope')
 CONFIG_FILE = CONFIG_DIR / 'scope_configuration.py'
 
@@ -54,13 +56,12 @@ _CONFIG = None
 def get_config():
     global _CONFIG
     if _CONFIG is None:
-        if not CONFIG_DIR.exists():
-            CONFIG_DIR.mkdir(parents=True)
-        if not CONFIG_FILE.exists():
-            from . import default_config
-            shutil.copyfile(default_config.__file__, str(CONFIG_FILE))
-        module_globals = runpy.run_path(str(CONFIG_FILE))
-        _CONFIG = module_globals['scope_configuration']
+        if CONFIG_DIR.exists():
+            if not CONFIG_FILE.exists():
+                shutil.copyfile(default_config.__file__, str(CONFIG_FILE))
+            _CONFIG = runpy.run_path(str(CONFIG_FILE))['scope_configuration']
+        else: # no CONFIG_DIR
+            _CONFIG = default_config.scope_configuration
      # return a new ConfigDict every time to prevent mutation of the global state
     return ConfigDict(_CONFIG)
 
