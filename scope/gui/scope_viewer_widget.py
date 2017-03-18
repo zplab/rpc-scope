@@ -39,7 +39,7 @@ from .. import scope_client
 ris_widget.qwidgets.layer_table.LayerTableModel.PROPERTIES.insert(
     ris_widget.qwidgets.layer_table.LayerTableModel.PROPERTIES.index('opacity') + 1, 'name')
 
-class ScopeViewerWidgetQtObject(ris_widget.ris_widget.RisWidgetQtObject):
+class ScopeViewerWidget(ris_widget.ris_widget.RisWidgetQtObject):
     NEW_IMAGE_EVENT = Qt.QEvent.registerEventType()
     OVEREXPOSURE_GETCOLOR_EXPRESSION = 's.r < 1.0f ? vec4(s.rrr, 1.0f) : vec4(1.0f, 0.0f, 0.0f, 1.0f)'
 
@@ -51,8 +51,6 @@ class ScopeViewerWidgetQtObject(ris_widget.ris_widget.RisWidgetQtObject):
             self,
             scope,
             scope_properties,
-            app_prefs_name='ScopeViewerWidget',
-            app_prefs_version=1,
             window_title='Scope Viewer',
             parent=None,
             window_flags=Qt.Qt.WindowFlags(0),
@@ -61,13 +59,16 @@ class ScopeViewerWidgetQtObject(ris_widget.ris_widget.RisWidgetQtObject):
             **kw):
 
         super().__init__(
-            app_prefs_name=app_prefs_name,
-            app_prefs_version=app_prefs_version,
+            app_prefs_name=None,
             window_title=window_title,
             parent=parent,
             window_flags=window_flags,
             layers=layers,
             **kw)
+
+        self.main_view_toolbar.removeAction(self.main_view_snapshot_action)
+        self.dock_widget_visibility_toolbar.removeAction(self.layer_stack_painter_dock_widget.toggleViewAction())
+
         hh = self.layer_table_view.horizontalHeader()
         col = ris_widget.qwidgets.layer_table.LayerTableModel.PROPERTIES.index('name')
         hh.resizeSection(col, hh.sectionSize(col) * 1.5)
@@ -125,8 +126,4 @@ class ScopeViewerWidgetQtObject(ris_widget.ris_widget.RisWidgetQtObject):
         else:
             # Revert to default getcolor_expression
             del layer.getcolor_expression
-
-class ScopeViewerWidget(ris_widget.ris_widget.RisWidget):
-    APP_PREFS_NAME = "ScopeViewerWidget"
-    QT_OBJECT_CLASS = ScopeViewerWidgetQtObject
 

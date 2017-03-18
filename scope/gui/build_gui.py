@@ -1,9 +1,6 @@
 import signal
-
-import OpenGL
-OpenGL.ERROR_CHECKING = False
-
 from PyQt5 import Qt
+from ris_widget import shared_resources
 
 from .. import scope_client
 from . import scope_widgets
@@ -16,13 +13,14 @@ from . import game_controller_input_widget
 from . import incubator_widget
 
 WIDGETS = [
+    # properties not specified as True are assumed False
     dict(name='camera', cls=andor_camera_widget.AndorCameraWidget, start_visible=True, docked=True),
     dict(name='lamps', cls=lamp_widget.LampWidget, start_visible=True, docked=True),
     dict(name='incubator', cls=incubator_widget.IncubatorWidget, start_visible=True, docked=True),
     dict(name='microscope', cls=microscope_widget.MicroscopeWidget, start_visible=True, docked=True),
-    dict(name='advanced_camera', cls=andor_camera_widget.AndorAdvancedCameraWidget, start_visible=False, docked=False),
-    dict(name='viewer', cls=scope_viewer_widget.ScopeViewerWidgetQtObject, start_visible=True, docked=False),
-    dict(name='stage_table', cls=stage_pos_table_widget.StagePosTableWidget, start_visible=False, docked=False),
+    dict(name='advanced_camera', cls=andor_camera_widget.AndorAdvancedCameraWidget, pad=True),
+    dict(name='viewer', cls=scope_viewer_widget.ScopeViewerWidget, start_visible=True),
+    dict(name='stage_table', cls=stage_pos_table_widget.StagePosTableWidget),
     dict(name='game_controller', cls=game_controller_input_widget.GameControllerInputWidget)
 ]
 
@@ -33,7 +31,7 @@ def sigint_handler(*args):
     Qt.QApplication.quit()
 
 def gui_main(host, desired_widgets=None):
-    Qt.QApplication.setAttribute(Qt.Qt.AA_ShareOpenGLContexts)
+    shared_resources.create_default_QSurfaceFormat() # must be called before starting QApplication
     app = Qt.QApplication([])
 
     scope, scope_properties = scope_client.client_main(host)
@@ -47,7 +45,10 @@ def gui_main(host, desired_widgets=None):
             # keep widget order from WIDGETS list
             widgets = [widget for widget in WIDGETS if widget['name'] in desired_widgets]
 
-    main_window = scope_widgets.WidgetWindow(scope, scope_properties, widgets)
+    title = "Microscope Control"
+    if host not in {'localhost', '127.0.0.1'}:
+        title += ': {}'.format(host)
+    main_window = scope_widgets.WidgetWindow(scope, scope_properties, widgets, window_title=title)
     main_window.show()
 
     # install a custom signal handler so that when python receives control-c, QT quits
