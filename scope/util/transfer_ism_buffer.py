@@ -81,9 +81,10 @@ def _server_release_array(name):
     is safe to call over RPC (which does not know how to send numpy arrays)."""
     _release_array(name)
 
-def _server_pack_data(name, compressor='blosc', **compressor_args):
+def _server_pack_data(name, compressor='blosc', downsample=None, **compressor_args):
     """Pack the data in the named ISM_Buffer into bytes for transfer over
     the network (or other serialization).
+    Downsample parameter: int / None. If not None, only return every nth pixel.
     Valid compressor values are:
       - None: pack raw image bytes
       - 'blosc': use the fast, modern BLOSC compression library
@@ -91,6 +92,8 @@ def _server_pack_data(name, compressor='blosc', **compressor_args):
     compressor_args are passed to zlib.compress() or blosc.compress() directly."""
 
     array = _release_array(name) # get the array and release it from the list of to-be-transfered arrays
+    if downsample:
+        array = array[::downsample, ::downsample]
     dtype_str = numpy.lib.format.dtype_to_descr(array.dtype)
     if array.flags.f_contiguous:
         order = 'F'
@@ -181,20 +184,23 @@ def client_get_data_getter(rpc_client, force_remote=False):
                     self.compressor = 'zlib'
                     self.compressor_args['level'] = 2
 
-            def set_network_compression(self, compressor, **compressor_args):
+            def set_network_compression(self, compressor, downsample=None, **compressor_args):
                 """Set the type of compression applied to images sent over the
                 network.
 
-                Valid compressor values are:
-                  - None: pack raw image bytes
-                  - 'blosc': use the fast, modern BLOSC compression library
-                  - 'zlib': use older, more widely supported zlib compression
-                compressor_args are passed to zlib.compress() or blosc.compress() directly."""
+                Parameters:
+                    compressor: what compression method to use. Valid choices:
+                      - None: pack raw image bytes
+                      - 'blosc': use the fast, modern BLOSC compression library
+                      - 'zlib': use older, more widely supported zlib compression
+                    downsample: int / None. If not None, return every nth pixel.
+                    compressor_args: passed to zlib.compress() or blosc.compress() directly."""
                 self.compressor = compressor
                 self.compressor_args = compressor_args
+                self.downsample = downsample
 
             def __call__(self, name):
-                data = rpc_client('_transfer_ism_buffer._server_pack_data', name, self.compressor, **self.compressor_args)
+                data = rpc_client('_transfer_ism_buffer._server_pack_data', name, self.compressor, self.downsample, **self.compressor_args)
                 return _client_unpack_data(data, self.compressor)
         get_data = GetData()
     return is_local, get_data
