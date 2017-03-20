@@ -47,24 +47,8 @@ class ScopeViewerWidget(ris_widget.ris_widget.RisWidgetQtObject):
     def can_run(scope):
         return hasattr(scope, 'camera')
 
-    def __init__(
-            self,
-            scope,
-            scope_properties,
-            window_title='Viewer',
-            parent=None,
-            window_flags=Qt.Qt.WindowFlags(0),
-            show=True,
-            layers = tuple(),
-            **kw):
-
-        super().__init__(
-            app_prefs_name=None,
-            window_title=window_title,
-            parent=parent,
-            window_flags=window_flags,
-            layers=layers,
-            **kw)
+    def __init__(self, scope, scope_properties, window_title='Viewer', app_prefs_name=None, parent=None):
+        super().__init__(window_title=window_title, app_prefs_name=app_prefs_name, parent=parent)
 
         self.main_view_toolbar.removeAction(self.main_view_snapshot_action)
         self.dock_widget_visibility_toolbar.removeAction(self.layer_stack_painter_dock_widget.toggleViewAction())

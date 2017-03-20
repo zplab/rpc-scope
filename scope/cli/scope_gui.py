@@ -2,7 +2,7 @@ import argparse
 
 from ..gui import build_gui
 
-def main(argv):
+def main(argv=None):
     parser = argparse.ArgumentParser(description="microscope GUI")
     choices = ', '.join(sorted(build_gui.WIDGET_NAMES))
     parser.add_argument('widgets', nargs="*", metavar='WIDGET',
@@ -15,7 +15,3 @@ def main(argv):
         # uniquify requested widgets; widget-name validation is done in build_gui
         desired_widgets = set(args.widgets)
     build_gui.gui_main(args.host, desired_widgets)
-
-if __name__ == '__main__':
-    import sys
-    main(sys.argv[1:])

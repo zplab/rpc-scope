@@ -175,6 +175,7 @@ def client_get_data_getter(rpc_client, force_remote=False):
     else: # pipe data over network
         class GetData:
             def __init__(self):
+                self.downsample = None
                 self.compressor_args = {}
                 try:
                     import blosc

@@ -1,11 +1,11 @@
 import argparse
 import traceback
+import sys
 
 from zplib import util
-
 from .. import scope_server
 
-def main(argv):
+def main(argv=None):
     parser = argparse.ArgumentParser(description='microscope server control')
     parser.add_argument('--debug', action='store_true', help='show full stack traces on error')
     subparsers = parser.add_subparsers(help='sub-command help', dest='command')
@@ -37,8 +37,3 @@ def main(argv):
         else:
             sys.stderr.write(str(e)+'\n')
         return 1
-
-
-if __name__ == '__main__':
-    import sys
-    sys.exit(main(sys.argv[1:]))

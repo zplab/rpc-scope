@@ -1,5 +1,0 @@
-#!/usr/bin/env python
-
-from scope.client_util import incubator_check
-
-incubator_check.main()

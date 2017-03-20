@@ -30,14 +30,28 @@ OTHER_WIDGETS = [
 WIDGETS = DEFAULT_WIDGETS + OTHER_WIDGETS
 WIDGET_NAMES = set(widget['name'] for widget in WIDGETS)
 
-def sigint_handler(*args):
-    """Handler for the SIGINT signal."""
-    Qt.QApplication.quit()
-
-def gui_main(host, desired_widgets=None):
+def interruptible_qt_app():
     shared_resources.create_default_QSurfaceFormat() # must be called before starting QApplication
     app = Qt.QApplication([])
 
+    # install a custom signal handler so that when python receives control-c, QT quits
+    def sigint_handler(*args):
+        """Handler for the SIGINT signal."""
+        Qt.QApplication.quit()
+    signal.signal(signal.SIGINT, sigint_handler)
+    # now arrange for the QT event loop to allow the python interpreter to
+    # run occasionally. Otherwise it never runs, and hence the signal handler
+    # would never get called.
+    timer = Qt.QTimer()
+    timer.start(100)
+    # add a no-op callback for timeout. What's important is that the python interpreter
+    # gets a chance to run so it can see the signal and call the handler.
+    timer.timeout.connect(lambda: None)
+    return app
+
+
+def gui_main(host, desired_widgets=None):
+    app = interruptible_qt_app()
     scope, scope_properties = scope_client.client_main(host)
     if desired_widgets is None:
         widgets = DEFAULT_WIDGETS
@@ -54,16 +68,19 @@ def gui_main(host, desired_widgets=None):
         title += ': {}'.format(host)
     main_window = scope_widgets.WidgetWindow(scope, scope_properties, widgets, window_title=title)
     main_window.show()
-
-    # install a custom signal handler so that when python receives control-c, QT quits
-    signal.signal(signal.SIGINT, sigint_handler)
-    # now arrange for the QT event loop to allow the python interpreter to
-    # run occasionally. Otherwise it never runs, and hence the signal handler
-    # would never get called.
-    timer = Qt.QTimer()
-    timer.start(100)
-    # add a no-op callback for timeout. What's important is that the python interpreter
-    # gets a chance to run so it can see the signal and call the handler.
-    timer.timeout.connect(lambda: None)
-
     app.exec()
+
+def monitor_main(hosts, downsample=None):
+    app = interruptible_qt_app()
+    viewers = []
+    for host in hosts:
+        scope, scope_properties = scope_client.client_main(host)
+        if hasattr(scope, 'camera'):
+            if not scope._is_local:
+                scope._get_data.downsample = downsample
+            app_prefs_name = 'viewer-{}'.format(host)
+            viewer = scope_viewer_widget.ScopeViewerWidget(scope, scope_properties, host, app_prefs_name)
+            viewers.append(viewer)
+            viewer.show()
+    app.exec()
+

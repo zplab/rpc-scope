@@ -1,6 +1,7 @@
 import argparse
 import time
 import traceback
+import sys
 
 from .. import scope_job_runner
 
@@ -16,7 +17,7 @@ def parse_delay(arg):
         seconds += val * multiplier
     return time.time() + seconds
 
-def main(argv):
+def main(argv=None):
     # scope_job_daemon [start --verbose | stop | add_job exec_file email ]
 
     parser = argparse.ArgumentParser(description='microscope job control')
@@ -80,8 +81,3 @@ def main(argv):
         else:
             sys.stderr.write(str(e)+'\n')
         return 1
-
-
-if __name__ == '__main__':
-    import sys
-    sys.exit(main(sys.argv[1:]))
