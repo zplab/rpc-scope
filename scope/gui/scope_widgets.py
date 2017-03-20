@@ -79,6 +79,7 @@ class WidgetWindow(Qt.QMainWindow):
             if not container.docked:
                 self.settings.setValue(container.name + '_geometry', container.saveGeometry())
                 container.close()
+                container.contained_widget.close()
         super().closeEvent(e)
 
 
