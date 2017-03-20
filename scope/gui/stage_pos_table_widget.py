@@ -35,7 +35,7 @@ class StagePosTableWidget(Qt.QWidget):
             return False
         return True
 
-    def __init__(self, scope, scope_properties, positions=(), window_title='Stage Position Table', parent=None):
+    def __init__(self, scope, scope_properties, positions=(), window_title='Stage Positions', parent=None):
         super().__init__(parent)
         self.setAttribute(Qt.Qt.WA_DeleteOnClose, True)
         self.scope = scope

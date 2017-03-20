@@ -74,7 +74,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
     def __init__(self, scope, scope_properties, parent=None):
         super().__init__(scope, scope_properties, parent)
         self.limit_pixmaps_and_tooltips = LimitPixmapsAndToolTips()
-        self.setWindowTitle('Microscope')
+        self.setWindowTitle('Stand')
         form = Qt.QFormLayout()
         form.setContentsMargins(0, 0, 0, 0)
         form.setVerticalSpacing(4)

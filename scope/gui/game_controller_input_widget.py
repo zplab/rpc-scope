@@ -110,7 +110,7 @@ class GameControllerInputWidget(Qt.QAction):
                     return
         else:
             self.connect_game_controller(device)
-        self.setText('Disconnect Game Controller')
+        self.setText('Ignore Gamepad')
         self.setToolTip('Currently connected to "{}".'.format(self.game_controller_input.device_name))
 
     def disconnect(self):
@@ -118,7 +118,7 @@ class GameControllerInputWidget(Qt.QAction):
             return
         self.game_controller_input.stop_and_destroy_event_loop_thread()
         self.game_controller_input = None
-        self.setText('Connect Game Controller')
+        self.setText('Use Gamepad')
         self.setToolTip(None)
 
 class _GameControllerDeviceSelectionDialog(Qt.QDialog):

@@ -51,7 +51,7 @@ class ScopeViewerWidget(ris_widget.ris_widget.RisWidgetQtObject):
             self,
             scope,
             scope_properties,
-            window_title='Scope Viewer',
+            window_title='Viewer',
             parent=None,
             window_flags=Qt.Qt.WindowFlags(0),
             show=True,
@@ -73,7 +73,6 @@ class ScopeViewerWidget(ris_widget.ris_widget.RisWidgetQtObject):
         col = ris_widget.qwidgets.layer_table.LayerTableModel.PROPERTIES.index('name')
         hh.resizeSection(col, hh.sectionSize(col) * 1.5)
         self.scope_toolbar = self.addToolBar('Scope')
-        self.live_streamer = scope_client.LiveStreamer(scope, scope_properties, self.post_new_image_event)
         import freeimage
         import pathlib
         if pathlib.Path('/home/zplab/vignette_mask.png').exists():
@@ -84,10 +83,17 @@ class ScopeViewerWidget(ris_widget.ris_widget.RisWidgetQtObject):
         self.show_over_exposed_action.toggled.connect(self.on_show_over_exposed_action_toggled)
         self.show_over_exposed_action.setChecked(True)
         self.scope_toolbar.addAction(self.show_over_exposed_action)
+        self.closing = False
+        self.live_streamer = scope_client.LiveStreamer(scope, scope_properties, self.post_new_image_event)
+
+    def closeEvent(self, e):
+        self.closing = True
+        self.live_streamer.detach()
+        super().closeEvent(e)
 
     def event(self, e):
         # This is called by the main QT event loop to service the event posted in post_new_image_event().
-        if e.type() == self.NEW_IMAGE_EVENT and self.isVisible() and self.live_streamer.image_ready():
+        if e.type() == self.NEW_IMAGE_EVENT and self.live_streamer.image_ready():
             image_data, timestamp, frame_no = self.live_streamer.get_image()
             target_layer = self.get_live_target_layer()
             target_layer.image = ris_widget.image.Image(
@@ -103,7 +109,8 @@ class ScopeViewerWidget(ris_widget.ris_widget.RisWidgetQtObject):
     def post_new_image_event(self):
         # posting an event does not require calling thread to have an event loop,
         # unlike sending a signal
-        Qt.QCoreApplication.postEvent(self, Qt.QEvent(self.NEW_IMAGE_EVENT))
+        if not self.closing and self.isVisible():
+            Qt.QCoreApplication.postEvent(self, Qt.QEvent(self.NEW_IMAGE_EVENT))
 
     def get_live_target_layer(self):
         """The first Layer in self.layers with name "Live Target" is returned.  If self.layers contains no Layer with name

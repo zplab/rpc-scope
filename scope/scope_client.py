@@ -183,6 +183,12 @@ class LiveStreamer:
         scope_properties.subscribe('scope.camera.frame_number', self._image_update, valueonly=True)
         scope_properties.subscribe('scope.camera.bit_depth', self._depth_update, valueonly=True)
 
+    def detach(self):
+        self.image_ready_callback = None
+        scope_properties.unsubscribe('scope.camera.live_mode', self._live_change, valueonly=True)
+        scope_properties.unsubscribe('scope.camera.frame_number', self._image_update, valueonly=True)
+        scope_properties.unsubscribe('scope.camera.bit_depth', self._depth_update, valueonly=True)
+
     def get_image(self):
         """Return the latest image retrieved from the camera, along with a
         timestamp (in camera timestamp units; use camera.timestamp_hz to convert

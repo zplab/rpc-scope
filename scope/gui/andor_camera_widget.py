@@ -213,7 +213,7 @@ class AndorCameraWidget(device_widget.DeviceWidget):
 
 class AndorAdvancedCameraWidget(AndorCameraWidget):
     def build_gui(self):
-        self.setWindowTitle('Advanced Camera')
+        self.setWindowTitle('Adv. Camera')
         property_types = dict(self.camera.andor_property_types)
         advanced_properties = sorted(property_types.keys() - set(self.PROPERTIES))
         self.add_property_rows(advanced_properties, property_types)

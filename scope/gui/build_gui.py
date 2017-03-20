@@ -12,18 +12,22 @@ from . import stage_pos_table_widget
 from . import game_controller_input_widget
 from . import incubator_widget
 
-WIDGETS = [
+DEFAULT_WIDGETS = [
     # properties not specified as True are assumed False
     dict(name='camera', cls=andor_camera_widget.AndorCameraWidget, start_visible=True, docked=True),
+    dict(name='advanced_camera', cls=andor_camera_widget.AndorAdvancedCameraWidget, pad=True),
     dict(name='lamps', cls=lamp_widget.LampWidget, start_visible=True, docked=True),
     dict(name='incubator', cls=incubator_widget.IncubatorWidget, start_visible=True, docked=True),
     dict(name='microscope', cls=microscope_widget.MicroscopeWidget, start_visible=True, docked=True),
-    dict(name='advanced_camera', cls=andor_camera_widget.AndorAdvancedCameraWidget, pad=True),
     dict(name='viewer', cls=scope_viewer_widget.ScopeViewerWidget, start_visible=True),
-    dict(name='stage_table', cls=stage_pos_table_widget.StagePosTableWidget),
     dict(name='game_controller', cls=game_controller_input_widget.GameControllerInputWidget)
 ]
 
+OTHER_WIDGETS = [
+    dict(name='stage_table', cls=stage_pos_table_widget.StagePosTableWidget)
+]
+
+WIDGETS = DEFAULT_WIDGETS + OTHER_WIDGETS
 WIDGET_NAMES = set(widget['name'] for widget in WIDGETS)
 
 def sigint_handler(*args):
@@ -36,7 +40,7 @@ def gui_main(host, desired_widgets=None):
 
     scope, scope_properties = scope_client.client_main(host)
     if desired_widgets is None:
-        widgets = WIDGETS
+        widgets = DEFAULT_WIDGETS
     else:
         desired_widgets = set(desired_widgets)
         for widget in desired_widgets:
