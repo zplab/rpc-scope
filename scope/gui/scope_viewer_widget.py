@@ -22,6 +22,8 @@
 #
 # Authors: Erik Hvatum <ice.rikh@gmail.com>
 
+import time
+
 from PyQt5 import Qt
 import ris_widget
 import ris_widget.image
@@ -47,7 +49,7 @@ class ScopeViewerWidget(ris_widget.ris_widget.RisWidgetQtObject):
     def can_run(scope):
         return hasattr(scope, 'camera')
 
-    def __init__(self, scope, scope_properties, window_title='Viewer', app_prefs_name=None, parent=None):
+    def __init__(self, scope, scope_properties, window_title='Viewer', fps_max=None, app_prefs_name=None, parent=None):
         super().__init__(window_title=window_title, app_prefs_name=app_prefs_name, parent=parent)
 
         self.main_view_toolbar.removeAction(self.main_view_snapshot_action)
@@ -69,6 +71,11 @@ class ScopeViewerWidget(ris_widget.ris_widget.RisWidgetQtObject):
         self.scope_toolbar.addAction(self.show_over_exposed_action)
         self.closing = False
         self.live_streamer = scope_client.LiveStreamer(scope, scope_properties, self.post_new_image_event)
+        if fps_max is None:
+            self.interval_min = None
+        else:
+            self.interval_min = 1/fps_max
+        self.last_image = 0
 
     def closeEvent(self, e):
         self.closing = True
@@ -78,6 +85,11 @@ class ScopeViewerWidget(ris_widget.ris_widget.RisWidgetQtObject):
     def event(self, e):
         # This is called by the main QT event loop to service the event posted in post_new_image_event().
         if e.type() == self.NEW_IMAGE_EVENT and self.live_streamer.image_ready():
+            if self.interval_min is not None:
+                t = time.time()
+                if t - self.last_image < self.interval_min:
+                    return True
+                self.last_image = t
             image_data, timestamp, frame_no = self.live_streamer.get_image()
             target_layer = self.get_live_target_layer()
             target_layer.image = ris_widget.image.Image(
