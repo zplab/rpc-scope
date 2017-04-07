@@ -185,10 +185,10 @@ class MotorizedNosepiece(ManualNosepiece):
         self.send_message(POS_ABS_OBJ, mag_positions[0], intent="change objective turret position")
 
 
-class MotorizedNosepieceWithSafeMode(ManualNosepiece):
+class MotorizedNosepieceWithSafeMode(MotorizedNosepiece):
     def set_position(self, position):
         try:
-            self.set_position(position)
+            super().set_position(position)
         except stand.message_device.LeicaError:
             if self.get_safe_mode() and self._get_objpar(self.get_position(), 5) != self._get_objpar(position, 5):
                 raise stand.message_device.LeicaError('Attempting to change to an objective with a different immersion/dry state is forbidden in safe mode.')
