@@ -15,3 +15,6 @@ def main(argv=None):
         # uniquify requested widgets; widget-name validation is done in build_gui
         desired_widgets = set(args.widgets)
     build_gui.gui_main(args.host, desired_widgets)
+
+if __name__ == '__main__':
+    main()

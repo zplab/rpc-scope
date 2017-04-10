@@ -10,3 +10,6 @@ def main(argv=None):
     parser.add_argument('--fps-max', type=int, help='maximum image update FPS to reduce and network load')
     args = parser.parse_args(argv)
     build_gui.monitor_main(args.hosts, args.downsample, args.fps_max)
+
+if __name__ == '__main__':
+    main()
