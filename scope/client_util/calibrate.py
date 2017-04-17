@@ -185,10 +185,13 @@ def meter_exposure(scope, lamp, max_exposure=200, min_intensity_fraction=0.3,
     """
     max_exposure_exponent = numpy.log2(max_exposure)
     # Exposure range is set by the curious property of the Zyla camera that
-    # short exposures with bright lights yield really noisy images. So avoid
-    # exposures < 2 ms...
-    # TODO: verify that this is still the case with new cameras once obtained
-    exposures = 2**numpy.arange(1, numpy.ceil(max_exposure_exponent)+1)
+    # short exposures with bright lights yield really noisy images. Worse,
+    # dark banding in the center can appear with exposures < 4 ms and too many
+    # photons per second (which overwhelm the anti-bloom circuits, even outside
+    # of the overexposed range).
+    # So avoid exposures < 4 ms...
+    # TODO: verify that this is still the case (last checked 2017)
+    exposures = 2**numpy.arange(2, numpy.ceil(max_exposure_exponent)+1)
     exposures[-1] = max_exposure
     with lamp.in_state(enabled=True):
         scope.camera.start_image_sequence_acquisition(frame_count=len(exposures), trigger_mode='Software')
@@ -221,7 +224,7 @@ def get_vignette_mask(image, percent_vignetted=5):
     vignetted borders of the image.
 
     percent_vignetted: percent (0-100) of pixels estimated to be in the vignetted region.
-        35% is a good estimate for images with a full circular vignette 
+        35% is a good estimate for images with a full circular vignette
         (e.g. 0.7x optocoupler); 5% is reasonable for images with only small
         vignetted areas (e.g. 1x optocoupler).
 

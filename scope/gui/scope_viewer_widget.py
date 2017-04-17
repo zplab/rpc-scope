@@ -52,7 +52,7 @@ class ScopeViewerWidget(ris_widget.ris_widget.RisWidgetQtObject):
     def __init__(self, scope, scope_properties, window_title='Viewer', fps_max=None, app_prefs_name=None, parent=None):
         super().__init__(window_title=window_title, app_prefs_name=app_prefs_name, parent=parent)
 
-        self.main_view_toolbar.removeAction(self.main_view_snapshot_action)
+        self.main_view_toolbar.removeAction(self.snapshot_action)
         self.dock_widget_visibility_toolbar.removeAction(self.layer_stack_painter_dock_widget.toggleViewAction())
 
         hh = self.layer_table_view.horizontalHeader()
