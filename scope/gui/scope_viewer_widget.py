@@ -108,11 +108,10 @@ class ScopeViewerWidget(ris_widget.ris_widget.RisWidgetQtObject):
             Qt.QCoreApplication.postEvent(self, Qt.QEvent(self.NEW_IMAGE_EVENT))
 
     def on_show_over_exposed_action_toggled(self, show_over_exposed):
-        layer = self.get_live_target_layer()
         if show_over_exposed:
-            if layer.image is not None and layer.image.type == 'G':
-                layer.getcolor_expression = self.OVEREXPOSURE_GETCOLOR_EXPRESSION
+            if self.layer.image is not None and self.layer.image.type == 'G':
+                self.layer.getcolor_expression = self.OVEREXPOSURE_GETCOLOR_EXPRESSION
         else:
             # Revert to default getcolor_expression
-            del layer.getcolor_expression
+            del self.layer.getcolor_expression
 
