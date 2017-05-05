@@ -91,8 +91,7 @@ class ScopeViewerWidget(ris_widget.ris_widget.RisWidgetQtObject):
                     return True
                 self.last_image = t
             image_data, timestamp, frame_no = self.live_streamer.get_image()
-            target_layer = self.get_live_target_layer()
-            target_layer.image = ris_widget.image.Image(
+            self.image = ris_widget.image.Image(
                 image_data,
                 mask=self.layer_stack.imposed_image_mask,
                 is_twelve_bit=self.live_streamer.bit_depth == '12 Bit',
@@ -107,19 +106,6 @@ class ScopeViewerWidget(ris_widget.ris_widget.RisWidgetQtObject):
         # unlike sending a signal
         if not self.closing and self.isVisible():
             Qt.QCoreApplication.postEvent(self, Qt.QEvent(self.NEW_IMAGE_EVENT))
-
-    def get_live_target_layer(self):
-        """The first Layer in self.layers with name "Live Target" is returned.  If self.layers contains no Layer with name
-        "Live Target", one is created, inserted at index 0, and returned."""
-        if self.layers is None:
-            self.layers = []
-        else:
-            for layer in self.layers:
-                if layer.name == 'Live Target':
-                    return layer
-        t = ris_widget.layer.Layer(name='Live Target')
-        self.layers.insert(0, t)
-        return t
 
     def on_show_over_exposed_action_toggled(self, show_over_exposed):
         layer = self.get_live_target_layer()

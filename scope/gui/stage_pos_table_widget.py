@@ -24,7 +24,7 @@
 
 import json
 from PyQt5 import Qt
-from ris_widget import om
+from ris_widget.om import qt_property, signaling_list
 
 class StagePosTableWidget(Qt.QWidget):
     @classmethod
@@ -42,7 +42,7 @@ class StagePosTableWidget(Qt.QWidget):
         self.setWindowTitle(window_title)
         self.model = PosTableModel(
             ('x', 'y', 'z', 'info'),
-            positions if isinstance(positions, om.SignalingList) else om.SignalingList(Pos(*e) for e in positions),
+            positions if isinstance(positions, signaling_list.SignalingList) else signaling_list.SignalingList(Pos(*e) for e in positions),
             self)
         self.view = PosTableView(self.model, self)
         self.view.setSizePolicy(Qt.QSizePolicy.Expanding, Qt.QSizePolicy.Expanding)
@@ -141,59 +141,37 @@ class PosTableView(Qt.QTableView):
         if midx.isValid():
             m.removeRow(midx.row())
 
-class PosTableModel(om.signaling_list.DragDropModelBehavior, om.signaling_list.PropertyTableModel):
+class PosTableModel(signaling_list.DragDropModelBehavior, signaling_list.PropertyTableModel):
     pass
 
-class Pos(Qt.QObject):
+class Pos(qt_property.QtPropertyOwner):
     changed = Qt.pyqtSignal(object)
 
     def __init__(self, x=None, y=None, z=None, info='', parent=None):
         super().__init__(parent)
-        for property in self.properties:
-            property.instantiate(self)
         self.x, self.y, self.z, self.info = x, y, z, info
 
-    properties = []
-
-    def component_default_value_callback(self):
-        pass
-
-    def take_component_arg_callback(self, v):
+    def _coerce_component_arg(self, v):
         if v is not None:
             return float(v)
 
-    def info_default_value_callback(self):
-        return ''
-
-    def take_info_arg_callback(self, v):
+    def _coerce_info_arg(self, v):
         if v is None:
             return ''
         return str(v)
 
-    x = om.Property(
-        properties,
-        "x",
-        default_value_callback=component_default_value_callback,
-        take_arg_callback=take_component_arg_callback)
+    x = qt_property.Property(
+        default_value=None,
+        coerce_arg_fn=_coerce_component_arg)
 
-    y = om.Property(
-        properties,
-        "y",
-        default_value_callback=component_default_value_callback,
-        take_arg_callback=take_component_arg_callback)
+    y = qt_property.Property(
+        default_value=None,
+        coerce_arg_fn=_coerce_component_arg)
 
-    z = om.Property(
-        properties,
-        "z",
-        default_value_callback=component_default_value_callback,
-        take_arg_callback=take_component_arg_callback)
+    z = qt_property.Property(
+        default_value=None,
+        coerce_arg_fn=_coerce_component_arg)
 
-    info = om.Property(
-        properties,
-        "info",
-        default_value_callback=info_default_value_callback,
-        take_arg_callback=take_info_arg_callback)
-
-    for property in properties:
-        exec(property.changed_signal_name + ' = Qt.pyqtSignal(object)')
-    del property
+    info = qt_property.Property(
+        default_value='',
+        coerce_arg_fn=_coerce_info_arg)

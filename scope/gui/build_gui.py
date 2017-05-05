@@ -47,6 +47,7 @@ def interruptible_qt_app():
     # add a no-op callback for timeout. What's important is that the python interpreter
     # gets a chance to run so it can see the signal and call the handler.
     timer.timeout.connect(lambda: None)
+    app._timer = timer
     return app
 
 
