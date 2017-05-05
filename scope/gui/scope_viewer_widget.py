@@ -96,8 +96,8 @@ class ScopeViewerWidget(ris_widget.ris_widget.RisWidgetQtObject):
                 mask=self.layer_stack.imposed_image_mask,
                 is_twelve_bit=self.live_streamer.bit_depth == '12 Bit',
                 use_open_mp=True)
-            if self.show_over_exposed_action.isChecked() and target_layer.image.type == 'G':
-                target_layer.getcolor_expression = self.OVEREXPOSURE_GETCOLOR_EXPRESSION
+            if self.show_over_exposed_action.isChecked() and self.layer.image.type == 'G':
+                self.layer.getcolor_expression = self.OVEREXPOSURE_GETCOLOR_EXPRESSION
             return True
         return super().event(e)
 
