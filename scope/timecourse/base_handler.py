@@ -216,7 +216,7 @@ class TimepointHandler:
         self.logger.debug('Position done (total: {:.1f} seconds)', t3-t0)
 
     def _write_atomic_json(self, out_path, data):
-        util.json_encode_atomic_legible_to_file(data, out_path, suffix=self.timepoint_prefix)
+        util.json_encode_atomic_legible_to_file(data, out_path)
 
     def acquire_images(self, position_name, position_dir, position_metadata):
         """Override this method in a subclass to define the image-acquisition sequence.
