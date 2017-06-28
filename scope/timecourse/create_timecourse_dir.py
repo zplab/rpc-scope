@@ -184,7 +184,7 @@ def update_z_positions(data_dir, scope):
     positions = experiment_metadata['positions']
 
     new_z = {}
-    for position_name, (x,y,z) in positions.items():
+    for position_name, (x,y,z) in sorted(positions.items()):
         position_dir = data_dir / position_name
         position_metadata_path = position_dir / 'position_metadata.json'
         with position_metadata_path.open() as f:
