@@ -318,7 +318,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             self.scope.stage.z = last_z
 
         override_autofocus = False
-        if 'z_updates' in self.experiment_metadata and len(experiment_metadata['z_updates']) > 0:
+        if 'z_updates' in self.experiment_metadata and len(self.experiment_metadata['z_updates']) > 0:
             z_updates = self.experiment_metadata['z_updates']
             latest_update_isotime = sorted(z_updates.keys())[-1]
             last_autofocus_isotime = datetime.datetime.fromtimestamp(last_autofocus_time).isoformat()
@@ -326,6 +326,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
                 latest_z_update = z_updates[latest_update_isotime]
                 if position_name in latest_z_update:
                     z = latest_z_update[position_name]
+                    self.logger.info('Using updated z: {}', z)
                     self.scope.stage.z = z
                     metadata['fine_z'] = z
                     override_autofocus = True
