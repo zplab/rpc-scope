@@ -25,6 +25,7 @@
 import string
 import pathlib
 import math
+import datetime
 
 from zplib import util
 
@@ -123,8 +124,7 @@ def create_acquire_file(data_dir, run_interval, filter_cube, fluorescence_flatfi
             compatible with the specified filter cube.
     """
     data_dir = pathlib.Path(data_dir)
-    if not data_dir.exists():
-        data_dir.mkdir()
+    data_dir.mkdir(parents=True, exist_ok=True)
     code = handler_template.substitute(filter_cube=repr(filter_cube),
         fl_flatfield_lamp=repr(fluorescence_flatfield_lamp), run_interval=repr(run_interval))
     with (data_dir / 'acquire.py').open('w') as f:
@@ -143,8 +143,7 @@ def create_metadata_file(data_dir, positions, z_max, reference_positions):
             brightfield and optionally fluorescence flat-field images.
     """
     data_dir = pathlib.Path(data_dir)
-    if not data_dir.exists():
-        data_dir.mkdir()
+    data_dir.mkdir(parents=True, exist_ok=True)
     try:
         items = positions.items()
     except AttributeError:
@@ -175,3 +174,28 @@ def _name_positions(num_positions, name_prefix):
     padding = int(math.ceil(math.log10(max(1, num_positions-1))))
     names = ['{}{:0{pad}}'.format(name_prefix, i, pad=padding) for i in range(num_positions)]
     return names
+
+def update_positions(data_dir, scope):
+    data_dir = pathlib.Path(data_dir)
+    experiment_metadata_path = data_dir / 'experiment_metadata.json'
+    with experiment_metadata_path.open() as f:
+        experiment_metadata = json.load(f)
+    positions = experiment_metadata['positions']
+
+    new_z = {}
+    for position_name in positions:
+        position_dir = data_dir / position_name
+        position_metadata_path = position_dir / 'position_metadata.json'
+        with metadata_path.open() as f:
+            position_metadata = json.load(f)
+        x, y, z = positions[position_name]
+        for m in position_metadata[::-1]:
+            if 'fine_z' in m:
+                z = m['fine_z']
+                break
+        scope.stage.position = x, y, z
+        input('refine position {} (press enter when done)'.format(position_name))
+        new_z[position_name] = scope.stage.z
+
+    experiment_metadata.setdefault('z_updates', {})[datetime.datetime.now().isoformat()] = new_z
+    util.json_encode_atomic_legible_to_file(experiment_metadata, experiment_metadata_path)

@@ -25,6 +25,7 @@
 import numpy
 import logging
 import time
+import datetime
 
 from . import base_handler
 from ..client_util import autofocus
@@ -252,8 +253,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
 
         # save out calibration information
         calibration_dir = self.data_dir / 'calibrations'
-        if not calibration_dir.exists():
-            calibration_dir.mkdir()
+        calibration_dir.mkdir(exist_ok=True)
         cal_image_paths = [calibration_dir / (self.timepoint_prefix + ' ' + name) for name in cal_image_names]
         if self.write_files:
             self.image_io.write(cal_images, cal_image_paths)
@@ -307,23 +307,37 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.scope.camera.exposure_time = self.bf_exposure
         self.scope.tl.lamp.intensity = self.tl_intensity
         metadata = {}
-
         last_autofocus_time = 0
-        last_z = self.positions[position_name][2]
-        for m in position_metadata[::-1]:
-            if 'fine_z' in m:
-                last_autofocus_time = m['timestamp']
-                last_z = m['fine_z']
-                break
         if self.USE_LAST_FOCUS_POSITION:
+            last_z = self.positions[position_name][2]
+            for m in position_metadata[::-1]:
+                if 'fine_z' in m:
+                    last_autofocus_time = m['timestamp']
+                    last_z = m['fine_z']
+                    break
             self.scope.stage.z = last_z
-        if t0 - last_autofocus_time > self.REFOCUS_INTERVAL_MINS * 60:
+
+        override_autofocus = False
+        if 'z_updates' in self.experiment_metadata and len(experiment_metadata['z_updates']) > 0:
+            z_updates = self.experiment_metadata['z_updates']
+            latest_update_isotime = sorted(z_updates.keys())[-1]
+            last_autofocus_isotime = datetime.datetime.fromtimestamp(last_autofocus_time).isoformat()
+            if latest_update_isotime > last_autofocus_isotime:
+                latest_z_update = z_updates[latest_update_isotime]
+                if position_name in latest_z_update:
+                    z = latest_z_update[position_name]
+                    self.scope.stage.z = z
+                    metadata['fine_z'] = z
+                    override_autofocus = True
+
+        if not override_autofocus and t0 - last_autofocus_time > self.REFOCUS_INTERVAL_MINS * 60:
             self.run_autofocus(metadata)
             t1 = time.time()
             self.logger.debug('Autofocused ({:.1f} seconds)', t1-t0)
             self.logger.info('Autofocus z: {}', metadata['fine_z'])
         else:
             t1 = time.time()
+
         images = self.scope.camera.acquisition_sequencer.run()
         t2 = time.time()
         self.logger.debug('Acquisition sequence run ({:.1f} seconds)', t2-t1)

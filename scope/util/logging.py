@@ -63,8 +63,7 @@ def attach_file_handlers(log_dir):
     desired level before attaching handlers.
     """
     log_dir = pathlib.Path(log_dir)
-    if not log_dir.exists():
-        log_dir.mkdir(parents=True)
+    log_dir.mkdir(parents=True, exist_ok=True)
 
     log_file = log_dir / 'messages.log'
     debug_log_file = log_dir / 'debug.log'

@@ -185,8 +185,7 @@ class TimepointHandler:
         self.logger.info('Acquiring Position: {}', position_name)
         t0 = time.time()
         position_dir = self.data_dir / position_name
-        if not position_dir.exists():
-            position_dir.mkdir()
+        position_dir.mkdir(exist_ok=True)
         metadata_path = position_dir / 'position_metadata.json'
         if metadata_path.exists():
             with metadata_path.open('r') as f:
@@ -217,11 +216,7 @@ class TimepointHandler:
         self.logger.debug('Position done (total: {:.1f} seconds)', t3-t0)
 
     def _write_atomic_json(self, out_path, data):
-        out_path = pathlib.Path(out_path)
-        tmp_path = out_path.parent / (out_path.name + '-' +self.timepoint_prefix)
-        with tmp_path.open('w') as f:
-             util.json_encode_legible_to_file(data, f)
-        os.replace(str(tmp_path), str(out_path))
+        util.json_encode_atomic_legible_to_file(data, out_path, suffix=self.timepoint_prefix)
 
     def acquire_images(self, position_name, position_dir, position_metadata):
         """Override this method in a subclass to define the image-acquisition sequence.
