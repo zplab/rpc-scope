@@ -26,6 +26,7 @@ import string
 import pathlib
 import math
 import datetime
+import json
 
 from zplib import util
 
@@ -175,7 +176,7 @@ def _name_positions(num_positions, name_prefix):
     names = ['{}{:0{pad}}'.format(name_prefix, i, pad=padding) for i in range(num_positions)]
     return names
 
-def update_positions(data_dir, scope):
+def update_z_positions(data_dir, scope):
     data_dir = pathlib.Path(data_dir)
     experiment_metadata_path = data_dir / 'experiment_metadata.json'
     with experiment_metadata_path.open() as f:
