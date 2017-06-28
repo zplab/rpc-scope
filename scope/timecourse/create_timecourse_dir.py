@@ -184,12 +184,11 @@ def update_z_positions(data_dir, scope):
     positions = experiment_metadata['positions']
 
     new_z = {}
-    for position_name in positions:
+    for position_name, (x,y,z) in positions.items():
         position_dir = data_dir / position_name
         position_metadata_path = position_dir / 'position_metadata.json'
-        with metadata_path.open() as f:
+        with position_metadata_path.open() as f:
             position_metadata = json.load(f)
-        x, y, z = positions[position_name]
         for m in position_metadata[::-1]:
             if 'fine_z' in m:
                 z = m['fine_z']
