@@ -53,7 +53,7 @@ def coarse_fine_autofocus(scope, z_start, z_max, coarse_range_mm, coarse_steps, 
             binning='1x1', return_images=return_images)
     return coarse_result, fine_result
 
-def autofocus(scope, z_start, z_max, range_mm, steps, speed, return_images, **camera_params):
+def autofocus(scope, z_start, z_max, range_mm, steps, speed=0.3, return_images=False, mask=None, **camera_params):
     """Run a single-pass autofocus.
 
     Parameters:
@@ -63,10 +63,12 @@ def autofocus(scope, z_start, z_max, range_mm, steps, speed, return_images, **ca
             objective)
         range_mm: range to try to focus on, in mm around z_start
         steps: how many focus steps to take over the range
+        speed: stage movement speed during autofocus in mm/s
         return_images: if True, return the coarse and fine images acquired
+        mask: filename of image mask defining region for autofocus to examine
 
     Returns:
-        If return_images is False, return the containing the best z-position.
+        If return_images is False, return the best z-position.
         If return_images is True, returns the pair (z, images)
     """
     offset = range_mm / 2
@@ -77,7 +79,7 @@ def autofocus(scope, z_start, z_max, range_mm, steps, speed, return_images, **ca
     scope._rpc_client.timeout_sec = 60 * 45
     try:
         values = scope.camera.autofocus.autofocus_continuous_move(start, end, steps=steps,
-            max_speed=speed, metric='high pass + brenner', return_images=return_images, **camera_params)
+            max_speed=speed, focus_filter_mask=mask, return_images=return_images, **camera_params)
     finally:
         scope._rpc_client.timeout_sec = old_timeout
     if return_images:

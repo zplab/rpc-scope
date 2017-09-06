@@ -129,7 +129,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         raise NotImplementedError()
 
     def post_acquisition_sequence(self, position_name, position_dir, position_metadata, current_timepoint_metadata, images, exposures, timestamps):
-        """Run any necessary inage acquisitions, etc, after the main acquisition
+        """Run any necessary image acquisitions, etc, after the main acquisition
         sequence finishes. (E.g. for light stimulus and post-stimulus recording.)
 
         Parameters:

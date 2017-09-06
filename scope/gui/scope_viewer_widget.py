@@ -32,14 +32,7 @@ import ris_widget.ris_widget
 import ris_widget.qwidgets.layer_table
 from .. import scope_client
 
-# TODO: Should live_target be a flipbook entry instead of a layer?
-# If so, get rid of the layer-name showing.
-# TODO: Fix vignette masking to use center and radius, and to have some
-# UI for selecting same. Also, remove openmp stuff.
-
-# Show layer name column in LayerTable
-ris_widget.qwidgets.layer_table.LayerTableModel.PROPERTIES.insert(
-    ris_widget.qwidgets.layer_table.LayerTableModel.PROPERTIES.index('opacity') + 1, 'name')
+# TODO: Should live_target be a flipbook entry instead of just self.image?
 
 class ScopeViewerWidget(ris_widget.ris_widget.RisWidgetQtObject):
     NEW_IMAGE_EVENT = Qt.QEvent.registerEventType()
@@ -55,14 +48,7 @@ class ScopeViewerWidget(ris_widget.ris_widget.RisWidgetQtObject):
         self.main_view_toolbar.removeAction(self.snapshot_action)
         self.dock_widget_visibility_toolbar.removeAction(self.layer_stack_painter_dock_widget.toggleViewAction())
 
-        hh = self.layer_table_view.horizontalHeader()
-        col = ris_widget.qwidgets.layer_table.LayerTableModel.PROPERTIES.index('name')
-        hh.resizeSection(col, hh.sectionSize(col) * 1.5)
         self.scope_toolbar = self.addToolBar('Scope')
-        import freeimage
-        import pathlib
-        if pathlib.Path('/home/zplab/vignette_mask.png').exists():
-            self.layer_stack.imposed_image_mask = freeimage.read('/home/zplab/vignette_mask.png')
         self.show_over_exposed_action = Qt.QAction('Show Over-Exposed Live Pixels', self)
         self.show_over_exposed_action.setCheckable(True)
         self.show_over_exposed_action.setChecked(False)
@@ -98,6 +84,8 @@ class ScopeViewerWidget(ris_widget.ris_widget.RisWidgetQtObject):
                 use_open_mp=True)
             if self.show_over_exposed_action.isChecked() and self.layer.image.type == 'G':
                 self.layer.getcolor_expression = self.OVEREXPOSURE_GETCOLOR_EXPRESSION
+            else:
+                del self.layer.getcolor_expression
             return True
         return super().event(e)
 

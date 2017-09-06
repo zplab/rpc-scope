@@ -83,7 +83,7 @@ def monitor_main(hosts, downsample=None, fps_max=None):
             viewer = scope_viewer_widget.ScopeViewerWidget(scope, scope_properties, host, fps_max, app_prefs_name)
             viewer.removeToolbar(viewer.scope_toolbar)
             viewer.show_over_exposed_action.setChecked(False)
-            viewer.main_view_toolbar.removeAction(viewer.layer_stack.solo_layer_mode_action)
+            viewer.image_view_toolbar.removeAction(viewer.layer_stack.solo_layer_mode_action)
             viewer.dock_widget_visibility_toolbar.removeAction(viewer.layer_table_dock_widget.toggleViewAction())
             viewer.dock_widget_visibility_toolbar.removeAction(viewer.flipbook_dock_widget.toggleViewAction())
             viewers.append(viewer)
