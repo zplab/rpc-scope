@@ -65,7 +65,7 @@ class AutofocusMetric:
 class BrennerAutofocus(AutofocusMetric):
     def __init__(self, shape, period_range=None, mask=None):
         super().__init__()
-        self.filter = self._get_filter(shape, period_range)
+        self.filter = self._get_filter(tuple(shape), tuple(period_range))
         self.mask = mask
 
     @staticmethod
@@ -90,7 +90,7 @@ class BrennerAutofocus(AutofocusMetric):
         if self.mask is None:
             return x_diffs.sum() + y_diffs.sum()
         else:
-            return x_diffs[mask[1:-1, :]].sum() + y_diffs[mask[:, 1:-1]].sum()
+            return x_diffs[self.mask[1:-1, :]].sum() + y_diffs[self.mask[:, 1:-1]].sum()
 
 class Autofocus:
     _CAMERA_MODE = dict(readout_rate='280 MHz', shutter_mode='Rolling')
