@@ -198,8 +198,9 @@ def get_positions_with_roi(scope, scope_properties):
         rois: list of Qt.QRectF objects describing the ROI for each position.
     """
     viewer = scope_viewer_widget.ScopeViewerWidget(scope, scope_properties)
-    focus_roi = roi.EllipseROI(rw, bounds=(200, 200, 2000, 2000))
-    focus_roi.setSelected()
+    viewer.show()
+    focus_roi = roi.EllipseROI(viewer, bounds=(400, 200, 2200, 2000))
+    focus_roi.setSelected(True)
     positions = []
     rois = []
 
@@ -209,12 +210,14 @@ def get_positions_with_roi(scope, scope_properties):
             rw_util.input()
         except KeyboardInterrupt:
             break
-        if not roi.isVisible():
+        if not focus_roi.isVisible():
             print('Please draw a ROI in the viewer and press enter')
             continue
-        rois.append(roi.rect())
+        rois.append(focus_roi.rect())
         positions.append(scope.stage.position)
         print('Position {}: {}'.format(len(positions), tuple(positions[-1])), end='')
+    focus_roi.remove_from_rw()
+    viewer.close()
     return positions, rois
 
 def write_roi_mask_files(data_dir, rois):
@@ -241,17 +244,17 @@ def write_roi_mask_files(data_dir, rois):
         items = rois.items()
     except AttributeError:
         items = [('', rois)]
-    named_positions = {}
     for name_prefix, rois in items:
-        names = _name_positions(len(positions), name_prefix)
+        names = _name_positions(len(rois), name_prefix)
         for name, roi in zip(names, rois):
             image.fill(Qt.Qt.black)
             painter.begin(image)
             painter.setBrush(Qt.Qt.white)
-            painter.drawEllipse(roi.rect())
+            painter.drawEllipse(roi)
             painter.end()
             image.save(str(mask_dir / name)+'.png')
-
+    del image # image must be deleted before painter to avoid warning. So delete now...
+    
 def update_z_positions(data_dir, scope):
     """Interactively update the z positions for an existing experiment.
 

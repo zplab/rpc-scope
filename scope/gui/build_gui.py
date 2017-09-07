@@ -8,7 +8,7 @@ from . import andor_camera_widget
 from . import lamp_widget
 from . import scope_viewer_widget
 from . import microscope_widget
-from . import stage_pos_table_widget
+#from . import stage_pos_table_widget
 from . import game_controller_input_widget
 from . import incubator_widget
 
@@ -24,7 +24,7 @@ DEFAULT_WIDGETS = [
 ]
 
 OTHER_WIDGETS = [
-    dict(name='stage_table', cls=stage_pos_table_widget.StagePosTableWidget)
+    #dict(name='stage_table', cls=stage_pos_table_widget.StagePosTableWidget)
 ]
 
 WIDGETS = DEFAULT_WIDGETS + OTHER_WIDGETS
