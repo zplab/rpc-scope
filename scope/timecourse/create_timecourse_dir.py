@@ -27,8 +27,12 @@ import pathlib
 import math
 import datetime
 import json
+from ..gui import scope_viewer_widget
 
+from PyQt5 import Qt
 from zplib import util
+from ris_widget import util as rw_util
+from ris_widget.overlay import roi
 
 handler_template = string.Template(
 '''import pathlib
@@ -47,7 +51,7 @@ class Handler(timecourse_handler.BasicAcquisitionHandler):
     FINE_FOCUS_RANGE = 0.09
     FINE_FOCUS_STEPS = 45
     PIXEL_READOUT_RATE = '100 MHz'
-    USE_LAST_FOCUS_POSITION = True
+    USE_LAST_FOCUS_POSITION = True # if False, start autofocus from original z position rather than last autofocused position.
     INTERVAL_MODE = 'scheduled start'
     IMAGE_COMPRESSION = timecourse_handler.COMPRESSION.DEFAULT # useful options include PNG_FAST, PNG_NONE, TIFF_NONE
     LOG_LEVEL = timecourse_handler.logging.INFO # DEBUG may be useful
@@ -176,7 +180,89 @@ def _name_positions(num_positions, name_prefix):
     names = ['{}{:0{pad}}'.format(name_prefix, i, pad=padding) for i in range(num_positions)]
     return names
 
+def get_positions_with_roi(scope, scope_properties):
+    """Interactively obtain scope stage positions and an elliptical ROI for each.
+
+    A viewer showing the live scope image is displayed, with a movable, resizable
+    ellipse. Once the ellipse is placed over the desired focus region of the
+    image, press enter in the terminal to record that position and ROI.
+
+    NOTE: focus ROIs are used ONLY in fine-focus-only mode. They will be ignored
+    if DO_COARSE_FOCUS is True.
+
+    Parameters:
+        scope, scope_properties: microscope and properties objects.
+
+    Returns: positions, rois
+        positions: list of (x, y, z) positions
+        rois: list of Qt.QRectF objects describing the ROI for each position.
+    """
+    viewer = scope_viewer_widget.ScopeViewerWidget(scope, scope_properties)
+    focus_roi = roi.EllipseROI(rw, bounds=(200, 200, 2000, 2000))
+    focus_roi.setSelected()
+    positions = []
+    rois = []
+
+    print('Press enter after each position has been found; press control-c to end')
+    while True:
+        try:
+            rw_util.input()
+        except KeyboardInterrupt:
+            break
+        if not roi.isVisible():
+            print('Please draw a ROI in the viewer and press enter')
+            continue
+        rois.append(roi.rect())
+        positions.append(scope.stage.position)
+        print('Position {}: {}'.format(len(positions), tuple(positions[-1])), end='')
+    return positions, rois
+
+def write_roi_mask_files(data_dir, rois):
+    """ Create a "Focus Masks" directory of ROIs for timecourse acquisitions.
+
+    Focus ROIs obtained from get_positions_with_roi() will be converted to mask
+    images and written to "Focus Masks" in the experiment directory.
+
+    NOTE: focus ROIs are used ONLY in fine-focus-only mode. They will be ignored
+    if DO_COARSE_FOCUS is True.
+
+    Parameters:
+        data_dir: directory to write metadata file into
+        rois: list of Qt.QRectFs describing the bounds of an elliptical ROI within
+            which autofocus scores will be calculated, OR dict mapping different
+            category names to lists of Qt.QRectFs.
+    """
+    mask_dir = pathlib.Path(data_dir) / 'Focus Masks'
+    mask_dir.mkdir(parents=True, exist_ok=True)
+    image = Qt.QImage(2560, 2160, Qt.QImage.Format_Grayscale8)
+    painter = Qt.QPainter()
+
+    try:
+        items = rois.items()
+    except AttributeError:
+        items = [('', rois)]
+    named_positions = {}
+    for name_prefix, rois in items:
+        names = _name_positions(len(positions), name_prefix)
+        for name, roi in zip(names, rois):
+            image.fill(Qt.Qt.black)
+            painter.begin(image)
+            painter.setBrush(Qt.Qt.white)
+            painter.drawEllipse(roi.rect())
+            painter.end()
+            image.save(str(mask_dir / name)+'.png')
+
 def update_z_positions(data_dir, scope):
+    """Interactively update the z positions for an existing experiment.
+
+    New positions are written to a 'z_updates' metadata dictionary, which is
+    used by the acquisiton script to override the previous focal position.
+
+    Parameters:
+        data_dir: experiment directory with existing experiment_metadata.json
+            file.
+        scope: scope object.
+    """
     data_dir = pathlib.Path(data_dir)
     experiment_metadata_path = data_dir / 'experiment_metadata.json'
     with experiment_metadata_path.open() as f:

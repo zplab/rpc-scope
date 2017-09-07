@@ -93,7 +93,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     FINE_FOCUS_RANGE = 0.09
     FINE_FOCUS_STEPS = 45
     PIXEL_READOUT_RATE = '100 MHz'
-    USE_LAST_FOCUS_POSITION = True
+    USE_LAST_FOCUS_POSITION = True # if False, start autofocus from original z position rather than last autofocused position.
     INTERVAL_MODE = 'scheduled start'
     IMAGE_COMPRESSION = COMPRESSION.DEFAULT # useful options include PNG_FAST, PNG_NONE, TIFF_NONE
     LOG_LEVEL = logging.INFO
@@ -288,7 +288,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             start = self.end_time
         return start + interval_seconds
 
-    def run_autofocus(self, current_timepoint_metadata):
+    def run_autofocus(self, position_name, current_timepoint_metadata):
         z_start = self.scope.stage.z
         z_max = self.experiment_metadata['z_max']
         with self.scope.tl.lamp.in_state(enabled=True), self.scope.camera.in_state(readout_rate='280 MHz', shutter_mode='Rolling'):
@@ -298,8 +298,12 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
                     self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS)
                 current_timepoint_metadata['coarse_z'] = coarse_z
             else:
+                mask_file = self.data_dir / 'Focus Masks' / (position_name + '.png')
+                mask = str(mask_file) if mask_file.exists() else None
+                if mask:
+                    self.logger.info('Using autofocus mask: {}', mask)
                 fine_z = autofocus.autofocus(self.scope, z_start, z_max, self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS,
-                    speed=0.3, return_images=False)
+                    speed=0.3, mask=mask, return_images=False)
             current_timepoint_metadata['fine_z'] = fine_z
 
     def acquire_images(self, position_name, position_dir, position_metadata):
@@ -332,7 +336,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
                     override_autofocus = True
 
         if not override_autofocus and t0 - last_autofocus_time > self.REFOCUS_INTERVAL_MINS * 60:
-            self.run_autofocus(metadata)
+            self.run_autofocus(position_name, metadata)
             t1 = time.time()
             self.logger.debug('Autofocused ({:.1f} seconds)', t1-t0)
             self.logger.info('Autofocus z: {}', metadata['fine_z'])

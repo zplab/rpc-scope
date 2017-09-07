@@ -25,16 +25,14 @@
 import time
 
 from PyQt5 import Qt
-import ris_widget
-import ris_widget.image
-import ris_widget.layer
-import ris_widget.ris_widget
-import ris_widget.qwidgets.layer_table
+from  ris_widget import image
+from ris_widget import ris_widget
+
 from .. import scope_client
 
 # TODO: Should live_target be a flipbook entry instead of just self.image?
 
-class ScopeViewerWidget(ris_widget.ris_widget.RisWidgetQtObject):
+class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
     NEW_IMAGE_EVENT = Qt.QEvent.registerEventType()
     OVEREXPOSURE_GETCOLOR_EXPRESSION = 's.r < 1.0f ? vec4(s.rrr, 1.0f) : vec4(1.0f, 0.0f, 0.0f, 1.0f)'
 
@@ -42,7 +40,7 @@ class ScopeViewerWidget(ris_widget.ris_widget.RisWidgetQtObject):
     def can_run(scope):
         return hasattr(scope, 'camera')
 
-    def __init__(self, scope, scope_properties, window_title='Viewer', fps_max=None, app_prefs_name=None, parent=None):
+    def __init__(self, scope, scope_properties, window_title='Viewer', fps_max=None, app_prefs_name='scope-viewer', parent=None):
         super().__init__(window_title=window_title, app_prefs_name=app_prefs_name, parent=parent)
 
         self.main_view_toolbar.removeAction(self.snapshot_action)
@@ -77,11 +75,8 @@ class ScopeViewerWidget(ris_widget.ris_widget.RisWidgetQtObject):
                     return True
                 self.last_image = t
             image_data, timestamp, frame_no = self.live_streamer.get_image()
-            self.image = ris_widget.image.Image(
-                image_data,
-                mask=self.layer_stack.imposed_image_mask,
-                is_twelve_bit=self.live_streamer.bit_depth == '12 Bit',
-                use_open_mp=True)
+            image_bits = 12 if self.live_streamer.bit_depth == '12 Bit' else 16
+            self.image = image.Image(image_data, image_bits=image_bits)
             if self.show_over_exposed_action.isChecked() and self.layer.image.type == 'G':
                 self.layer.getcolor_expression = self.OVEREXPOSURE_GETCOLOR_EXPRESSION
             else:
