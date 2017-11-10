@@ -30,7 +30,7 @@ import json
 from ..gui import scope_viewer_widget
 
 from PyQt5 import Qt
-from zplib import util
+from zplib import datafile
 from ris_widget import util as rw_util
 from ris_widget.overlay import roi
 
@@ -160,7 +160,7 @@ def create_metadata_file(data_dir, positions, z_max, reference_positions):
     metadata = dict(z_max=z_max, reference_positions=reference_positions,
         positions=named_positions)
     with (data_dir / 'experiment_metadata.json').open('w') as f:
-        util.json_encode_legible_to_file(metadata, f)
+        datafile.json_encode_legible_to_file(metadata, f)
 
 def simple_get_positions(scope):
     """Return a list of interactively-obtained scope stage positions."""
@@ -199,7 +199,7 @@ def get_positions_with_roi(scope, scope_properties):
     """
     viewer = scope_viewer_widget.ScopeViewerWidget(scope, scope_properties)
     viewer.show()
-    focus_roi = roi.EllipseROI(viewer, bounds=(400, 200, 2200, 2000))
+    focus_roi = roi.EllipseROI(viewer, geometry=((400, 200), (2200, 2000)))
     focus_roi.setSelected(True)
     positions = []
     rois = []
@@ -210,13 +210,14 @@ def get_positions_with_roi(scope, scope_properties):
             rw_util.input()
         except KeyboardInterrupt:
             break
-        if not focus_roi.isVisible():
+        rect = focus_roi.rect()
+        if not rect.isValid():
             print('Please draw a ROI in the viewer and press enter')
             continue
-        rois.append(focus_roi.rect())
+        rois.append(rect)
         positions.append(scope.stage.position)
-        print('Position {}: {}'.format(len(positions), tuple(positions[-1])), end='')
-    focus_roi.remove_from_rw()
+        print('Position {}: {}'.format(len(positions), tuple(positions[-1])))
+    focus_roi.remove()
     viewer.close()
     return positions, rois
 
@@ -254,7 +255,7 @@ def write_roi_mask_files(data_dir, rois):
             painter.end()
             image.save(str(mask_dir / name)+'.png')
     del image # image must be deleted before painter to avoid warning. So delete now...
-    
+
 def update_z_positions(data_dir, scope):
     """Interactively update the z positions for an existing experiment.
 
@@ -287,4 +288,4 @@ def update_z_positions(data_dir, scope):
         new_z[position_name] = scope.stage.z
 
     experiment_metadata.setdefault('z_updates', {})[datetime.datetime.now().isoformat()] = new_z
-    util.json_encode_atomic_legible_to_file(experiment_metadata, experiment_metadata_path)
+    datafile.json_encode_atomic_legible_to_file(experiment_metadata, experiment_metadata_path)

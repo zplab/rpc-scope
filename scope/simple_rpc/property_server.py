@@ -26,7 +26,7 @@ import zmq
 import threading
 import queue
 
-from zplib import util
+from zplib import datafile
 
 from ..util import logging
 logger = logging.get_logger(__name__)
@@ -125,6 +125,6 @@ class ZMQServer(PropertyServer):
 
     def _publish_update(self, property_name, value):
         # dump json first to catch "not serializable" errors before sending the first part of a two-part message
-        json = util.json_encode_compact_to_bytes(value)
+        json = datafile.json_encode_compact_to_bytes(value)
         self.socket.send_string(property_name, flags=zmq.SNDMORE)
         self.socket.send(json)

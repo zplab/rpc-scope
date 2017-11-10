@@ -34,7 +34,7 @@ import os
 import signal
 import contextlib
 
-from zplib import util
+from zplib import datafile
 
 from ..util import logging
 logger = logging.get_logger(__name__)
@@ -134,10 +134,10 @@ class ZMQServerMixin:
 
         if reply_type == 'error' or reply_type == 'json':
             try:
-                reply = util.json_encode_compact_to_bytes(reply)
+                reply = datafile.json_encode_compact_to_bytes(reply)
             except TypeError:
                 reply_type = 'error'
-                reply = util.json_encode_compact_to_bytes('Could not JSON-serialize return value.')
+                reply = datafile.json_encode_compact_to_bytes('Could not JSON-serialize return value.')
         self.socket.send_string(reply_type, flags=zmq.SNDMORE)
         self.socket.send(reply) # TODO: profile to see if copy=False improves performance
 

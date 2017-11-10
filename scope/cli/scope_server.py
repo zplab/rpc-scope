@@ -2,7 +2,7 @@ import argparse
 import traceback
 import sys
 
-from zplib import util
+from zplib import datafile
 from .. import scope_server
 
 def main(argv=None):
@@ -28,7 +28,7 @@ def main(argv=None):
             server.stop(args.force)
         if args.command == 'start':
             with server.arg_file.open('w') as f:
-                util.json_encode_legible_to_file(dict(public=args.public, verbose=args.verbose), f)
+                datafile.json_encode_legible_to_file(dict(public=args.public, verbose=args.verbose), f)
         if args.command in {'start', 'restart'}:
             server.start()
     except Exception as e:

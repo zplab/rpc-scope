@@ -44,7 +44,6 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
         super().__init__(window_title=window_title, app_prefs_name=app_prefs_name, parent=parent)
 
         self.main_view_toolbar.removeAction(self.snapshot_action)
-        self.dock_widget_visibility_toolbar.removeAction(self.layer_stack_painter_dock_widget.toggleViewAction())
 
         self.scope_toolbar = self.addToolBar('Scope')
         self.show_over_exposed_action = Qt.QAction('Show Over-Exposed Live Pixels', self)

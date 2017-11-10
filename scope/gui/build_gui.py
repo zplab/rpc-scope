@@ -1,5 +1,3 @@
-import signal
-from PyQt5 import Qt
 from ris_widget import shared_resources
 
 from .. import scope_client
@@ -30,29 +28,8 @@ OTHER_WIDGETS = [
 WIDGETS = DEFAULT_WIDGETS + OTHER_WIDGETS
 WIDGET_NAMES = set(widget['name'] for widget in WIDGETS)
 
-def interruptible_qt_app():
-    shared_resources.create_default_QSurfaceFormat() # must be called before starting QApplication
-    app = Qt.QApplication([])
-
-    # install a custom signal handler so that when python receives control-c, QT quits
-    def sigint_handler(*args):
-        """Handler for the SIGINT signal."""
-        Qt.QApplication.quit()
-    signal.signal(signal.SIGINT, sigint_handler)
-    # now arrange for the QT event loop to allow the python interpreter to
-    # run occasionally. Otherwise it never runs, and hence the signal handler
-    # would never get called.
-    timer = Qt.QTimer()
-    timer.start(100)
-    # add a no-op callback for timeout. What's important is that the python interpreter
-    # gets a chance to run so it can see the signal and call the handler.
-    timer.timeout.connect(lambda: None)
-    app._timer = timer
-    return app
-
-
 def gui_main(host, desired_widgets=None):
-    app = interruptible_qt_app()
+    app = shared_resources.init_qapplication(icon_resource_path=None)
     scope, scope_properties = scope_client.client_main(host)
     if desired_widgets is None:
         widgets = DEFAULT_WIDGETS
@@ -72,7 +49,7 @@ def gui_main(host, desired_widgets=None):
     app.exec()
 
 def monitor_main(hosts, downsample=None, fps_max=None):
-    app = interruptible_qt_app()
+    app = shared_resources.init_qapplication(icon_resource_path=None)
     viewers = []
     for host in hosts:
         scope, scope_properties = scope_client.client_main(host)

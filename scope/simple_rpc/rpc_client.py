@@ -27,7 +27,7 @@ import collections
 import contextlib
 import time
 
-from zplib import util
+from zplib import datafile
 
 from . import heartbeat
 
@@ -209,7 +209,7 @@ class ZMQClient(RPCClient):
         self.heartbeat_error = True
 
     def _send(self, command, args, kwargs):
-        json = util.json_encode_compact_to_bytes((command, args, kwargs))
+        json = datafile.json_encode_compact_to_bytes((command, args, kwargs))
         self.socket.send(json)
 
     def _receive_reply(self):

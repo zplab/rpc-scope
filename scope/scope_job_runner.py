@@ -12,7 +12,7 @@ import platform
 import email.mime.text as mimetext
 
 import lockfile
-from zplib import util
+from zplib import datafile
 
 from .config import scope_configuration
 from .util import base_daemon
@@ -460,7 +460,7 @@ class _JobList:
         """Write Job tuples as json to self.backing_file."""
         job_list = [[str(exec_file)] + rest for exec_file, *rest in jobs.values()]
         with self.jobs_lock, self.backing_file.open('w') as bf:
-            util.json_encode_legible_to_file(job_list, bf)
+            datafile.json_encode_legible_to_file(job_list, bf)
 
     def remove(self, exec_file):
         """Remove the job specified by exec_file from the list."""
