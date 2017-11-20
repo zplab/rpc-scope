@@ -1,5 +1,6 @@
-System for controlling ZP lab microscopes from python code. The system has a few moving parts (literally and figuratively), so here's an introduction.
-Currently Leica DM6000 and DMi8 are supported, with Andor Zyla cameras.
+System for controlling ZP lab microscopes from python code. The system has a few
+moving parts (literally and figuratively), so here's an introduction. Currently
+Leica DM6000 and DMi8 are supported, with Andor Zyla cameras.
 
 High-Level Architecture
 -----------------------
@@ -71,7 +72,8 @@ commands in its namespace, allowing the client to build up a rich set of proxy
 functions to be called.
 
 *Property Protocol*
-The property client and server code is in `simple_rpc/property_[client|server].py`
+The property client and server code is in 
+`simple_rpc/property_[client|server].py`
 
 In addition to an imperative RPC architecture, there is an asynchronous
 "property server" that allows clients to be notified of any changes to the state
@@ -100,29 +102,29 @@ These buffers must be handed from the server to the client carefully to ensure
 that the server doesn't acidentally tear down the ISM_Buffer before the client
 receives it and increments its reference count. This is accomplished as follows:
 
-First, on the server, a named `ISM_Buffer` is created (in `transfer_ism_buffer.py`),
-and a numpy array that is a view onto that shared memory is created. Any
-function that returns an "image" to the client must first register the
-`ISM_Buffer` by name (via `transfer_ism_buffer.server_register_array_for_transfer()`) which causes
-the server to keep a reference to the ISM_Buffer-backed array around. Then the
+First, on the server, a named `ISM_Buffer` is created (in
+`transfer_ism_buffer.py`), and a numpy array that is a view onto that shared
+memory is created. Any function that returns an "image" to the client must
+first register the `ISM_Buffer` by name (via
+`transfer_ism_buffer.server_register_array_for_transfer()`) which causes the
+server to keep a reference to the ISM_Buffer-backed array around. Then the
 ISM_Buffer's name is returned to the client, which the client can use to create
 its own ISM_Buffer view onto that memory. Once this is accomplished, the client
-calls `transfer_ism_buffer._server_release_array()` to tell the server that it need
-no longer keep it's own reference.
+calls `transfer_ism_buffer._server_release_array()` to tell the server that it
+need no longer keep it's own reference.
 
-This is all taken care of by `transfer_ism_buffer.client_get_data_getter()`, which
-returns a function called `get_data()` that, given a ISM_Buffer name, performs
-all of the above steps. The scope client even monkeypatches things so that all
-known calls that return an ISM_Buffer name get wrapped with this `get_data()`
-function, so that things work transparently.
+This is all taken care of by `transfer_ism_buffer.client_get_data_getter()`,
+which returns a function called `get_data()` that, given a ISM_Buffer name,
+performs all of the above steps. The scope client even monkeypatches things so
+that all known calls that return an ISM_Buffer name get wrapped with this
+`get_data()` function, so that things work transparently.
 
-*Network Image Streaming*
-The above is all well and good if the client is local on that machine and can
-access the shared memory. If the client is remote, then it must ask the server
-to pack the named ISM_Buffer's memory into binary data and send that over RPC.
-This is also transparently handled by
-`transfer_ism_buffer.client_get_data_getter()`, which will detect if the client and
-server are not on the same machine, and return a `get_data()` function that
+*Network Image Streaming* The above is all well and good if the client is local
+on that machine and can access the shared memory. If the client is remote, then
+it must ask the server to pack the named ISM_Buffer's memory into binary data
+and send that over RPC. This is also transparently handled by
+`transfer_ism_buffer.client_get_data_getter()`, which will detect if the client
+and server are not on the same machine, and return a `get_data()` function that
 causes network data transfer to occur.
 
 *Message-Based Devices (Leica Scope)*
@@ -134,8 +136,8 @@ functions to be called when a reply to that given message is received. (Replies
 and callbacks are matched up via a "key" generated based on the reply contents.)
 
 Each class that represents a part of the microscope is a subclass of
-`message_device.AsyncDevice`. This base class interacts with a `MessageManager` to
-send and receive messages either in an async mode (where seveal messages can be
-sent before calling `wait()` to block until all have been replied to) or in
+`message_device.AsyncDevice`. This base class interacts with a `MessageManager`
+to send and receive messages either in an async mode (where seveal messages can
+be sent before calling `wait()` to block until all have been replied to) or in
 synchronous mode where sending a message blocks until the reply for that
 message is received.

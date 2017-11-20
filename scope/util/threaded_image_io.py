@@ -1,3 +1,5 @@
+# This code is licensed under the MIT License (see LICENSE file for details)
+
 import concurrent.futures as futures
 import freeimage
 

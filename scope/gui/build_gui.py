@@ -1,3 +1,5 @@
+# This code is licensed under the MIT License (see LICENSE file for details)
+
 from ris_widget import shared_resources
 
 from .. import scope_client
