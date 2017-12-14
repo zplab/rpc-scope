@@ -21,9 +21,6 @@ from .util import base_daemon
 from .util import logging
 logger = logging.get_logger(__name__)
 
-
-MAIL_RELAY = 'mailrelay.wustl.edu'
-
 STATUS_QUEUED = 'queued'
 STATUS_ERROR = 'error'
 STATUS_SUSPENDED = 'suspended'
@@ -363,7 +360,7 @@ class JobRunner(base_daemon.Runner):
         message['To'] = ', '.join(emails)
         message['Subject'] = subject
         try:
-            with smtplib.SMTP(MAIL_RELAY) as s:
+            with smtplib.SMTP(config.mail_relay) as s:
                 s.sendmail(sender, emails, message.as_string())
         except:
             logger.error('Could not send alert email.', exc_info=True)

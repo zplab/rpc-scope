@@ -125,5 +125,5 @@ scope_configuration = dict(
     #         baudrate=19200
     #     )
     # ),
-
+    mail_relay = 'osmtp.wustl.edu'
 )
