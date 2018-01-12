@@ -5,12 +5,13 @@ import pathlib
 import math
 import datetime
 import json
-from ..gui import scope_viewer_widget
 
 from PyQt5 import Qt
 from zplib import datafile
 from ris_widget import util as rw_util
 from ris_widget.overlay import roi
+
+from ..gui import scope_viewer_widget
 
 handler_template = string.Template(
 '''import pathlib
@@ -71,7 +72,7 @@ class Handler(timecourse_handler.BasicAcquisitionHandler):
             timestamps: list of camera timestamps for acquired images. If
                 additional images are acquired, their timestamps should be appended.
         """
-        # remember to call self._heartbeat() at least once every minute or so
+        # remember to call self.heartbeat() at least once every minute or so
         pass
 
     def get_next_run_interval(self, experiment_hours):

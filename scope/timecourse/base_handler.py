@@ -8,11 +8,13 @@ import logging
 import inspect
 import concurrent.futures as futures
 import os
+import contextlib
 
 from zplib import datafile
 
 from ..util import threaded_image_io
 from ..util import log_util
+from ..util import timer
 
 class DummyIO:
     def __init__(self, logger):
@@ -71,12 +73,18 @@ class TimepointHandler:
         self.logger.addHandler(handler)
         self._job_thread = futures.ThreadPoolExecutor(max_workers=1)
 
-    def _heartbeat(self):
+    def heartbeat(self):
         print('heartbeat') # write a line to stdout to serve as a heartbeat
+
+    @contextlib.context_manager
+    def heartbeat_timer(self):
+        heartbeat_timer = timer.Timer(self.heartbeat, interval=60)
+        yield
+        heartbeat_timer.stop()
 
     def run_timepoint(self, scheduled_start):
         try:
-            self._heartbeat()
+            self.heartbeat()
             self.timepoint_prefix = time.strftime('%Y-%m-%dt%H%M')
             self.scheduled_start = scheduled_start
             self.start_time = time.time()
@@ -88,14 +96,14 @@ class TimepointHandler:
             self.experiment_metadata.setdefault('timepoints', []).append(self.timepoint_prefix)
             self.experiment_metadata.setdefault('timestamps', []).append(self.start_time)
             self.configure_timepoint()
-            self._heartbeat()
+            self.heartbeat()
             for position_name, position_coords in sorted(self.positions.items()):
                 if position_name not in self.skip_positions:
                     self.run_position(position_name, position_coords)
-                    self._heartbeat()
+                    self.heartbeat()
             self.experiment_metadata['skip_positions'] = list(self.skip_positions)
             self.finalize_timepoint()
-            self._heartbeat()
+            self.heartbeat()
             self.end_time = time.time()
             self.experiment_metadata.setdefault('durations', []).append(self.end_time - self.start_time)
             if self.write_files:
@@ -109,7 +117,7 @@ class TimepointHandler:
                 while not_done:
                     # send heartbeats while we wait for futures to finish
                     done, not_done = futures.wait(not_done, timeout=60)
-                    self._heartbeat()
+                    self.heartbeat()
                 # now get the result() from each future, which will raise any errors encountered
                 # during the execution.
                 [f.result() for f in self._job_futures]

@@ -3,25 +3,25 @@
 import threading
 
 class Timer(threading.Thread):
-    def __init__(self, callback, interval, run_immediately=True):
+    def __init__(self, function, interval, run_immediately=True, *args, **kws):
         super().__init__(daemon=True)
-        self.callback = callback
-        self._stopped = threading.Event()
+        self.function = function
+        self.args = args
+        self.kws = kws
+        self.stopped = threading.Event()
         self.interval = interval
         self.run_immediately = run_immediately
         self.start()
 
     @property
-    def running(self):
-        return self._stopped.is_set()
+    def is_running(self):
+        return not self.stopped.is_set()
 
-    @running.setter
-    def running(self, value):
-        if not running:
-            self._stopped.set()
+    def stop(self):
+        self.stopped.set()
 
     def run(self):
         if self.run_immediately:
-            self.callback()
-        while not self._stopped.wait(self.interval):
-            self.callback()
+            self.function(*args, **kws)
+        while not self.stopped.wait(self.interval):
+            self.function(*args, **kws)

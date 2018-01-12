@@ -50,9 +50,9 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     GFP exposure, which also requires adding the name of the image file to save
     out to the self.image_names attribute.
 
-    The subclass MUST call self._heartbeat() at least once a minute if any
+    The subclass MUST call self.heartbeat() at least once a minute if any
     overridden functions take more time than that. (The superclass calls
-    _heartbeat() between calls to these functions.)
+    heartbeat() between calls to these functions.)
     """
 
     # Attributes and functions subclasses MUST or MAY override are here:
@@ -196,7 +196,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.bf_exposure, self.tl_intensity = calibrate.meter_exposure_and_intensity(self.scope, self.scope.tl.lamp,
             max_exposure=32, min_intensity_fraction=0.2, max_intensity_fraction=0.5)
 
-        self._heartbeat()
+        self.heartbeat()
 
         # calculate the BF flatfield image and reference intensity value
         self.scope.stage.position = ref_positions[0]
@@ -212,7 +212,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         cal_image_names = ['vignette_mask.png', 'bf_flatfield.tiff']
         cal_images = [self.vignette_mask.astype(numpy.uint8)*255, bf_flatfield]
 
-        self._heartbeat()
+        self.heartbeat()
 
         # calculate a fluorescent flatfield if requested
         if self.FLUORESCENCE_FLATFIELD_LAMP:
@@ -227,7 +227,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             cal_image_names.append('fl_flatfield.tiff')
             cal_images.append(fl_flatfield)
 
-        self._heartbeat()
+        self.heartbeat()
 
         # save out calibration information
         calibration_dir = self.data_dir / 'calibrations'
@@ -269,7 +269,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     def run_autofocus(self, position_name, current_timepoint_metadata):
         z_start = self.scope.stage.z
         z_max = self.experiment_metadata['z_max']
-        with self.scope.tl.lamp.in_state(enabled=True), self.scope.camera.in_state(readout_rate='280 MHz', shutter_mode='Rolling'):
+        with self.heartbeat_timer(), self.scope.tl.lamp.in_state(enabled=True), self.scope.camera.in_state(readout_rate='280 MHz', shutter_mode='Rolling'):
             if self.DO_COARSE_FOCUS:
                 coarse_z, fine_z = autofocus.coarse_fine_autofocus(self.scope, z_start, z_max,
                     self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
