@@ -19,8 +19,11 @@ logger = logging.get_logger(__name__)
 
 FFTW_WISDOM = scope_configuration.CONFIG_DIR / 'fftw_wisdom'
 if FFTW_WISDOM.exists():
-    fast_fft.load_plan_hints(str(FFTW_WISDOM))
-    logger.debug('FFTW wisdom loaded')
+    loaded = fast_fft.load_plan_hints(str(FFTW_WISDOM))
+    if loaded:
+        logger.debug('FFTW wisdom loaded')
+    else:
+        logger.warning('FFTW wisdom file exists, but some wisdom could not be loaded (FFTW version mismatch?)')
 else:
     logger.warning('No FFTW wisdom found!')
 
