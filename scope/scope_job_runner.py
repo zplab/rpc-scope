@@ -129,7 +129,6 @@ class JobRunner(base_daemon.Runner):
                 upcoming_jobs.append(job)
             else:
                 non_queued_jobs.append(job)
-        now = time.time()
         if current_job and not upcoming_jobs:
             print('No other queued jobs.')
         elif not upcoming_jobs:
@@ -139,16 +138,17 @@ class JobRunner(base_daemon.Runner):
             if not is_running:
                 print('NOTE: As the job-runner is NOT CURRENTLY RUNNING, queued jobs WILL NOT BE RUN until the runner is started.')
             for job in upcoming_jobs:
-                print(self.format_job_blurb(now, job))
+                print(self.format_job_blurb(job))
         if non_queued_jobs:
             print('Jobs not queued:')
             for job in non_queued_jobs:
-                print(self.format_job_blurb(now, job))
+                print(self.format_job_blurb(job))
 
-    def format_job_blurb(self, now, job):
+    def format_job_blurb(self, job):
         if job.next_run_time is None:
             time_blurb = 'no additional runs scheduled'
         else:
+            now = time.time()
             interval = (job.next_run_time - now)
             past = interval < 0
             if past:

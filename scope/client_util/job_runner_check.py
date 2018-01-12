@@ -54,10 +54,8 @@ def main(scope_host='127.0.0.1'):
     if to_email:
         # we have not alerted some people about the queued jobs
         host = platform.node().split('.')[0]
-        now = datetime.datetime.now()
-        now = now.replace(microsecond=0)
-        iso_now = now.isoformat(' ')
-        job_blurbs = '\n'.join(runner.format_job_blurb(now, job) for job in queued_jobs)
+        now = datetime.datetime.now().replace(microsecond=0).isoformat(' ')
+        job_blurbs = '\n'.join(runner.format_job_blurb(job) for job in queued_jobs)
         message = ERROR_MESSAGE.format(host, now, job_blurbs)
         print('Emailing alert about the following jobs:\n{}'.format(job_blurbs))
         subject = ERROR_SUBJECT.format(host)
