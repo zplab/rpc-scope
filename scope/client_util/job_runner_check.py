@@ -44,7 +44,7 @@ def main(scope_host='127.0.0.1'):
 
     print('Jobs queued but job runner is not running.')
 
-    if problem_file.exists:
+    if problem_file.exists():
         # this error was previously detected
         previously_emailed = set(problem_file.read_text().split('\n'))
     else:
