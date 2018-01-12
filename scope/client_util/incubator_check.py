@@ -62,15 +62,13 @@ def main(scope_host='127.0.0.1'):
             if not last_email_file.exists():
                 send_email = True
             else:
-                with last_email_file.open() as f:
-                    last_email = float(f.read())
+                last_email = float(last_email_file.read_text())
                 if time.time() > last_email + 6*60*60: # email every 6h at most
                     send_email = True
             if send_email:
                 print('sending email: {}'.format(subject))
-                runner._send_error_email(sorted(to_email), subject, message)
-                with last_email_file.open('w') as f:
-                    f.write(str(time.time()))
+                runner.send_error_email(sorted(to_email), subject, message)
+                last_email_file.write_text(str(time.time()))
             else:
                 print('not sending email (previous alert too recent)')
 

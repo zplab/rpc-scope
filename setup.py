@@ -14,7 +14,8 @@ setuptools.setup(
             'scope_monitor=scope.cli.scope_monitor:main',
             'scope_server=scope.cli.scope_server:main',
             'scope_job_runner=scope.cli.scope_job_runner:main',
-            'incubator_check=scope.client_util.incubator_check:main'
+            'incubator_check=scope.client_util.incubator_check:main',
+            'job_runner_check=scope.client_util.job_runner_check:main'
         ],
     }
 )

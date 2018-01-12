@@ -43,19 +43,11 @@ def main(argv=None):
         help='remove a job from the queue (will not terminate the current job if running)')
     parser_remove.set_defaults(func='remove_job')
     parser_remove.add_argument(metavar='py_file', dest='exec_file', help='python script to remove')
-    parser_suspend = subparsers.add_parser('suspend',
-        help='suspend a job (do not remove from queue, but do not run again until it is resumed)')
-    parser_suspend.set_defaults(func='suspend_job')
-    parser_suspend.add_argument(metavar='py_file', dest='exec_file', help='python script to suspend')
-    parser_resume = subparsers.add_parser('resume', help='resume a job previously suspended manually or because of an error')
+    parser_resume = subparsers.add_parser('resume', help='resume a job previously suspended because of an error')
     parser_resume.set_defaults(func='resume_job')
     parser_resume.add_argument(metavar='py_file', dest='exec_file', help='python script to resume')
     parser_resume.add_argument('-d', '--delay', metavar='DELAY', type=parse_delay, dest='next_run_time',
         help='time to delay before next running the job (h, h:m, or h:m:s). If not specified, use the currently scheduled next-run time')
-    parser_suspend_all = subparsers.add_parser('suspend_all',
-        help='suspend all queued jobs (do not remove jobs from queue, but do not run again until it is resumed)')
-    parser_resume_all = subparsers.add_parser('resume_all',
-        help='resume all suspended jobs (except those not running due to "error" status)')
     args = parser.parse_args(argv)
 
     try:

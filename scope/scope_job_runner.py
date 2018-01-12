@@ -23,7 +23,6 @@ logger = logging.get_logger(__name__)
 
 STATUS_QUEUED = 'queued'
 STATUS_ERROR = 'error'
-STATUS_SUSPENDED = 'suspended'
 
 HEARTBEAT_BYTES = b'\n'
 HEARTBEAT_TIMEOUT = 5*60 # in seconds
@@ -90,21 +89,8 @@ class JobRunner(base_daemon.Runner):
         if self.is_running():
             self._awaken_daemon()
 
-    def suspend_job(self, exec_file):
-        """Suspend further execution of the job specified by the given exec_file.
-
-        Note: If the job is currently running, it will complete but further runs
-        will not be executed."""
-        exec_file = canonical_path(exec_file)
-        self.jobs.update(exec_file, status=STATUS_SUSPENDED)
-        print('Job {} has been suspended and will not be executed in the future unless resumed.'.format(exec_file))
-        if self.current_job.get() == exec_file:
-            print('This job is running. The current run has NOT been terminated.')
-        if self.is_running():
-            self._awaken_daemon()
-
     def resume_job(self, exec_file, next_run_time=None):
-        """Resume a job that was suspended manually or for reasons of error.
+        """Resume a job that was suspended due to an error.
 
         If next_run_time is not None, it will be used as the new next_run_time,
         otherwise the previous run-time will be used. 'now' can be used to
@@ -119,36 +105,6 @@ class JobRunner(base_daemon.Runner):
             self._awaken_daemon()
         else:
             print('NOTE: The job-runner is NOT CURRENTLY RUNNING. Until it is started again, queued jobs WILL NOT BE RUN.')
-
-
-    def suspend_all(self):
-        """Suspend further execution of all queued jobs."""
-        self._change_all_status(STATUS_QUEUED, STATUS_SUSPENDED)
-        print('All jobs have been suspended and will not be executed in the future unless resumed.')
-        exec_file = self.current_job.get()
-        if exec_file:
-            print('Job {} is currently running. This run has NOT been terminated.'.format(exec_file))
-
-
-    def resume_all(self):
-        """Resume all suspended jobs.
-
-        Note that only jobs with 'suspended' status will be resumed. Thus jobs
-        that are not running due to errors and are marked with 'error' status
-        will not be resumed except by specifically calling resume_job()."""
-        self._change_all_status(STATUS_SUSPENDED, STATUS_QUEUED)
-        if not self.is_running():
-            print('NOTE: The job-runner is NOT CURRENTLY RUNNING. Until it is started again, queued jobs WILL NOT BE RUN.')
-
-
-    def _change_all_status(self, status_from, status_to):
-        """Change all jobs with status_from to have status_to instead."""
-        jobs = self.jobs.get_jobs()
-        for job in jobs:
-            if job.status == status_from:
-                self.jobs.update(job.exec_file, status=status_to)
-        if self.is_running():
-            self._awaken_daemon()
 
     def status(self):
         """Print a status message listing the running and queued jobs, if any."""
@@ -183,34 +139,34 @@ class JobRunner(base_daemon.Runner):
             if not is_running:
                 print('NOTE: As the job-runner is NOT CURRENTLY RUNNING, queued jobs WILL NOT BE RUN until the runner is started.')
             for job in upcoming_jobs:
-                blurb = self._format_job_blurb(now, job)
-                print('{}: {} (status: {})'.format(blurb, job.exec_file, job.status))
+                print(self.format_job_blurb(now, job))
         if non_queued_jobs:
             print('Jobs not queued:')
             for job in non_queued_jobs:
-                blurb = self._format_job_blurb(now, job)
-                print('{}: {} (status: {})'.format(blurb, job.exec_file, job.status))
+                print(self.format_job_blurb(now, job))
 
-    def _format_job_blurb(self, now, job):
+    def format_job_blurb(self, now, job):
         if job.next_run_time is None:
-             return 'no additional runs scheduled'
-        interval = (job.next_run_time - now)
-        past = interval < 0
-        if past:
-            interval = -interval
-        hours = int(interval // 60**2)
-        minutes = int(interval % 60**2 // 60)
-        seconds = int(interval % 60)
-        timediff = ''
-        if hours:
-            timediff += str(hours) + 'h '
-        if hours or minutes:
-            timediff += str(minutes) + 'm '
-        timediff += str(seconds) + 's'
-        if past:
-            return 'scheduled for {} ago'.format(timediff)
+            time_blurb = 'no additional runs scheduled'
         else:
-            return 'scheduled in {}'.format(timediff)
+            interval = (job.next_run_time - now)
+            past = interval < 0
+            if past:
+                interval *= -1
+            hours = int(interval // 60**2)
+            minutes = int(interval % 60**2 // 60)
+            seconds = int(interval % 60)
+            timediff = ''
+            if hours:
+                timediff += str(hours) + 'h '
+            if hours or minutes:
+                timediff += str(minutes) + 'm '
+            timediff += str(seconds) + 's'
+            if past:
+                time_blurb = 'scheduled for {} ago'.format(timediff)
+            else:
+                time_blurb = 'scheduled in {}'.format(timediff)
+        return '{}: {} (status: {})'.format(time_blurb, job.exec_file, job.status)
 
     def start(self, verbose):
         super().start(self.log_dir, verbose, SIGINT=self.sigint_handler, SIGHUP=self.sighup_handler)
@@ -345,10 +301,10 @@ class JobRunner(base_daemon.Runner):
         if job.alert_emails:
             error = 'timed out' if timed_out else 'failed'
             subject = '[{}] Job {} {}.'.format(platform.node(), job.exec_file, error)
-            self._send_error_email(job.alert_emails, subject, error_text)
+            self.send_error_email(job.alert_emails, subject, error_text)
 
     @staticmethod
-    def _send_error_email(emails, subject, text):
+    def send_error_email(emails, subject, text):
         try:
             host = platform.node().split('.')[0]
         except:
@@ -412,7 +368,7 @@ def _validate_alert_emails(alert_emails):
     return alert_emails
 
 def canonical_path(path):
-    return pathlib.Path(os.path.realpath(str(path)))
+    return pathlib.Path(path).expanduser().resolve()
 
 class RLockFile(lockfile.LockFile):
     def __init__(self, path, timeout=None):
