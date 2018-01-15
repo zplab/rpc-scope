@@ -95,8 +95,8 @@ def install_systemd_units(executable):
     service_file = base_unit.with_suffix('.service')
     service_file.write_text(SERVICE_UNIT.format(executable=executable))
     service_file.chmod(0o644)
-    subprocess.run(['systemctl', 'enable', base_unit.name], check=True)
-    subprocess.run(['systemctl', 'start', base_unit.name], check=True)
+    subprocess.run(['systemctl', 'enable', timer_file.name], check=True)
+    subprocess.run(['systemctl', 'start', timer_file.name], check=True)
     subprocess.run(['systemctl', 'status', base_unit.name], check=True)
 
 
