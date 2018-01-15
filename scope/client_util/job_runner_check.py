@@ -88,7 +88,7 @@ ExecStart={executable}
 '''
 
 def install_systemd_units(executable):
-    base_unit = pathlib.Path('etc/systemd/system/job_runner_check')
+    base_unit = pathlib.Path('/etc/systemd/system/job_runner_check')
     timer_file = base_unit.with_suffix('.timer')
     timer_file.write_text(TIMER_UNIT)
     timer_file.chmod(0o644)
