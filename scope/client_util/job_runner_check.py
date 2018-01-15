@@ -73,7 +73,7 @@ TIMER_UNIT = '''[Unit]
 Description=Check that scope_job_runner is active if jobs are queued
 
 [Timer]
-OnBootSec=5min
+OnBootSec=15min
 OnActiveSec=30min
 
 [Install]
