@@ -76,7 +76,7 @@ class TimepointHandler:
     def heartbeat(self):
         print('heartbeat') # write a line to stdout to serve as a heartbeat
 
-    @contextlib.context_manager
+    @contextlib.contextmanager
     def heartbeat_timer(self):
         heartbeat_timer = timer.Timer(self.heartbeat, interval=60)
         yield
