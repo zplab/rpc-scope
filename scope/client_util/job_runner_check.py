@@ -6,6 +6,7 @@ import datetime
 import sys
 import pathlib
 import subprocess
+import time
 
 from .. import scope_job_runner
 from ..config import scope_configuration
