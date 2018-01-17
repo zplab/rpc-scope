@@ -22,7 +22,7 @@ Description=Check that scope_job_runner is active if jobs are queued
 
 [Timer]
 OnBootSec=15min
-OnActiveSec=45min
+OnUnitActiveSec=45min
 
 [Install]
 WantedBy=timers.target
