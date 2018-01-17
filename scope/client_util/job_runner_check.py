@@ -103,7 +103,7 @@ def get_overdue_jobs(runner):
     overdue_jobs = []
     to_email = set()
     for job in runner.jobs.get_jobs():
-        if ( job.exec_file.parent == exec_dir and # job is user-provided, not like incubator_check
+        if ( job.exec_file.parent != exec_dir and # job is user-provided, not like incubator_check
              job.status == scope_job_runner.STATUS_QUEUED and # and is active
              job.next_run_time is not None and # and is scheduled to run again
              job.next_run_time < now and # and is overdue
