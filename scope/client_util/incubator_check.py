@@ -45,9 +45,7 @@ def main(scope_host='127.0.0.1'):
             errors.append('TEMPERATURE DEVIATION')
 
         host = platform.node().split('.')[0]
-        now = datetime.datetime.now()
-        now = now.replace(microsecond=0)
-        now = now.isoformat(' ')
+        now = datetime.datetime.now().isoformat(sep=' ', timespec='seconds')
         err_text = '\n'.join(errors)
         if errors:
             err_text += '\n\n'

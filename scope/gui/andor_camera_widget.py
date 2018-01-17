@@ -62,7 +62,7 @@ class AndorCameraWidget(device_widget.DeviceWidget):
     def add_property_rows(self, properties, property_types):
         form = Qt.QFormLayout()
         form.setContentsMargins(0, 0, 0, 0)
-        form.setVerticalSpacing(6)
+        form.setVerticalSpacing(5)
         form.setLabelAlignment(Qt.Qt.AlignRight)
         form.setFieldGrowthPolicy(Qt.QFormLayout.ExpandingFieldsGrow)
         self.setLayout(form)

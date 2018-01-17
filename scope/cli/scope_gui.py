@@ -9,7 +9,7 @@ def main(argv=None):
     choices = ', '.join(sorted(build_gui.WIDGET_NAMES))
     parser.add_argument('widgets', nargs="*", metavar='WIDGET',
         help='the widget(s) to display, or all if none are specified (valid options: {})'.format(choices))
-    parser.add_argument('--host', default='127.0.0.1', help='microscope host to connect to (default %(default)s')
+    parser.add_argument('--host', default='127.0.0.1', help='microscope host to connect to (default %(default)s)')
     args = parser.parse_args(argv)
     if len(args.widgets) == 0:
         desired_widgets = None

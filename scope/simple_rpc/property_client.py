@@ -59,7 +59,7 @@ class PropertyClient(threading.Thread):
             callbacks = self.callbacks[property_name]
             callbacks.remove((callback, valueonly))
         except KeyError:
-            raise KeyError('No matching subscription found for property name "{}".'.format(property_name))
+            raise KeyError('No matching subscription found for property name "{}".'.format(property_name)) from None
         if not callbacks:
             del self.callbacks[property_name]
 

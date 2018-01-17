@@ -39,6 +39,9 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
         self.last_image = 0
 
     def closeEvent(self, e):
+        if self.closing:
+            # sometimes closeEvent gets fired off twice (2018-01, PyQt 5.9). Why? TODO: verify if problem goes away in later Qt
+            return
         self.closing = True
         self.live_streamer.detach()
         super().closeEvent(e)

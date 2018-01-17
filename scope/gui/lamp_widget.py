@@ -18,8 +18,7 @@ class LampWidget(device_widget.DeviceWidget):
 
         grid_layout = Qt.QGridLayout()
         grid_layout.setContentsMargins(0, 0, 0, 0)
-        grid_layout.setVerticalSpacing(4)
-        grid_layout.setHorizontalSpacing(4)
+        grid_layout.setSpacing(4)
         container_layout.addLayout(grid_layout)
 
         self.lamp_controllers = []
@@ -34,7 +33,6 @@ class LampWidget(device_widget.DeviceWidget):
 
         bottom_layout = Qt.QHBoxLayout()
         bottom_layout.setContentsMargins(0, 0, 0, 0)
-        grid_layout.setSpacing(10)
         container_layout.addLayout(bottom_layout)
         disable_all_button = Qt.QPushButton('Disable All')
         bottom_layout.addWidget(disable_all_button)
