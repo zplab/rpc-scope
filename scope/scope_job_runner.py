@@ -218,8 +218,15 @@ class JobRunner(base_daemon.Runner):
     def run_daemon(self):
         """Main loop: get a job to run and run it, or sleep until the next run
         time (or forever) otherwise."""
+        # upon restarting, try to run job_runner_check (in a subprocess, so if it breaks it's not our problem)
+        # to send the all-clear email if there were previous alert emails
+        job_runner_check = pathlib.Path(sys.argv[0]).parent / 'job_runner_check'
+        if job_runner_check.exists():
+            logger.debug('running job_runner_check')
+            subprocess.run(job_runner_check)
         self.asleep = False
         self.running = True
+        logger.debug('starting job runner daemon mainloop')
         while self.running:
             job = self._get_next_job() # may be None
             if job and job.next_run_time > time.time():
