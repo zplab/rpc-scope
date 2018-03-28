@@ -9,8 +9,10 @@ import inspect
 import concurrent.futures as futures
 import os
 import contextlib
+import pickle
 
 from zplib import datafile
+from elegant import load_data
 
 from ..util import threaded_image_io
 from ..util import log_util
@@ -49,6 +51,17 @@ class TimepointHandler:
             self.experiment_metadata = json.load(f)
         self.positions = self.experiment_metadata['positions'] # dict mapping names to (x,y,z) stage positions
         self.skip_positions = set(self.experiment_metadata.setdefault('skip_positions', []))
+        position_annotations = load_data.read_annotations(self.data_dir)
+
+        self.annotated_dead = set()
+        for position in sorted(self.positions.keys()):
+            if position in position_annotations:
+                annotations = list(position_annotations[position][1].values())
+                if len(annotations) > 0:
+                    latest_annotation = annotations[-1]
+                    if latest_annotation.get('stage', None) == 'dead':
+                        self.annotated_dead.add(position)
+
         if scope_host is not None:
             from .. import scope_client
             self.scope, self.scope_properties = scope_client.client_main(scope_host)
@@ -98,7 +111,7 @@ class TimepointHandler:
             self.configure_timepoint()
             self.heartbeat()
             for position_name, position_coords in sorted(self.positions.items()):
-                if position_name not in self.skip_positions:
+                if position_name not in self.skip_positions and position_name not in self.annotated_dead:
                     self.run_position(position_name, position_coords)
                     self.heartbeat()
             self.experiment_metadata['skip_positions'] = list(self.skip_positions)
