@@ -26,12 +26,16 @@ def main(argv=None):
     parser.add_argument('-d', '--debug', action='store_true', help='show full stack traces on error')
     subparsers = parser.add_subparsers(help='sub-command help', dest='command')
     subparsers.required = True
+
     parser_start = subparsers.add_parser('start', help='start the job runner, if not running')
     parser_start.add_argument('-v', '--verbose', action='store_true', help='log extra debug information')
+
     parser_stop = subparsers.add_parser('stop', help='stop the job runner, if running')
     parser_stop.add_argument('-f', '--force', action='store_true', help='do not allow in-progress jobs to complete before stopping the runner')
+
     parser_status = subparsers.add_parser('status', help='print the status of the queued jobs')
     parser_status.set_defaults(func='status')
+
     parser_add = subparsers.add_parser('add', help='add a new job to the queue')
     parser_add.set_defaults(func='add_job')
     parser_add.add_argument(metavar='py_file', dest='exec_file', help='python script to run')
@@ -39,15 +43,21 @@ def main(argv=None):
     parser_add.add_argument('-d', '--delay', metavar='DELAY', type=parse_delay, dest='next_run_time',
         help='time to delay before running the job (h, h:m, or h:m:s). Default: run immediately.',
         default='0')
+
     parser_remove = subparsers.add_parser('remove',
         help='remove a job from the queue (will not terminate the current job if running)')
     parser_remove.set_defaults(func='remove_job')
     parser_remove.add_argument(metavar='py_file', dest='exec_file', help='python script to remove')
+
     parser_resume = subparsers.add_parser('resume', help='resume a job previously suspended because of an error')
     parser_resume.set_defaults(func='resume_job')
     parser_resume.add_argument(metavar='py_file', dest='exec_file', help='python script to resume')
     parser_resume.add_argument('-d', '--delay', metavar='DELAY', type=parse_delay, dest='next_run_time',
         help='time to delay before next running the job (h, h:m, or h:m:s). If not specified, use the currently scheduled next-run time')
+
+    parser_duty = subparsers.add_parser('duty-cycle', help='print the recent duty cycle (i.e. % utilization)')
+    parser_status.set_defaults(func='duty_cycle')
+
     args = parser.parse_args(argv)
 
     try:

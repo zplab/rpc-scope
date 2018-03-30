@@ -184,6 +184,33 @@ class JobRunner(base_daemon.Runner):
         if current_job is not None:
             print('Job complete. Job-runner is stopping.')
 
+    def duty_cycle(self, intervals=[6, 24, 24*7]):
+        """Return job-running cycle over the previous number of hours specified."""
+        logfiles = sorted(self.log_dir.glob('messages.log*')) # read all logs, including rotated ones
+        completed_jobs = []
+        for logfile in logfiles:
+            # read text, skipping first char which is a >, then split job entries on
+            # >s that start at new lines.
+            log_entries = logfile.read_text()[1:].split('\n>')
+            start_time = None
+            for entry in log_entries:
+                isotime, loglevel, module, message = entry.split('\t')
+                timestamp = time.mktime(time.strptime(isotime, '%Y-%m-%d %H:%M:%S'))
+                if message.startswith('Running job'):
+                    start_time = timestamp
+                elif message.startswith('Job done'):
+                    if start_time is None:
+                        # job logs shouldn't contain job stop but no job start...
+                        print('Anomaly in job log {}: no start time for job done at {}'.format(logfile, isotime))
+                        continue
+                    elapsed_time = timestamp - start_time
+                    completed_jobs.append((start_time, elapsed_time))
+        for interval in intervals:
+            start_threshold = time.time() - interval * 3600 # interval is in hours
+            in_interval = [job[1] for job in completed_jobs if job[0] > start_threshold]
+            job_hours = sum(in_interval) / 3600
+            duty_cycle = int(100*job_hours / interval)
+            print('In the last {} hours, jobs ran for {:.1f} hours ({}%).'.format(interval, job_hours, duty_cycle))
 
     def _awaken_daemon(self):
         """Wake the daemon up if it is sleeping, so that it will reread the

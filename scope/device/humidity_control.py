@@ -68,7 +68,7 @@ class HumidityController(property_device.PropertyDevice):
     def full_reset(self):
         with self._serial_port_lock:
             self._call('P1F14') # store in RAM bus format: echo, no LF, no continuous xmit
-            self._call('W1F14') # bus format: echo, no LF, no continuous xmit
+            self._call('W1F14') # store bus format in EEPROM too
             self._call('D01') # disable alarm 1 / enable output 1
             self._call('D02') # disable alarm 2 / enable output 2 (not used)
             self._call('W0C20') # configure output 1 as on/off only
