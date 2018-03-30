@@ -31,7 +31,7 @@ class DarkCurrentCorrector:
              scope.tl.lamp.in_state(enabled=False):
             if hasattr(scope.il, 'spectra'):
                 scope.il.spectra.push_state(**{lamp+'_enabled':False for lamp in scope.il.spectra.lamp_specs.keys()})
-            scope.camera.start_image_sequence_acquisition(frame_count=len(exposures)*frames_to_average, trigger_mode='Software')
+            scope.camera.start_image_sequence_acquisition(frame_count=len(requested_exposure_times)*frames_to_average, trigger_mode='Software')
             self.exposure_times = []
             for exp in requested_exposure_times:
                 images = []
