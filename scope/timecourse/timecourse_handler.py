@@ -221,6 +221,9 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         cal_image_names = ['vignette_mask.png', 'bf_flatfield.tiff']
         cal_images = [self.vignette_mask.astype(numpy.uint8)*255, bf_flatfield]
 
+        bf_metering = self.experiment_metadata.setdefault('brightfield metering', {})
+        bf_metering[self.timepoint_prefix] = dict(exposure=self.bf_exposure, intensity=self.tl_intensity, ref_intensity=bf_ref_intensity)
+
         self.heartbeat()
 
         # calculate a fluorescent flatfield if requested
@@ -237,18 +240,18 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             cal_image_names.append('fl_flatfield.tiff')
             cal_images.append(fl_flatfield)
 
+        fl_metering = self.experiment_metadata.setdefault('fluorescent metering', {})
+        fl_metering[self.timepoint_prefix] = dict(ref_intensity=fl_ref_intensity, fl_flatfield_exposure=fl_exposure, fl_flatfield_intensity=fl_intensity)
+
         self.heartbeat()
 
-        # save out calibration information
+        # save out calibration images
         calibration_dir = self.data_dir / 'calibrations'
         calibration_dir.mkdir(exist_ok=True)
         cal_image_paths = [calibration_dir / (self.timepoint_prefix + ' ' + name) for name in cal_image_names]
         if self.write_files:
             self.image_io.write(cal_images, cal_image_paths)
-        bf_metering = self.experiment_metadata.setdefault('brightfield metering', {})
-        bf_metering[self.timepoint_prefix] = dict(exposure=self.bf_exposure, intensity=self.tl_intensity, ref_intensity=bf_ref_intensity)
-        fl_metering = self.experiment_metadata.setdefault('fluorescent metering', {})
-        fl_metering[self.timepoint_prefix] = dict(ref_intensity=fl_ref_intensity, fl_flatfield_exposure_time=fl_exposure)
+
         self.scope.camera.exposure_time = self.bf_exposure
 
     def get_next_run_time(self):
