@@ -287,12 +287,12 @@ def get_flat_field(image, vignette_mask):
     # don't muck things up too much.
     flat_field[~vignette_mask] = flat_field[near_vignette_mask].mean()
     flat_field = _smooth_flat_field(flat_field)
-    median = numpy.median(flat_field[vignette_mask])
-    flat_field /= mean_intensity
+    image_pixels = flat_field[vignette_mask]
+    flat_field /= numpy.mean(image_pixels)
     flat_field[flat_field <= 0] = 1 # we're going to reciprocate, so prevent div/0 errors
     flat_field = 1 / flat_field # take reciprocal so that the mask can be used multiplicatively
     flat_field[~vignette_mask] = 0
-    return flat_field, median
+    return flat_field, numpy.median(image_pixels)
 
 
 def _circular_mask(s):
