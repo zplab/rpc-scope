@@ -34,7 +34,6 @@ def main(argv=None):
     parser_stop.add_argument('-f', '--force', action='store_true', help='do not allow in-progress jobs to complete before stopping the runner')
 
     parser_status = subparsers.add_parser('status', help='print the status of the queued jobs')
-    parser_status.set_defaults(func='status')
 
     parser_add = subparsers.add_parser('add', help='add a new job to the queue')
     parser_add.set_defaults(func='add_job')
@@ -55,7 +54,8 @@ def main(argv=None):
     parser_resume.add_argument('-d', '--delay', metavar='DELAY', type=parse_delay, dest='next_run_time',
         help='time to delay before next running the job (h, h:m, or h:m:s). If not specified, use the currently scheduled next-run time')
 
-    parser_duty = subparsers.add_parser('duty_cycle', help='print the recent duty cycle (i.e. % utilization)')
+    parser_duty = subparsers.add_parser('duty', help='print the recent duty cycle (i.e. % utilization)')
+    parser_duty.set_defaults(func='duty_cycle')
 
     args = parser.parse_args(argv)
 
