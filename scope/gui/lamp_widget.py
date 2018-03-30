@@ -31,26 +31,6 @@ class LampWidget(device_widget.DeviceWidget):
             lamps = sorted(lamp_specs.keys(), key=lamp_specs.get)
             self.lamp_controllers += [LampController(self, 'scope.il.spectra.'+lamp, grid_layout) for lamp in lamps]
 
-        bottom_layout = Qt.QHBoxLayout()
-        bottom_layout.setContentsMargins(0, 0, 0, 0)
-        container_layout.addLayout(bottom_layout)
-        disable_all_button = Qt.QPushButton('Disable All')
-        bottom_layout.addWidget(disable_all_button)
-        disable_all_button.clicked.connect(self.disable_all)
-        bottom_layout.addWidget(Qt.QWidget())
-        if device_widget.has_component(scope, 'scope.il.spectra'):
-            temperature_label = Qt.QLabel('Temperature: -')
-            temperature_label.setAlignment(Qt.Qt.AlignRight)
-            bottom_layout.addWidget(temperature_label)
-            self.subscribe('scope.il.spectra.temperature',
-               callback=lambda temp: temperature_label.setText('Temperature: {}°C'.format(temp)))
-        else:
-            bottom_layout.addWidget(Qt.QWidget())
-
-    def disable_all(self):
-        for lamp_controller in self.lamp_controllers:
-            lamp_controller.toggle.setChecked(False)
-
 class LampController:
     def __init__(self, widget, name, layout):
         display_name = name.split('.', 1)[1] # strip off leading 'scope.'
