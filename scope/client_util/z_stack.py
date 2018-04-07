@@ -22,10 +22,9 @@ def z_stack(scope, mm_range, num_steps, tl_enabled=False, **spectra_state):
     """
     z = scope.stage.z
     z_positions = numpy.linspace(z - mm_range/2, z + mm_range/2, num_steps)
-    scope.camera.start_image_sequence_acquisition(num_steps, trigger_mode='Software')
     images = []
     exposure_sec = scope.camera.exposure_time / 1000
-    with scope.stage.in_state(async=True):
+    with scope.camera.image_sequence_acquisition(num_steps, trigger_mode='Software'), scope.stage.in_state(async=True):
         # parallelize stage movement and image transfer by dispatching movement
         # and image-retrieval and then waiting for the stage to finish.
         # Overall this will run a bit faster than it would by doing everything
@@ -37,14 +36,10 @@ def z_stack(scope, mm_range, num_steps, tl_enabled=False, **spectra_state):
                 images.append(scope.camera.next_image(read_timeout_ms=1000))
             scope.stage.wait()
             with contextlib.ExitStack() as stack:
-                scope.tl.lamp.push_state(enabled=tl_enabled)
-                stack.callback(scope.tl.lamp.pop_state)
+                stack.enter_context(scope.tl.lamp.in_state(enabled=tl_enabled))
                 if spectra_state:
-                    scope.il.spectra.push_state(**spectra)
-                    stack.callback(scope.il.spectra.pop_state)
+                    stack.enter_context(scope.il.spectra.in_state(**spectra))
                 scope.camera.send_software_trigger()
                 time.sleep(exposure_sec)
-
         images.append(scope.camera.next_image(read_timeout_ms=1000))
-    scope.camera.end_image_sequence_acquisition()
     return images, z_positions

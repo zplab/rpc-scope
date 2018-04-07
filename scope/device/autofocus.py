@@ -124,18 +124,17 @@ class Autofocus:
         """
         self._start_autofocus(focus_filter_period_range, focus_filter_mask, **camera_state)
         frame_rate, overlap = self._camera.calculate_streaming_mode(steps, trigger_mode='Software', desired_frame_rate=1000) # try to get the max possible frame rate...
-        self._camera.start_image_sequence_acquisition(frame_count=steps, trigger_mode='Software')
         z_positions = numpy.linspace(start, end, steps)
         runner = MetricRunner(self._camera, frame_rate, steps, self._metric, return_images)
-        runner.start()
-        for z in z_positions:
-            self._stage.set_z(z)
-            self._stage.wait()
-            self._camera.send_software_trigger()
-            if z != end:
-                time.sleep(sleep_time)
-        image_names, camera_timestamps = runner.join()
-        self._camera.end_image_sequence_acquisition()
+        with self._camera.image_sequence_acquisition(steps, trigger_mode='Software'):
+            runner.start()
+            for z in z_positions:
+                self._stage.set_z(z)
+                self._stage.wait()
+                self._camera.send_software_trigger()
+                if z != end:
+                    time.sleep(sleep_time)
+            image_names, camera_timestamps = runner.join()
         best_z, positions_and_scores = self._stop_autofocus(z_positions)
         if return_images:
             return best_z, positions_and_scores, image_names
@@ -199,15 +198,13 @@ class Autofocus:
         zrecorder = ZRecorder(self._camera, self._stage)
         self._stage.set_z(start) # move to start position at original speed
         self._stage.wait()
-        with self._stage.in_state(async=False, z_speed=speed):
+        with self._camera.image_sequence_acquisition(steps, trigger_mode='Internal', frame_rate=frame_rate, overlap_enabled=overlap):
             zrecorder.start()
-            self._camera.start_image_sequence_acquisition(frame_count=steps, trigger_mode='Internal',
-              frame_rate=frame_rate, overlap_enabled=overlap)
             runner.start()
-            self._stage.set_z(end)
-        zrecorder.stop()
-        image_names, camera_timestamps = runner.join()
-        self._camera.end_image_sequence_acquisition()
+            with self._stage.in_state(async=False, z_speed=speed):
+                self._stage.set_z(end)
+            zrecorder.stop()
+            image_names, camera_timestamps = runner.join()
         if len(camera_timestamps) != steps:
             self._camera.pop_state()
             raise RuntimeError('Autofocus image acquisition failed: Expected {} images, got {}.'.format(steps, len(camera_timestamps)))

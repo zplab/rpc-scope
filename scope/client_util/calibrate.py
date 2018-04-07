@@ -1,8 +1,10 @@
 # This code is licensed under the MIT License (see LICENSE file for details)
 
+import contextlib
 import time
 import numpy
 from scipy import ndimage
+
 from zplib.scalar_stats import mcd
 
 def image_order_statistic(image, k):
@@ -26,13 +28,16 @@ class DarkCurrentCorrector:
         """
         requested_exposure_times = numpy.logspace(numpy.log10(min_exposure_ms), numpy.log10(max_exposure_ms), 10)
         self.dark_images = []
-        with scope.il.in_state(shutter_open=False), \
-             scope.tl.in_state(shutter_open=False), \
-             scope.tl.lamp.in_state(enabled=False):
+        self.exposure_times = []
+        with contextlib.ExitStack() as stack:
+            # set up all the scope states
+            stack.enter_context(scope.il.in_state(shutter_open=False))
+            stack.enter_context(scope.tl.in_state(shutter_open=False))
+            stack.enter_context(scope.tl.lamp.in_state(enabled=False))
             if hasattr(scope.il, 'spectra'):
-                scope.il.spectra.push_state(**{lamp+'_enabled':False for lamp in scope.il.spectra.lamp_specs.keys()})
-            scope.camera.start_image_sequence_acquisition(frame_count=len(requested_exposure_times)*frames_to_average, trigger_mode='Software')
-            self.exposure_times = []
+                stack.enter_context(scope.il.spectra.in_state(**{lamp+'_enabled':False for lamp in scope.il.spectra.lamp_specs.keys()}))
+            stack.enter_context(scope.camera.image_sequence_acquisition(len(requested_exposure_times)*frames_to_average, trigger_mode='Software'))
+
             for exp in requested_exposure_times:
                 images = []
                 scope.camera.exposure_time = exp
@@ -44,9 +49,6 @@ class DarkCurrentCorrector:
                     scope.camera.send_software_trigger()
                     images.append(scope.camera.next_image(max(1000, 2*exp)))
                 self.dark_images.append(numpy.mean(images, axis=0))
-            scope.camera.end_image_sequence_acquisition()
-            if hasattr(scope.il, 'spectra'):
-                scope.il.spectra.pop_state()
 
     def correct(self, image, exposure_ms):
         """Correct a given image for the dark-currents.
@@ -116,11 +118,10 @@ def meter_exposure_and_intensity(scope, lamp, max_exposure=200, max_intensity=25
     # First, find a decent lamp intensity setting: one where (almost) all pixels
     # are under the max allowed value, for the minimum exposure time
     scope.camera.exposure_time = 4
-    scope.camera.start_image_sequence_acquisition(frame_count=len(intensities), trigger_mode='Software')
     bit_depth = int(scope.camera.sensor_gain[:2])
     max_good_value = max_intensity_fraction * (2**bit_depth-1)
     good_intensity = None
-    with lamp.in_state(enabled=True):
+    with scope.camera.image_sequence_acquisition(len(intensities), trigger_mode='Software'), lamp.in_state(enabled=True):
         for intensity in intensities:
             lamp.intensity = intensity
             time.sleep(0.01) # make sure lamp has time to settle
@@ -129,7 +130,6 @@ def meter_exposure_and_intensity(scope, lamp, max_exposure=200, max_intensity=25
             if image_order_statistic(image, -26) < max_good_value:
                 good_intensity = intensity
                 break
-    scope.camera.end_image_sequence_acquisition()
     if good_intensity is None:
         raise RuntimeError('Could not find a non-overexposed lamp intensity')
     # Now given the intensity setting, find the shortest-possible exposure time
@@ -184,9 +184,8 @@ def meter_exposure(scope, lamp, max_exposure=200, min_intensity_fraction=0.3,
     exposures = list((4 * 1.25**numpy.arange(int(max_i))).astype(int))
     if exposures[-1] < max_exposure:
         exposures.append(max_exposure)
-    scope.camera.start_image_sequence_acquisition(frame_count=len(exposures), trigger_mode='Software')
     good_exposure = None
-    with lamp.in_state(enabled=True):
+    with scope.camera.image_sequence_acquisition(len(exposures), trigger_mode='Software'), lamp.in_state(enabled=True):
         for exposure in exposures:
             scope.camera.exposure_time = exposure
             scope.camera.send_software_trigger()
@@ -199,7 +198,6 @@ def meter_exposure(scope, lamp, max_exposure=200, min_intensity_fraction=0.3,
                 break
             if image_min > min_good_value:
                 break
-    scope.camera.end_image_sequence_acquisition()
     if good_exposure is None:
         raise RuntimeError('Could not find a valid exposure time: intensity {}, exposure {}, image max {}, image min {}, max good {}, min good {}'.format(
             lamp.intensity, exposure, image_max, image_min, max_good_value, min_good_value))
@@ -245,10 +243,8 @@ def get_averaged_images(scope, positions, dark_corrector, frames_to_average=5):
     with scope.stage.in_state(async=False):
         for position in positions:
             scope.stage.position = position
-            scope.camera.start_image_sequence_acquisition(frame_count=frames_to_average,
-                trigger_mode='Internal')
-            images = [scope.camera.next_image() for i in range(frames_to_average)]
-            scope.camera.end_image_sequence_acquisition()
+            with scope.camera.image_sequence_acquisition(frames_to_average, trigger_mode='Internal'):
+                images = [scope.camera.next_image() for i in range(frames_to_average)]
             images = [dark_corrector.correct(image, exposure_ms) for image in images]
             position_images.append(numpy.mean(images, axis=0))
     return numpy.median(position_images, axis=0)

@@ -216,24 +216,22 @@ class AcquisitionSequencer:
             raise RuntimeError('Camera cannot queue more than {} images in its current state, {} acquisition steps requested.'.format(safe_images, num_images))
 
         self._camera.set_io_selector('Aux Out 1')
-        self._camera.start_image_sequence_acquisition(num_images, trigger_mode='External Exposure',
-            overlap_enabled=True, auxiliary_out_source='FireAll', selected_io_pin_inverted=False)
-        try:
-            with self._spectra.in_state(**self._starting_fl_lamp_state), self._tl_lamp.in_state(enabled=False, intensity=self._tl_lamp.get_intensity()):
-                # wait for lamps to turn off
-                config = self._config
-                time.sleep(max(config.sutter_led.TIMING.off_latency_ms + config.sutter_led.TIMING.fall_ms,
-                               config.spectra.TIMING.off_latency_ms + config.spectra.TIMING.fall_ms) / 1000)
-                readout_ms = self._camera.get_readout_time() # get this after setting the relevant camera modes above
-                self._exposures = [exp + readout_ms for exp in self._fire_all_time]
-                self._iotool.start_program()
-                names, self._latest_timestamps = [], []
-                for exposure in self._exposures:
-                    names.append(self._camera.next_image(read_timeout_ms=exposure+1000))
-                    self._latest_timestamps.append(self._camera.get_latest_timestamp())
-                self._output = self._iotool.wait_until_done()
-        finally:
-            self._camera.end_image_sequence_acquisition()
+        config = self._config
+        camera_state = dict(trigger_mode='External Exposure', overlap_enabled=True, auxiliary_out_source='FireAll', selected_io_pin_inverted=False)
+        with self._camera.image_sequence_acquisition(num_images, **camera_state), \
+             self._spectra.in_state(**self._starting_fl_lamp_state), \
+             self._tl_lamp.in_state(enabled=False, intensity=self._tl_lamp.get_intensity()):
+            # wait for lamps to turn off
+            time.sleep(max(config.sutter_led.TIMING.off_latency_ms + config.sutter_led.TIMING.fall_ms,
+                           config.spectra.TIMING.off_latency_ms + config.spectra.TIMING.fall_ms) / 1000)
+            readout_ms = self._camera.get_readout_time() # get this after setting the relevant camera modes above
+            self._exposures = [exp + readout_ms for exp in self._fire_all_time]
+            self._iotool.start_program()
+            names, self._latest_timestamps = [], []
+            for exposure in self._exposures:
+                names.append(self._camera.next_image(read_timeout_ms=exposure+1000))
+                self._latest_timestamps.append(self._camera.get_latest_timestamp())
+            self._output = self._iotool.wait_until_done()
         return names
 
     def get_latest_timestamps(self):

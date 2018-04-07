@@ -5,6 +5,7 @@ import time
 import collections
 import numpy
 import threading
+import contextlib
 
 from .simple_rpc import rpc_client, property_client
 from .util import transfer_ism_buffer
@@ -78,6 +79,18 @@ def _make_rpc_client(host, rpc_port, context):
         latest_image.__doc__ = scope.camera.latest_image.__doc__
         scope.camera.latest_image = latest_image
 
+        #monkeypatch in a image sequence acquisition context manager
+        @contextlib.contextmanager
+        def image_sequence_acquisition(camera, frame_count=1, trigger_mode='Internal', **camera_params):
+            """Context manager to begin and automatically end an image sequence acquisition."""
+            camera.start_image_sequence_acquisition(frame_count, trigger_mode, **camera_params)
+            try:
+                yield
+            finally:
+                camera.end_image_sequence_acquisition()
+        scope.camera.image_sequence_acquisition = image_sequence_acquisition
+
+    # monkeypatch in in_state context managers
     _replace_in_state(scope)
     scope._get_data = get_data
     scope._is_local = is_local

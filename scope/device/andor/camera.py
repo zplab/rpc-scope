@@ -613,11 +613,9 @@ class Camera(property_device.PropertyDevice):
         use the start_image_sequence_acquisition(), next_image(), and
         end_image_sequence_acquisition() functions, with software/internal/external
         triggering as appropriate."""
-        self.start_image_sequence_acquisition(frame_count=1, **camera_params)
-        read_timeout_ms = self.get_exposure_time() + 1000 # exposure time + 1 second
-        name = self.next_image(read_timeout_ms)
-        self.end_image_sequence_acquisition()
-        return name
+        with self.image_sequence_acquisition(frame_count=1, **camera_params):
+            read_timeout_ms = self.get_exposure_time() + 1000 # exposure time + 1 second
+            return self.next_image(read_timeout_ms)
 
     def send_software_trigger(self):
         """Send a software trigger command to the camera to start an acquisition.
@@ -702,6 +700,15 @@ class Camera(property_device.PropertyDevice):
         self.pop_state()
         del self._buffer_maker
 
+    @contextlib.contextmanager
+    def image_sequence_acquisition(self, frame_count=1, trigger_mode='Internal', **camera_params):
+        """Context manager to begin and automatically end an image sequence acquisition."""
+        self.start_image_sequence_acquisition(frame_count, trigger_mode, **camera_params)
+        try:
+            yield
+        finally:
+            self.end_image_sequence_acquisition()
+
     def flush():
         """Flush the camera RAM, which can be used to recover from a bad state."""
         lowlevel.Flush()
@@ -778,15 +785,14 @@ class Camera(property_device.PropertyDevice):
         """
         frame_rate, overlap = self.calculate_streaming_mode(frame_count, frame_rate,
             trigger_mode='Internal', **camera_params)
-        self.start_image_sequence_acquisition(frame_count, frame_rate=frame_rate,
-            trigger_mode='Internal', overlap_enabled=overlap, **camera_params)
         image_names = []
         timestamps = []
-        read_time = 1/min(self.get_max_interface_fps(), frame_rate)
-        for _ in range(frame_count):
-            image_names.append(self.next_image(3 * read_time * 1000))
-            timestamps.append(self._latest_timestamp)
-        self.end_image_sequence_acquisition()
+        with self.image_sequence_acquisition(frame_count, frame_rate=frame_rate,
+                trigger_mode='Internal', overlap_enabled=overlap, **camera_params):
+            read_time = 1/min(self.get_max_interface_fps(), frame_rate)
+            for _ in range(frame_count):
+                image_names.append(self.next_image(3 * read_time * 1000))
+                timestamps.append(self._latest_timestamp)
         return image_names, timestamps, frame_rate
 
 
