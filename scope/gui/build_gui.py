@@ -8,11 +8,10 @@ from . import andor_camera_widget
 from . import lamp_widget
 from . import scope_viewer_widget
 from . import microscope_widget
-#from . import stage_pos_table_widget
 from . import game_controller_input_widget
 from . import incubator_widget
 
-DEFAULT_WIDGETS = [
+WIDGETS = [
     # properties not specified as True are assumed False
     dict(name='camera', cls=andor_camera_widget.AndorCameraWidget, start_visible=True, docked=True),
     dict(name='advanced_camera', cls=andor_camera_widget.AndorAdvancedCameraWidget, pad=True),
@@ -23,11 +22,6 @@ DEFAULT_WIDGETS = [
     dict(name='game_controller', cls=game_controller_input_widget.GameControllerInputWidget)
 ]
 
-OTHER_WIDGETS = [
-    #dict(name='stage_table', cls=stage_pos_table_widget.StagePosTableWidget)
-]
-
-WIDGETS = DEFAULT_WIDGETS + OTHER_WIDGETS
 WIDGET_NAMES = set(widget['name'] for widget in WIDGETS)
 
 def gui_main(host, desired_widgets=None):
