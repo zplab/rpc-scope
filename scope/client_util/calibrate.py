@@ -123,14 +123,15 @@ def meter_exposure_and_intensity(scope, lamp, max_exposure=200, max_intensity=25
     with lamp.in_state(enabled=True):
         for intensity in intensities:
             lamp.intensity = intensity
+            time.sleep(0.01) # make sure lamp has time to settle
             scope.camera.send_software_trigger()
             image = scope.camera.next_image(1000)
             if image_order_statistic(image, -26) < max_good_value:
                 good_intensity = intensity
                 break
-        if good_intensity is None:
-            raise RuntimeError('Could not find a non-overexposed lamp intensity')
     scope.camera.end_image_sequence_acquisition()
+    if good_intensity is None:
+        raise RuntimeError('Could not find a non-overexposed lamp intensity')
     # Now given the intensity setting, find the shortest-possible exposure time
     # that fully complies with the min and max requirements
     good_exposure = meter_exposure(scope, lamp, max_exposure, min_intensity_fraction, max_intensity_fraction)
@@ -198,10 +199,10 @@ def meter_exposure(scope, lamp, max_exposure=200, min_intensity_fraction=0.3,
                 break
             if image_min > min_good_value:
                 break
+    scope.camera.end_image_sequence_acquisition()
     if good_exposure is None:
         raise RuntimeError('Could not find a valid exposure time: intensity {}, exposure {}, image max {}, image min {}, max good {}, min good {}'.format(
             lamp.intensity, exposure, image_max, image_min, max_good_value, min_good_value))
-    scope.camera.end_image_sequence_acquisition()
     scope.camera.exposure_time = good_exposure
     return good_exposure
 
