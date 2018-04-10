@@ -5,6 +5,8 @@ import pathlib
 import math
 import datetime
 import json
+import numpy
+from scipy.spatial import distance
 
 from PyQt5 import Qt
 from zplib import datafile
@@ -136,10 +138,22 @@ def create_metadata_file(data_dir, positions, z_max, reference_positions):
     for name_prefix, positions in items:
         names = _name_positions(len(positions), name_prefix)
         named_positions.update(zip(names, positions))
+    bf_meter_position_name = _choose_bf_metering_pos(named_positions)
     metadata = dict(z_max=z_max, reference_positions=reference_positions,
-        positions=named_positions)
+        positions=named_positions, bf_meter_position_name=bf_meter_position_name)
     with (data_dir / 'experiment_metadata.json').open('w') as f:
         datafile.json_encode_legible_to_file(metadata, f)
+
+def _choose_bf_metering_pos(positions):
+    # find the position which has the smallest distance to it's 8 closest neighbors,
+    # because that position is likely right in the middle
+    pos_names, pos_values = map(list, positions.items())
+    xys = numpy.array(pos_values)[:,:2]
+    distances = distance.squareform(distance.pdist(xys))
+    distances.sort(axis=1)
+    distance_sums = distances[:,:8].sum(axis=1)
+    return pos_names[distance_sums.argmin()]
+
 
 def simple_get_positions(scope):
     """Return a list of interactively-obtained scope stage positions."""
@@ -158,6 +172,7 @@ def _name_positions(num_positions, name_prefix):
     padding = int(math.ceil(math.log10(max(1, num_positions-1))))
     names = ['{}{:0{pad}}'.format(name_prefix, i, pad=padding) for i in range(num_positions)]
     return names
+
 
 def get_positions_with_roi(scope, scope_properties):
     """Interactively obtain scope stage positions and an elliptical ROI for each.
@@ -200,6 +215,7 @@ def get_positions_with_roi(scope, scope_properties):
     viewer.close()
     return positions, rois
 
+
 def write_roi_mask_files(data_dir, rois):
     """ Create a "Focus Masks" directory of ROIs for timecourse acquisitions.
 
@@ -234,6 +250,7 @@ def write_roi_mask_files(data_dir, rois):
             painter.end()
             image.save(str(mask_dir / name)+'.png')
     del image # image must be deleted before painter to avoid warning. So delete now...
+
 
 def update_z_positions(data_dir, scope):
     """Interactively update the z positions for an existing experiment.

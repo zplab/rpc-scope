@@ -111,11 +111,16 @@ def meter_exposure_and_intensity(scope, lamp, max_exposure=200, max_intensity=25
             intensity, allowing for 25 hot pixels) allowed for the image to
             count as 'properly exposed', as a fraction of the camera bit depth.
 
-    Returns: exposure_time, lamp_intensity
+    Returns: lamp_intensity, exposure_time, actual_bounds, requested_bounds
+        lamp_intensity: lamp.intensity setting
+        exposure_time: selected exposure time in ms
+        actual_bounds: (min, max) tuple of intensities in the image
+        requested_bounds: (min, max) tuple of requested bounds based on the
+            intensity_fraction paramteters
     """
     intensities = numpy.linspace(255, 32, 16, dtype=numpy.uint8)
     intensities = intensities[intensities <= max_intensity]
-    # First, find a decent lamp intensity setting: one where (almost) all pixels
+    # First, find a decent lamp intensity setting: one where the pixels
     # are under the max allowed value, for the minimum exposure time
     scope.camera.exposure_time = 4
     bit_depth = int(scope.camera.sensor_gain[:2])
@@ -124,7 +129,9 @@ def meter_exposure_and_intensity(scope, lamp, max_exposure=200, max_intensity=25
     with scope.camera.image_sequence_acquisition(len(intensities), trigger_mode='Software'), lamp.in_state(enabled=True):
         for intensity in intensities:
             lamp.intensity = intensity
-            time.sleep(0.01) # make sure lamp has time to settle
+            # We use an RC circuit to smooth out the PWM lamp-intensity signal
+            # so we need to wait a little bit for the intensity to settle out
+            time.sleep(0.25)
             scope.camera.send_software_trigger()
             image = scope.camera.next_image(1000)
             if image_order_statistic(image, -26) < max_good_value:
@@ -134,8 +141,8 @@ def meter_exposure_and_intensity(scope, lamp, max_exposure=200, max_intensity=25
         raise RuntimeError('Could not find a non-overexposed lamp intensity')
     # Now given the intensity setting, find the shortest-possible exposure time
     # that fully complies with the min and max requirements
-    good_exposure = meter_exposure(scope, lamp, max_exposure, min_intensity_fraction, max_intensity_fraction)
-    return good_exposure, good_intensity
+    good_exposure, actual_bounds, requested_bounds = meter_exposure(scope, lamp, max_exposure, min_intensity_fraction, max_intensity_fraction)
+    return good_intensity, good_exposure, actual_bounds, requested_bounds
 
 def meter_exposure(scope, lamp, max_exposure=200, min_intensity_fraction=0.3,
     max_intensity_fraction=0.75):
@@ -167,7 +174,11 @@ def meter_exposure(scope, lamp, max_exposure=200, min_intensity_fraction=0.3,
             intensity) allowed for the image to count as 'properly exposed', as
             a fraction of the camera bit depth.
 
-    Returns: exposure_time
+    Returns: exposure_time, actual_bounds, requested_bounds
+        exposure_time: selected exposure time in ms
+        actual_bounds: (min, max) tuple of intensities in the image
+        requested_bounds: (min, max) tuple of requested bounds based on the
+            intensity_fraction paramteters
     """
     # Exposure range is controlled by the curious property of the Zyla camera that
     # short exposures with bright lights yield really noisy images. Worse,
@@ -202,7 +213,7 @@ def meter_exposure(scope, lamp, max_exposure=200, min_intensity_fraction=0.3,
         raise RuntimeError('Could not find a valid exposure time: intensity {}, exposure {}, image max {}, image min {}, max good {}, min good {}'.format(
             lamp.intensity, exposure, image_max, image_min, max_good_value, min_good_value))
     scope.camera.exposure_time = good_exposure
-    return good_exposure
+    return good_exposure, (image_min, image_max), (max_good_value, min_good_value)
 
 def get_vignette_mask(image, percent_vignetted=5):
     """Convert a well-exposed image (ideally a brightfield image with ~uniform

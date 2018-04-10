@@ -198,12 +198,31 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.dark_corrector = calibrate.DarkCurrentCorrector(self.scope)
         ref_positions = self.experiment_metadata['reference_positions']
 
-        # go to a data-acquisition position and figure out the right brightfield exposure
+        # figure out the right brightfield exposure
+
+        # first, go to a good xyz position to look at brightfield exposure
         data_positions = self.experiment_metadata['positions']
-        some_pos = list(data_positions.values())[0]
-        self.scope.stage.position = some_pos
-        self.bf_exposure, self.tl_intensity = calibrate.meter_exposure_and_intensity(self.scope, self.scope.tl.lamp,
-            max_exposure=32, min_intensity_fraction=0.2, max_intensity_fraction=0.6)
+        if 'bf_meter_position_name' in self.experiment_metadata:
+            position_name = self.experiment_metadata['bf_meter_position']
+        else:
+            position_name = sorted(data_positions.keys())[0]
+        position_metadata = self._position_metadata(position_name)[1]
+        x, y, z = data_positions[position_name]
+        # see if we have an updated z position to use on...
+        for m in position_metadata[::-1]:
+            if 'fine_z' in m:
+                z = m['fine_z']
+                break
+        self.scope.stage.position = x, y, z
+
+        # now find a good exposure time and intensity
+        self.tl_intensity, self.bf_exposure, actual_bounds, requested_bounds = calibrate.meter_exposure_and_intensity(
+            self.scope, self.scope.tl.lamp, max_exposure=32, min_intensity_fraction=0.2, max_intensity_fraction=0.6)
+        # make sure that the image is not all dark:
+        if actual_bounds[1] < 3000:
+            # the almost-brightest point of the image is really dim, when really
+            # we wanted it somewhere around 32000. Something's wrong.
+            raise RuntimeError('Exposure metering failed to identify an appropriate brightfield lamp setting.')
 
         self.heartbeat()
 
@@ -211,9 +230,8 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.scope.stage.position = ref_positions[0]
         with self.scope.tl.lamp.in_state(enabled=True):
             exposure = calibrate.meter_exposure(self.scope, self.scope.tl.lamp,
-            max_exposure=32, min_intensity_fraction=0.3, max_intensity_fraction=0.85)
-            bf_avg = calibrate.get_averaged_images(self.scope, ref_positions,
-                self.dark_corrector, frames_to_average=2)
+                max_exposure=32, min_intensity_fraction=0.3, max_intensity_fraction=0.85)[:1]
+            bf_avg = calibrate.get_averaged_images(self.scope, ref_positions, self.dark_corrector, frames_to_average=2)
         self.vignette_mask = calibrate.get_vignette_mask(bf_avg, self.VIGNETTE_PERCENT)
         bf_flatfield, bf_ref_intensity = calibrate.get_flat_field(bf_avg, self.vignette_mask)
         exposure_ratio = self.bf_exposure / exposure
@@ -222,7 +240,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         cal_images = [self.vignette_mask.astype(numpy.uint8)*255, bf_flatfield]
 
         bf_metering = self.experiment_metadata.setdefault('brightfield metering', {})
-        bf_metering[self.timepoint_prefix] = dict(exposure=self.bf_exposure, intensity=self.tl_intensity, ref_intensity=bf_ref_intensity)
+        bf_metering[self.timepoint_prefix] = dict(ref_intensity=bf_ref_intensity, exposure=self.bf_exposure, intensity=self.tl_intensity)
 
         self.heartbeat()
 
@@ -232,9 +250,8 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             lamp = getattr(self.scope.il.spectra, self.FLUORESCENCE_FLATFIELD_LAMP)
             with lamp.in_state(enabled=True):
                 fl_exposure, fl_intensity = calibrate.meter_exposure_and_intensity(self.scope, lamp,
-                    max_exposure=400, min_intensity_fraction=0.1)
-                fl_avg = calibrate.get_averaged_images(self.scope, ref_positions,
-                    self.dark_corrector, frames_to_average=5)
+                    max_exposure=400, min_intensity_fraction=0.1)[:2]
+                fl_avg = calibrate.get_averaged_images(self.scope, ref_positions, self.dark_corrector, frames_to_average=5)
             fl_flatfield, fl_ref_intensity = calibrate.get_flat_field(fl_avg, self.vignette_mask)
             fl_ref_intensity /= fl_exposure
             cal_image_names.append('fl_flatfield.tiff')
