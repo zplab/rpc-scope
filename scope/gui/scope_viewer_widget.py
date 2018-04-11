@@ -95,8 +95,9 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
 
     def snap_image(self):
         self.flipbook.pages.append_named(self.camera.acquire_image(), datetime.datetime.now().isoformat(' ', 'seconds'))
+        self.flipbook.current_page_idx = -1
 
     def save_image(self):
-        fn, _ = Qt.QFileDialog.getSaveFileName(self, 'Save Image', filter='Images (*.png *.tiff *.tif)')
+        fn, _ = Qt.QFileDialog.getSaveFileName(self, 'Save Image', self.flipbook.current_page.name, filter='Images (*.png *.tiff *.tif)')
         if fn:
             freeimage.write(self.image.data, fn)
