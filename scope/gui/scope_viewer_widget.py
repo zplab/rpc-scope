@@ -32,7 +32,7 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
         self.scope_toolbar.addAction(self.show_over_exposed_action)
 
         self.flipbook.pages.append(image.Image([[0]], name='Live Image'))
-        self.flipbook.hide()
+        self.flipbook_dock_widget.hide()
         self.image = None
 
         self.camera = scope.camera
