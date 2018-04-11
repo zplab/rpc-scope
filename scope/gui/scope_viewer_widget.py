@@ -1,6 +1,7 @@
 # This code is licensed under the MIT License (see LICENSE file for details)
 
 import time
+import datetime
 
 from PyQt5 import Qt
 from  ris_widget import image
@@ -29,6 +30,10 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
         self.show_over_exposed_action.setChecked(True)
         self.show_over_exposed_action.toggled.connect(self.on_show_over_exposed_action_toggled)
         self.scope_toolbar.addAction(self.show_over_exposed_action)
+
+        self.flipbook.pages.append(image.Image([[0]], name='Live Image'))
+        self.flipbook.hide()
+        self.image = None
 
         self.camera = scope.camera
         self.snap_action = Qt.QAction('Snap Image', self)
@@ -63,6 +68,7 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
                 if t - self.last_image < self.interval_min:
                     return True
                 self.last_image = t
+            self.flipbook.current_page_idx = 0
             image_data, timestamp, frame_no = self.live_streamer.get_image()
             image_bits = 12 if self.live_streamer.bit_depth == '12 Bit' else 16
             self.image = image.Image(image_data, image_bits=image_bits)
@@ -88,9 +94,9 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
             del self.layer.getcolor_expression
 
     def snap_image(self):
-        self.flipbook.pages.append(self.camera.acquire_image())
+        self.flipbook.pages.append_named(self.camera.acquire_image(), datetime.datetime.now().isoformat(' ', 'seconds'))
 
     def save_image(self):
         fn, _ = Qt.QFileDialog.getSaveFileName(self, 'Save Image', filter='Images (*.png *.tiff *.tif)')
         if fn:
-            freeimage.write(self.image, fn)
+            freeimage.write(self.image.data, fn)
