@@ -88,7 +88,7 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
             del self.layer.getcolor_expression
 
     def snap_image(self):
-        self.flipbook_pages.append(self.camera.acquire_image())
+        self.flipbook.pages.append(self.camera.acquire_image())
 
     def save_image(self):
         fn, _ = Qt.QFileDialog.getSaveFileName(self, 'Save Image', filter='Images (*.png *.tiff *.tif)')
