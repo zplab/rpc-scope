@@ -98,6 +98,6 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
         self.flipbook.current_page_idx = -1
 
     def save_image(self):
-        fn, _ = Qt.QFileDialog.getSaveFileName(self, 'Save Image', self.flipbook.current_page.name, filter='Images (*.png *.tiff *.tif)')
+        fn, _ = Qt.QFileDialog.getSaveFileName(self, 'Save Image', self.flipbook.current_page.name+'.png', filter='Images (*.png *.tiff *.tif)')
         if fn:
             freeimage.write(self.image.data, fn)
