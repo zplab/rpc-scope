@@ -28,7 +28,7 @@ def gui_main(host, desired_widgets=None):
     app = shared_resources.init_qapplication(icon_resource_path=None)
     scope, scope_properties = scope_client.client_main(host)
     if desired_widgets is None:
-        widgets = DEFAULT_WIDGETS
+        widgets = WIDGETS
     else:
         desired_widgets = set(desired_widgets)
         for widget in desired_widgets:
