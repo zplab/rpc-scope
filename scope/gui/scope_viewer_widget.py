@@ -5,6 +5,7 @@ import time
 from PyQt5 import Qt
 from  ris_widget import image
 from ris_widget import ris_widget
+import freeimage
 
 from .. import scope_client
 
@@ -20,16 +21,24 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
 
     def __init__(self, scope, scope_properties, window_title='Viewer', fps_max=None, app_prefs_name='scope-viewer', parent=None):
         super().__init__(window_title=window_title, app_prefs_name=app_prefs_name, parent=parent)
-
         self.main_view_toolbar.removeAction(self.snapshot_action)
 
         self.scope_toolbar = self.addToolBar('Scope')
-        self.show_over_exposed_action = Qt.QAction('Show Over-Exposed Live Pixels', self)
+        self.show_over_exposed_action = Qt.QAction('Show Over-Exposed', self)
         self.show_over_exposed_action.setCheckable(True)
-        self.show_over_exposed_action.setChecked(False)
-        self.show_over_exposed_action.toggled.connect(self.on_show_over_exposed_action_toggled)
         self.show_over_exposed_action.setChecked(True)
+        self.show_over_exposed_action.toggled.connect(self.on_show_over_exposed_action_toggled)
         self.scope_toolbar.addAction(self.show_over_exposed_action)
+
+        self.camera = scope.camera
+        self.snap_action = Qt.QAction('Snap Image', self)
+        self.snap_action.triggered.connect(self.snap_image)
+        self.scope_toolbar.addAction(self.snap_action)
+
+        self.save_action = Qt.QAction('Save Image', self)
+        self.save_action.triggered.connect(self.save_image)
+        self.scope_toolbar.addAction(self.save_action)
+
         self.closing = False
         self.live_streamer = scope_client.LiveStreamer(scope, scope_properties, self.post_new_image_event)
         if fps_max is None:
@@ -78,3 +87,10 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
             # Revert to default getcolor_expression
             del self.layer.getcolor_expression
 
+    def snap_image(self):
+        self.flipbook_pages.append(self.camera.acquire_image())
+
+    def save_image(self):
+        fn, _ = Qt.QFileDialog.getSaveFileName(self, 'Save Image', filter='Images (*.png *.tiff *.tif)')
+        if fn:
+            freeimage.write(self.image, fn)
