@@ -31,7 +31,8 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
         self.show_over_exposed_action.toggled.connect(self.on_show_over_exposed_action_toggled)
         self.scope_toolbar.addAction(self.show_over_exposed_action)
 
-        self.flipbook.pages.append(image.Image([[0]], name='Live Image'))
+        self.flipbook.pages.append(image.Image([[1]], name='Live Image'))
+        self.live_image_page = self.flipbook.pages[-1]
         self.flipbook_dock_widget.hide()
         self.image = None
 
@@ -68,10 +69,9 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
                 if t - self.last_image < self.interval_min:
                     return True
                 self.last_image = t
-            self.flipbook.current_page_idx = 0
             image_data, timestamp, frame_no = self.live_streamer.get_image()
             image_bits = 12 if self.live_streamer.bit_depth == '12 Bit' else 16
-            self.image = image.Image(image_data, image_bits=image_bits)
+            self.live_image_page[0] = image.Image(image_data, image_bits=image_bits)
             if self.show_over_exposed_action.isChecked() and self.layer.image.type == 'G':
                 self.layer.getcolor_expression = self.OVEREXPOSURE_GETCOLOR_EXPRESSION
             else:
