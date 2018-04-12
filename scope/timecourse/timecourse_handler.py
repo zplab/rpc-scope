@@ -187,9 +187,16 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.configure_additional_acquisition_steps()
 
         humidity = self.experiment_metadata.setdefault('humidity', {})
+        temperature = self.experiment_metadata.setdefault('temperature', {})
         if hasattr(self.scope, 'humidity_controller'):
             hc = self.scope.humidity_controller
             humidity[self.timepoint_prefix] = dict(humidity=hc.humidity, target_humidity=hc.target_humidity)
+            # Use the humidity controller temperature: the anova circulator temp measurement gives the
+            # internal bath temperature, not the probe temperature...
+            temps = dict(temperature=hc.temperature)
+            if hasattr(self.scope, 'temperature_controller'):
+                temps.update(target_temperature=self.scope.temperature_controller.target_temperature)
+            temperature[self.timepoint_prefix] = temps
 
         t1 = time.time()
         self.logger.debug('Configuration done ({:.1f} seconds)', t1-t0)
