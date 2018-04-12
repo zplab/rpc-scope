@@ -2,8 +2,9 @@
 
 import time
 import datetime
-
+import numpy
 from PyQt5 import Qt
+
 from  ris_widget import image
 from ris_widget import ris_widget
 import freeimage
@@ -31,7 +32,7 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
         self.show_over_exposed_action.toggled.connect(self.on_show_over_exposed_action_toggled)
         self.scope_toolbar.addAction(self.show_over_exposed_action)
 
-        self.flipbook.pages.append(image.Image([[1]], name='Live Image'))
+        self.flipbook.pages.append(image.Image(numpy.array([[1]], dtype=numpy.uint16), name='Live Image'))
         self.live_image_page = self.flipbook.pages[-1]
         self.flipbook_dock_widget.hide()
         self.image = None
