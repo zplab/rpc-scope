@@ -4,7 +4,7 @@ import setuptools
 
 setuptools.setup(
     name = 'scope',
-    version = '1.5',
+    version = '2',
     description = 'zplab microscope package',
     packages = setuptools.find_packages(),
     package_data = {'scope.gui':['limit_icons/*.svg']},
