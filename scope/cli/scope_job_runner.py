@@ -20,8 +20,6 @@ def parse_delay(arg):
     return time.time() + seconds
 
 def main(argv=None):
-    # scope_job_daemon [start --verbose | stop | add_job exec_file email ]
-
     parser = argparse.ArgumentParser(description='microscope job control')
     parser.add_argument('-d', '--debug', action='store_true', help='show full stack traces on error')
     subparsers = parser.add_subparsers(help='sub-command help', dest='command')
