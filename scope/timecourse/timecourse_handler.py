@@ -213,7 +213,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             position_name = self.experiment_metadata['bf_meter_position']
         else:
             position_name = sorted(data_positions.keys())[0]
-        position_metadata = self._position_metadata(position_name)[1]
+        position_dir, metadata_path, position_metadata = self._position_metadata(position_name)
         x, y, z = data_positions[position_name]
         # see if we have an updated z position to use on...
         for m in position_metadata[::-1]:

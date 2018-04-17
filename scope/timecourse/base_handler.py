@@ -184,7 +184,7 @@ class TimepointHandler:
                 position_metadata = json.load(f)
         else:
             position_metadata = []
-        return position_dir, position_metadata
+        return position_dir, metadata_path, position_metadata
 
     def run_position(self, position_name, position_coords):
         """Do everything required for taking a timepoint at a single position
@@ -194,7 +194,7 @@ class TimepointHandler:
         self.logger.info('Acquiring Position: {}', position_name)
         t0 = time.time()
         timestamp = time.time()
-        position_dir, position_metadata = self._position_metadata(position_name)
+        position_dir, metadata_path, position_metadata = self._position_metadata(position_name)
         position_dir.mkdir(exist_ok=True)
         if self.scope is not None:
             self.scope.stage.position = position_coords
