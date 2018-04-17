@@ -24,4 +24,4 @@ class Timer(threading.Thread):
         if self.run_immediately:
             self.function(*self.args, **self.kws)
         while not self.stopped.wait(self.interval):
-            self.function(*args, **kws)
+            self.function(*self.args, **self.kws)
