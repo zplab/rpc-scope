@@ -205,12 +205,15 @@ class JobRunner(base_daemon.Runner):
                         continue
                     elapsed_time = timestamp - start_time
                     completed_jobs.append((start_time, elapsed_time))
+        duty_cycles = []
         for interval in intervals:
             start_threshold = time.time() - interval * 3600 # interval is in hours
             in_interval = [job[1] for job in completed_jobs if job[0] > start_threshold]
             job_hours = sum(in_interval) / 3600
             duty_cycle = int(100*job_hours / interval)
+            duty_cycles.append((job_hours, duty_cycle))
             print('In the last {} hours, jobs ran for {:.1f} hours ({}%).'.format(interval, job_hours, duty_cycle))
+        return duty_cycles
 
     def _awaken_daemon(self):
         """Wake the daemon up if it is sleeping, so that it will reread the
@@ -521,6 +524,8 @@ class _JobFile:
         if self.job_file.exists():
             with self.job_file.open('r') as f:
                 return canonical_path(f.read())
+        else:
+            return None
 
     def set(self, job):
         """Write the given string to the jobfile."""

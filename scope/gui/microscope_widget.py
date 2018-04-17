@@ -1,9 +1,10 @@
 # This code is licensed under the MIT License (see LICENSE file for details)
 
-import enum
 from pathlib import Path
 from PyQt5 import Qt
+
 from . import device_widget
+from . import status_widget
 from ..simple_rpc import rpc_client
 
 class MicroscopeWidget(device_widget.DeviceWidget):
@@ -53,15 +54,15 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         super().__init__(scope, scope_properties, parent)
         self.limit_pixmaps_and_tooltips = LimitPixmapsAndToolTips()
         self.setWindowTitle('Stand')
-        form = Qt.QFormLayout()
+        form = Qt.QFormLayout(self)
         form.setContentsMargins(0, 0, 0, 0)
         form.setVerticalSpacing(4)
         form.setLabelAlignment(Qt.Qt.AlignRight | Qt.Qt.AlignVCenter)
         form.setFieldGrowthPolicy(Qt.QFormLayout.ExpandingFieldsGrow)
-        self.setLayout(form)
         self.scope = scope
         for property, widget_type, *widget_args in self.PROPERTIES:
             self.make_widgets_for_property(self.PROPERTY_ROOT + property, widget_type, widget_args)
+        form.addRow(status_widget.StatusWidget(scope, scope_properties))
 
     def get_scope_attr(self, property):
         """look up an attribute on the scope object by property name, which is

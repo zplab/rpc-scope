@@ -9,6 +9,7 @@ from  ris_widget import image
 from ris_widget import ris_widget
 import freeimage
 
+from . import status_widget
 from .. import scope_client
 
 # TODO: Should live_target be a flipbook entry instead of just self.image?
@@ -32,7 +33,7 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
         self.show_over_exposed_action.toggled.connect(self.on_show_over_exposed_action_toggled)
         self.scope_toolbar.addAction(self.show_over_exposed_action)
 
-        self.flipbook.pages.append(image.Image(numpy.array([[1]], dtype=numpy.uint16), name='Live Image'))
+        self.flipbook.pages.append(image.Image(numpy.array([[0]], dtype=numpy.uint8), name='Live Image'))
         self.live_image_page = self.flipbook.pages[-1]
         self.flipbook_dock_widget.hide()
         self.image = None
@@ -102,3 +103,21 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
         fn, _ = Qt.QFileDialog.getSaveFileName(self, 'Save Image', self.flipbook.current_page.name+'.png', filter='Images (*.png *.tiff *.tif)')
         if fn:
             freeimage.write(self.image.data, fn)
+
+class MonitorWidget(ScopeViewerWidget):
+    def __init__(self, scope, scope_properties, window_title='Viewer', fps_max=None, app_prefs_name='scope-viewer', parent=None):
+        super().__init__(self, scope, scope_properties, window_title, fps_max, app_prefs_name, parent)
+        self.removeToolbar(self.scope_toolbar)
+        self.show_over_exposed_action.setChecked(False)
+        self.main_view_toolbar.removeAction(self.layer_stack.solo_layer_mode_action)
+        self.dock_widget_visibility_toolbar.removeAction(self.layer_table_dock_widget.toggleViewAction())
+        self.dock_widget_visibility_toolbar.removeAction(self.flipbook_dock_widget.toggleViewAction())
+        new_central = Qt.QWidget()
+        vbox = Qt.QVBoxLayout(new_central)
+        vbox.setContentsMargins(0,3,0,0)
+        vbox.setSpacing(3)
+        status = status_widget.StatusWidget(scope, scope_properties)
+        status.layout().insertSpacing(0, 5)
+        vbox.add_widget(status)
+        vbox.add_widget(self.centralWidget())
+        self.setCentralWidget(new_central)

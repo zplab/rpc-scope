@@ -205,6 +205,7 @@ class ZMQClient(RPCClient):
                 self.reconnect()
                 raise RuntimeError('No "heartbeat" signal detected from server (is it still running?)')
             if self.socket.poll(500): # 500 ms timeout
+                # socket has data
                 break
         try:
             reply_type = self.socket.recv_string()

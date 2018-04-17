@@ -53,12 +53,7 @@ def monitor_main(hosts, downsample=None, fps_max=None):
             if not scope._is_local:
                 scope._get_data.downsample = downsample
             app_prefs_name = 'viewer-{}'.format(host)
-            viewer = scope_viewer_widget.ScopeViewerWidget(scope, scope_properties, host, fps_max, app_prefs_name)
-            viewer.removeToolbar(viewer.scope_toolbar)
-            viewer.show_over_exposed_action.setChecked(False)
-            viewer.main_view_toolbar.removeAction(viewer.layer_stack.solo_layer_mode_action)
-            viewer.dock_widget_visibility_toolbar.removeAction(viewer.layer_table_dock_widget.toggleViewAction())
-            viewer.dock_widget_visibility_toolbar.removeAction(viewer.flipbook_dock_widget.toggleViewAction())
-            viewers.append(viewer)
+            viewer = scope_viewer_widget.MonitorWidget(scope, scope_properties, host, fps_max, app_prefs_name)
             viewer.show()
+            viewers.append(viewer)
     app.exec()

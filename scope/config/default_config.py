@@ -19,6 +19,7 @@ scope_configuration = dict(
         #('temperature_controller', 'temp_control.Peltier'), # dm6000
         #('temperature_controller', 'temp_control.Circulator'), # dm6
         #('humidity_controller', 'humidity_control.HumidityController') # dm6, dm6000
+        ('job_runner', 'runner_device.JobRunner')
     ),
 
     server = dict(
@@ -86,8 +87,8 @@ scope_configuration = dict(
         TIMING = dict(
             on_latency_ms = 0.120, # Time from trigger signal to start of rise
             rise_ms = 0.015, # Time from start of rise to end of rise
-            off_latency_ms = 0.08, # Time from end of trigger to start of fall
-            fall_ms = 0.010 # Time from start of fall to end of fall
+            off_latency_ms = 0.01, # Time from end of trigger to start of fall
+            fall_ms = 0.015 # Time from start of fall to end of fall
         ),
         #FILTER_SWITCH_DELAY = 0.15 # dm6
     ),
