@@ -18,7 +18,7 @@ class LampWidget(device_widget.DeviceWidget):
 
         grid_layout = Qt.QGridLayout()
         grid_layout.setContentsMargins(0, 0, 0, 0)
-        grid_layout.setSpacing(4)
+        grid_layout.setSpacing(2)
         container_layout.addLayout(grid_layout)
 
         self.lamp_controllers = []

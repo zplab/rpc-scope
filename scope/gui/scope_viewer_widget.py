@@ -106,8 +106,8 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
 
 class MonitorWidget(ScopeViewerWidget):
     def __init__(self, scope, scope_properties, window_title='Viewer', fps_max=None, app_prefs_name='scope-viewer', parent=None):
-        super().__init__(self, scope, scope_properties, window_title, fps_max, app_prefs_name, parent)
-        self.removeToolbar(self.scope_toolbar)
+        super().__init__(scope, scope_properties, window_title, fps_max, app_prefs_name, parent)
+        self.removeToolBar(self.scope_toolbar)
         self.show_over_exposed_action.setChecked(False)
         self.main_view_toolbar.removeAction(self.layer_stack.solo_layer_mode_action)
         self.dock_widget_visibility_toolbar.removeAction(self.layer_table_dock_widget.toggleViewAction())
@@ -118,6 +118,6 @@ class MonitorWidget(ScopeViewerWidget):
         vbox.setSpacing(3)
         status = status_widget.StatusWidget(scope, scope_properties)
         status.layout().insertSpacing(0, 5)
-        vbox.add_widget(status)
-        vbox.add_widget(self.centralWidget())
+        vbox.addWidget(status)
+        vbox.addWidget(self.centralWidget())
         self.setCentralWidget(new_central)

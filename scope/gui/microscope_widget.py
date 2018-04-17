@@ -62,7 +62,8 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         self.scope = scope
         for property, widget_type, *widget_args in self.PROPERTIES:
             self.make_widgets_for_property(self.PROPERTY_ROOT + property, widget_type, widget_args)
-        form.addRow(status_widget.StatusWidget(scope, scope_properties))
+        if hasattr(scope, 'job_runner'):
+            form.addRow(status_widget.StatusWidget(scope, scope_properties))
 
     def get_scope_attr(self, property):
         """look up an attribute on the scope object by property name, which is

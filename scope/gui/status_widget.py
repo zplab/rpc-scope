@@ -14,6 +14,7 @@ class StatusWidget(device_widget.DeviceWidget):
 
     def __init__(self, scope, scope_properties, parent=None):
         super().__init__(scope, scope_properties, parent)
+        self.scope = scope
         self.setWindowTitle('Status')
         layout = Qt.QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -26,18 +27,22 @@ class StatusWidget(device_widget.DeviceWidget):
         layout.addWidget(self.current_label)
         layout.addStretch()
 
-        if device_widget.has_component(scope, 'scope.job_runner'):
+        if hasattr(scope, 'job_runner'):
             for name, default in self.PROPERTY_DEFAULTS.items():
                 setattr(self, name, default)
-                self.subscribe('scope.job_runner.'+prop, lambda value: self.update(name, value))
+                self.subscribe('scope.job_runner.'+name, self._get_updater(name))
 
         self.server_running = False
-        self.timerEvent()
+        self.timerEvent(None)
         self.startTimer(60*1000, Qt.Qt.VeryCoarseTimer) # run timerEvent every 60 sec
 
-    def update(self, name=None, value=None):
-        if name is not None:
+    def _get_updater(self, name):
+        def updater(value):
             setattr(self, name, value)
+            self.update()
+        return updater
+
+    def update(self):
         _label_text(self.server_label, 'Server', self.server_running)
         suffix = f'{self.duty_cycle}% utilization; {self.queued_jobs} jobs queued'
         if self.errored_jobs > 0:
@@ -51,11 +56,11 @@ class StatusWidget(device_widget.DeviceWidget):
 
     def timerEvent(self, event):
         try:
-            self.scope._sleep(0) # no op to see if server is responding
-            running = True
+            self.scope._rpc_client('_sleep', 0) # no op to see if server is responding
+            self.server_running = True
         except:
-            running = False
-        self.update('server_running', running)
+            self.server_running = False
+        self.update()
 
 def _label_text(label, prefix, status_ok=True, suffix=None):
     color = 'green' if status_ok else 'red'

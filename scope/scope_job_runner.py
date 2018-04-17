@@ -253,7 +253,7 @@ class JobRunner(base_daemon.Runner):
         job_runner_check = pathlib.Path(sys.argv[0]).parent / 'job_runner_check'
         if job_runner_check.exists():
             logger.debug('running job_runner_check')
-            subprocess.run(job_runner_check)
+            subprocess.run([str(job_runner_check)])
         self.asleep = False
         self.running = True
         logger.debug('starting job runner daemon mainloop')
