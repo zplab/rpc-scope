@@ -20,18 +20,20 @@ class StatusWidget(device_widget.DeviceWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
         self.server_label = Qt.QLabel()
-        self.runner_label = Qt.QLabel()
         layout.addWidget(self.server_label)
-        layout.addWidget(self.runner_label)
-        self.current_label = Qt.QLabel()
-        layout.addWidget(self.current_label)
-        layout.addStretch()
 
         if hasattr(scope, 'job_runner'):
+            self.runner_label = Qt.QLabel()
+            layout.addWidget(self.runner_label)
+            self.current_label = Qt.QLabel()
+            layout.addWidget(self.current_label)
+            self.has_runner = True
             for name, default in self.PROPERTY_DEFAULTS.items():
                 setattr(self, name, default)
                 self.subscribe('scope.job_runner.'+name, self._get_updater(name))
-
+        else:
+            self.has_runner = False
+        layout.addStretch()
         self.server_running = False
         self.timerEvent(None)
         self.startTimer(60*1000, Qt.Qt.VeryCoarseTimer) # run timerEvent every 60 sec
@@ -44,15 +46,16 @@ class StatusWidget(device_widget.DeviceWidget):
 
     def update(self):
         _label_text(self.server_label, 'Server', self.server_running)
-        suffix = f'{self.duty_cycle}% utilization; {self.queued_jobs} jobs queued'
-        if self.errored_jobs > 0:
-            suffix +=f'; <span style="font-weight: bold; color: red">{self.errored_jobs} job errors</span>'
-        _label_text(self.runner_label, 'Job Runner', self.running, suffix)
-        if self.current_job is None:
-            self.current_label.setText('No job running.')
-        else:
-            job = pathlib.Path(self.current_job)
-            self.current_label.setText(f'Running job "{job.parent.parent.name}/{job.parent.name}".')
+        if self.has_runner:
+            suffix = f'{self.duty_cycle}% utilization; {self.queued_jobs} jobs queued'
+            if self.errored_jobs > 0:
+                suffix +=f'; <span style="font-weight: bold; color: red">{self.errored_jobs} job errors</span>'
+            _label_text(self.runner_label, 'Job Runner', self.running, suffix)
+            if self.current_job is None:
+                self.current_label.setText('No job running.')
+            else:
+                job = pathlib.Path(self.current_job)
+                self.current_label.setText(f'Running job "{job.parent.parent.name}/{job.parent.name}".')
 
     def timerEvent(self, event):
         try:
