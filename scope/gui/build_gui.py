@@ -56,9 +56,11 @@ def monitor_main(hosts, downsample=None, fps_max=None):
                     scope._get_data.downsample = downsample
                 app_prefs_name = 'viewer-{}'.format(host)
                 viewer = scope_viewer_widget.MonitorWidget(scope, scope_properties, host, fps_max, app_prefs_name)
-                viewer.show()
                 viewers.append(viewer)
         except rpc_client.RPCError: # from the update
             print('could not connect to host ' + host)
     if len(viewers) > 0:
+        scope.rebroadcast_properties()
+        for viewer in viewers:
+            viewer.show()
         app.exec()
