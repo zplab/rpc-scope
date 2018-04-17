@@ -18,7 +18,7 @@ scope_configuration = dict(
         ('camera.autofocus', 'autofocus.Autofocus'),
         #('temperature_controller', 'temp_control.Peltier'), # dm6000
         #('temperature_controller', 'temp_control.Circulator'), # dm6
-        #('humidity_controller', 'humidity_control.HumidityController') # dm6, dm6000
+        #('humidity_controller', 'humidity_control.HumidityController'), # dm6, dm6000
         ('job_runner', 'runner_device.JobRunner')
     ),
 
