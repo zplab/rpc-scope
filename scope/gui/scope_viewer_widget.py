@@ -109,6 +109,7 @@ class MonitorWidget(ScopeViewerWidget):
         super().__init__(scope, scope_properties, window_title, fps_max, app_prefs_name, parent)
         self.removeToolBar(self.scope_toolbar)
         self.show_over_exposed_action.setChecked(False)
+        self.image_view.zoom_to_fit_action.setChecked(False)
         self.main_view_toolbar.removeAction(self.layer_stack.solo_layer_mode_action)
         self.dock_widget_visibility_toolbar.removeAction(self.layer_table_dock_widget.toggleViewAction())
         self.dock_widget_visibility_toolbar.removeAction(self.flipbook_dock_widget.toggleViewAction())
