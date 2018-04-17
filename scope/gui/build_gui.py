@@ -2,6 +2,7 @@
 
 from ris_widget import shared_resources
 
+from ..simple_rpc import rpc_client
 from .. import scope_client
 from . import scope_widgets
 from . import andor_camera_widget
@@ -48,12 +49,15 @@ def monitor_main(hosts, downsample=None, fps_max=None):
     app = shared_resources.init_qapplication(icon_resource_path=None)
     viewers = []
     for host in hosts:
-        scope, scope_properties = scope_client.client_main(host)
-        if hasattr(scope, 'camera'):
-            if not scope._is_local:
-                scope._get_data.downsample = downsample
-            app_prefs_name = 'viewer-{}'.format(host)
-            viewer = scope_viewer_widget.MonitorWidget(scope, scope_properties, host, fps_max, app_prefs_name)
-            viewer.show()
-            viewers.append(viewer)
+        try:
+            scope, scope_properties = scope_client.client_main(host)
+            if hasattr(scope, 'camera'):
+                if not scope._is_local:
+                    scope._get_data.downsample = downsample
+                app_prefs_name = 'viewer-{}'.format(host)
+                viewer = scope_viewer_widget.MonitorWidget(scope, scope_properties, host, fps_max, app_prefs_name)
+                viewer.show()
+                viewers.append(viewer)
+        except rpc_client.RPCError: # from the update
+            print('could not connect to host ' + host)
     app.exec()

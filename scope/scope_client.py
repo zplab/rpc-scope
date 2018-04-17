@@ -89,13 +89,12 @@ def _make_rpc_client(host, rpc_port, context):
             finally:
                 camera.end_image_sequence_acquisition()
         scope.camera.image_sequence_acquisition = image_sequence_acquisition
+        if not scope._is_local:
+            scope.camera.set_network_compression = get_data.set_network_compression
 
-    # monkeypatch in in_state context managers
-    _replace_in_state(scope)
+    _replace_in_state(scope) # monkeypatch in in_state context managers
     scope._get_data = get_data
     scope._is_local = is_local
-    if not is_local:
-        scope.camera.set_network_compression = get_data.set_network_compression
     scope._rpc_client = client
     scope._image_transfer_client = image_transfer_client
     scope.configuration = server_config
