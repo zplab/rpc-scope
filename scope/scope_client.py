@@ -81,13 +81,13 @@ def _make_rpc_client(host, rpc_port, context):
 
         #monkeypatch in a image sequence acquisition context manager
         @contextlib.contextmanager
-        def image_sequence_acquisition(camera, frame_count=1, trigger_mode='Internal', **camera_params):
+        def image_sequence_acquisition(frame_count=1, trigger_mode='Internal', **camera_params):
             """Context manager to begin and automatically end an image sequence acquisition."""
-            camera.start_image_sequence_acquisition(frame_count, trigger_mode, **camera_params)
+            scope.camera.start_image_sequence_acquisition(frame_count, trigger_mode, **camera_params)
             try:
                 yield
             finally:
-                camera.end_image_sequence_acquisition()
+                scope.camera.end_image_sequence_acquisition()
         scope.camera.image_sequence_acquisition = image_sequence_acquisition
         if not is_local:
             scope.camera.set_network_compression = get_data.set_network_compression
