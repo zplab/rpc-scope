@@ -47,15 +47,15 @@ class StatusWidget(device_widget.DeviceWidget):
     def update(self):
         _label_text(self.server_label, 'Server', self.server_running)
         if self.has_runner:
-            suffix = f'{self.duty_cycle}% utilization; {self.queued_jobs} jobs queued'
+            suffix = f'{self.duty_cycle}% duty; {self.queued_jobs} queued'
             if self.errored_jobs > 0:
-                suffix +=f'; <span style="font-weight: bold; color: red">{self.errored_jobs} job errors</span>'
+                suffix +=f'; <span style="font-weight: bold; color: red">{self.errored_jobs} errors</span>'
             _label_text(self.runner_label, 'Job Runner', self.running, suffix)
             if self.current_job is None:
                 self.current_label.setText('No job running.')
             else:
                 job = pathlib.Path(self.current_job)
-                self.current_label.setText(f'Running job "{job.parent.parent.name}/{job.parent.name}".')
+                self.current_label.setText(f'Running "{job.parent.parent.name}/{job.parent.name}".')
 
     def timerEvent(self, event):
         try:
