@@ -9,6 +9,9 @@ from zplib import datafile
 
 from . import heartbeat
 
+class RPCError(RuntimeError):
+    pass
+
 class RPCClient:
     """Client for simple remote procedure calls. RPC calls can be dispatched
     in three ways, given a client object 'client', and the desire to call
@@ -142,15 +145,12 @@ class ClientNamespace:
     def __setattr__(self, name, value):
         if self.__attrs_locked:
             if not hasattr(self, name):
-                raise RuntimeError('Attribute "{}" is not known, so its state cannot be communicated to the server.'.format(name))
+                raise RPCError('Attribute "{}" is not known, so its state cannot be communicated to the server.'.format(name))
             else:
                 cls = type(self)
                 if not hasattr(cls, name) or not isinstance(getattr(cls, name), property):
-                    raise RuntimeError('Attribute "{}" is not a property value that can be communicated to the server.'.format(name))
+                    raise RPCError('Attribute "{}" is not a property value that can be communicated to the server.'.format(name))
         super().__setattr__(name, value)
-
-class RPCError(RuntimeError):
-    pass
 
 class ZMQClient(RPCClient):
     def __init__(self, rpc_addr, timeout_sec=None, context=None):
@@ -199,11 +199,11 @@ class ZMQClient(RPCClient):
                 # TODO: test if pyzmq properly supports REQ_RELAXED so that we don't have to reconnect() every time after error
                 # (still a problem as of 2017-02-28)
                 self.reconnect()
-                raise RuntimeError(timeout_errtext)
+                raise RPCError(timeout_errtext)
             if self.heartbeat_error:
                 self._send_interrupt()
                 self.reconnect()
-                raise RuntimeError('No "heartbeat" signal detected from server (is it still running?)')
+                raise RPCError('No "heartbeat" signal detected from server (is it still running?)')
             if self.socket.poll(500): # 500 ms timeout
                 # socket has data
                 break
@@ -216,7 +216,7 @@ class ZMQClient(RPCClient):
                 reply = self.socket.recv_json()
             return reply, reply_type == 'error'
         except zmq.error.Again:
-            raise RuntimeError(timeout_errtext)
+            raise RPCError(timeout_errtext)
 
     def _send_interrupt(self):
         if self.interrupt_socket is not None:

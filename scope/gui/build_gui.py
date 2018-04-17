@@ -60,4 +60,5 @@ def monitor_main(hosts, downsample=None, fps_max=None):
                 viewers.append(viewer)
         except rpc_client.RPCError: # from the update
             print('could not connect to host ' + host)
-    app.exec()
+    if len(viewers) > 0:
+        app.exec()
