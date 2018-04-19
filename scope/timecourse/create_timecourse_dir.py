@@ -147,7 +147,7 @@ def create_metadata_file(data_dir, positions, z_max, reference_positions):
 def _choose_bf_metering_pos(positions):
     # find the position which has the smallest distance to it's 8 closest neighbors,
     # because that position is likely right in the middle
-    pos_names, pos_values = map(list, positions.items())
+    pos_names, pos_values = zip(*positions.items())
     xys = numpy.array(pos_values)[:,:2]
     distances = distance.squareform(distance.pdist(xys))
     distances.sort(axis=1)

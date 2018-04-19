@@ -210,7 +210,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         # first, go to a good xyz position to look at brightfield exposure
         data_positions = self.experiment_metadata['positions']
         if 'bf_meter_position_name' in self.experiment_metadata:
-            position_name = self.experiment_metadata['bf_meter_position']
+            position_name = self.experiment_metadata['bf_meter_position_name']
         else:
             position_name = sorted(data_positions.keys())[0]
         position_dir, metadata_path, position_metadata = self._position_metadata(position_name)
@@ -264,8 +264,8 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             cal_image_names.append('fl_flatfield.tiff')
             cal_images.append(fl_flatfield)
 
-        fl_metering = self.experiment_metadata.setdefault('fluorescent metering', {})
-        fl_metering[self.timepoint_prefix] = dict(ref_intensity=fl_ref_intensity, fl_flatfield_exposure=fl_exposure, fl_flatfield_intensity=fl_intensity)
+            fl_metering = self.experiment_metadata.setdefault('fluorescent metering', {})
+            fl_metering[self.timepoint_prefix] = dict(ref_intensity=fl_ref_intensity, fl_flatfield_exposure=fl_exposure, fl_flatfield_intensity=fl_intensity)
 
         self.heartbeat()
 
