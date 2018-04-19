@@ -50,7 +50,7 @@ def monitor_main(hosts, downsample=None, fps_max=None):
     viewers = []
     for host in hosts:
         try:
-            scope, scope_properties = scope_client.client_main(host)
+            scope, scope_properties = scope_client.client_main(host, allow_interrupt=False)
             if hasattr(scope, 'camera'):
                 if not scope._is_local:
                     scope._get_data.downsample = downsample

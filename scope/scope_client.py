@@ -33,13 +33,14 @@ def _replace_in_state(scope):
             continue
         obj.in_state = _make_in_state_func(obj)
 
-def _make_rpc_client(host, rpc_port, context):
+def _make_rpc_client(host, rpc_port, context, allow_interrupt):
     rpc_addr = scope_configuration.make_tcp_host(host, rpc_port)
     client = rpc_client.ZMQClient(rpc_addr, timeout_sec=10, context=context)
 
     server_config = scope_configuration.ConfigDict(client('_get_configuration'))
     addresses = scope_configuration.get_addresses(host, server_config)
-    client.enable_interrupt(addresses['interrupt'])
+    if allow_interrupt:
+        client.enable_interrupt(addresses['interrupt'])
     client.enable_heartbeat(addresses['heartbeat'], server_config.server.HEARTBEAT_INTERVAL_SEC*1.5)
     image_transfer_client = rpc_client.ZMQClient(addresses['image_transfer_rpc'],
         timeout_sec=5, context=context)
@@ -96,6 +97,7 @@ def _make_rpc_client(host, rpc_port, context):
     scope._get_data = get_data
     scope._is_local = is_local
     scope._rpc_client = client
+    scope.send_interrupt = client.send_interrupt
     scope._image_transfer_client = image_transfer_client
     scope.configuration = server_config
     scope.host = host
@@ -103,14 +105,14 @@ def _make_rpc_client(host, rpc_port, context):
     def clone():
         """Create an identical client with distinct ZMQ sockets, so that it may be safely used
         from a separate thread."""
-        return _make_rpc_client(host, rpc_port, context)
+        return _make_rpc_client(host, rpc_port, context, allow_interrupt)
     scope._clone = clone
     scope._lock_attrs() # prevent unwary users from setting new attributes that won't get communicated to the server
     # now set a 60-second timeout to allow really long blocking operations (heartbeat client will address RPC server death in this interval)
     client.timeout_sec = 60
     return scope
 
-def client_main(host='127.0.0.1', rpc_port=None, subscribe_all=False):
+def client_main(host='127.0.0.1', rpc_port=None, subscribe_all=False, allow_interrupt=True):
     """Connect to the microscope on the specified host.
 
     Parameters:
@@ -125,7 +127,7 @@ def client_main(host='127.0.0.1', rpc_port=None, subscribe_all=False):
     context = zmq.Context()
     if rpc_port is None:
         rpc_port = scope_configuration.get_config().server.RPC_PORT
-    scope = _make_rpc_client(host, rpc_port, context)
+    scope = _make_rpc_client(host, rpc_port, context, allow_interrupt)
     scope_properties = property_client.ZMQClient(scope._addresses['property'], context)
     if subscribe_all:
         # have the property client subscribe to all properties. Even with a no-op callback,

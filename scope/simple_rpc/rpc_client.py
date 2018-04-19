@@ -32,7 +32,7 @@ class RPCClient:
         try:
             retval, is_error = self._receive_reply()
         except KeyboardInterrupt:
-            self._send_interrupt()
+            self.send_interrupt()
             retval, is_error = self._receive_reply()
         if is_error:
             raise RPCError(retval)
@@ -44,7 +44,8 @@ class RPCClient:
     def _receive_reply(self):
         raise NotImplementedError()
 
-    def _send_interrupt(self):
+    def send_interrupt(self):
+        """Raise a KeyboardInterrupt exception in the server process"""
         raise NotImplementedError()
 
     def proxy_function(self, command):
@@ -167,12 +168,14 @@ class ZMQClient(RPCClient):
         self.heartbeat_error = False
         # main timeout will be implemented with poll
         self.timeout_sec = timeout_sec
-        self.reconnect()
+        self.connect()
 
-    def reconnect(self):
+    def connect(self):
         self.socket = self.context.socket(zmq.REQ)
         self.socket.RCVTIMEO = 1000 # timeout receive after 1 sec, in case server dies after poll succeeds
-        self.socket.LINGER = False
+        self.socket.LINGER = 0
+        self.socket.REQ_RELAXED = True
+        self.socket.REQ_CORRELATE = True
         self.socket.connect(self.rpc_addr)
 
     def enable_interrupt(self, interrupt_addr):
@@ -195,14 +198,8 @@ class ZMQClient(RPCClient):
         timeout_errtext = 'Timed out waiting for reply from server (is it running?)'
         while True:
             if time.time() > timeout_time:
-                self._send_interrupt()
-                # TODO: test if pyzmq properly supports REQ_RELAXED so that we don't have to reconnect() every time after error
-                # (still a problem as of 2017-02-28)
-                self.reconnect()
                 raise RPCError(timeout_errtext)
             if self.heartbeat_error:
-                self._send_interrupt()
-                self.reconnect()
                 raise RPCError('No "heartbeat" signal detected from server (is it still running?)')
             if self.socket.poll(500): # 500 ms timeout
                 # socket has data
@@ -218,7 +215,8 @@ class ZMQClient(RPCClient):
         except zmq.error.Again:
             raise RPCError(timeout_errtext)
 
-    def _send_interrupt(self):
+    def send_interrupt(self):
+        """Raise a KeyboardInterrupt exception in the server process"""
         if self.interrupt_socket is not None:
             self.interrupt_socket.send(b'interrupt')
 
