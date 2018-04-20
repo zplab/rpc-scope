@@ -137,6 +137,9 @@ def client_main(host='127.0.0.1', rpc_port=None, subscribe_all=False, allow_inte
     return scope, scope_properties
 
 class LiveStreamer:
+    class Timeout(RuntimeError):
+        pass
+
     def __init__(self, scope, scope_properties, image_ready_callback=None):
         """Class to help manage retrieving images from a camera in live mode.
 
@@ -182,12 +185,16 @@ class LiveStreamer:
         self.properties.unsubscribe('scope.camera.frame_number', self._image_update, valueonly=True)
         self.properties.unsubscribe('scope.camera.bit_depth', self._depth_update, valueonly=True)
 
-    def get_image(self):
+    def get_image(self, timeout=None):
         """Return the latest image retrieved from the camera, along with a
         timestamp (in camera timestamp units; use camera.timestamp_hz to convert
         to seconds) and the frame sequence number. If no new image has arrived
         since the previous call to get_image(), the function blocks until a
         new image has arrived.
+
+        If the timeout elapses before an image is ready, a Timeout is raised. If
+        no timeout is specified, the wait may not ever return if there is no next
+        image.
 
         To determine whether an image is ready, use image_ready()"""
         self.image_received.wait()

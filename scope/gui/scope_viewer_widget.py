@@ -11,6 +11,7 @@ import freeimage
 
 from . import status_widget
 from .. import scope_client
+from .. import util
 
 # TODO: Should live_target be a flipbook entry instead of just self.image?
 
@@ -47,13 +48,14 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
         self.save_action.triggered.connect(self.save_image)
         self.scope_toolbar.addAction(self.save_action)
 
+        self.servicing_image = util.Condition()
         self.closing = False
         self.live_streamer = scope_client.LiveStreamer(scope, scope_properties, self.post_new_image_event)
         if fps_max is None:
             self.interval_min = None
         else:
             self.interval_min = 1/fps_max
-        self.last_image = 0
+        self.last_image_time = 0
 
     def closeEvent(self, e):
         if self.closing:
@@ -65,26 +67,31 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
 
     def event(self, e):
         # This is called by the main QT event loop to service the event posted in post_new_image_event().
-        if e.type() == self.NEW_IMAGE_EVENT and self.live_streamer.image_ready():
-            if self.interval_min is not None:
-                t = time.time()
-                if t - self.last_image < self.interval_min:
+        if e.type() == self.NEW_IMAGE_EVENT:
+            with self.servicing_image:
+                if self.interval_min is not None:
+                    t = time.time()
+                    if t - self.last_image_time > self.interval_min:
+                        return True
+                try:
+                    image_data, timestamp, frame_no = self.live_streamer.get_image(timeout=4)
+                except scope_client.LiveStreamer.Timeout:
                     return True
-                self.last_image = t
-            image_data, timestamp, frame_no = self.live_streamer.get_image()
-            image_bits = 12 if self.live_streamer.bit_depth == '12 Bit' else 16
-            self.live_image_page[0] = image.Image(image_data, image_bits=image_bits)
-            if self.show_over_exposed_action.isChecked() and self.layer.image.type == 'G':
-                self.layer.getcolor_expression = self.OVEREXPOSURE_GETCOLOR_EXPRESSION
-            else:
-                del self.layer.getcolor_expression
-            return True
+                self.last_image_time = time.time()
+                image_bits = 12 if self.live_streamer.bit_depth == '12 Bit' else 16
+                image_obj = image.Image(image_data, image_bits=image_bits)
+                if self.show_over_exposed_action.isChecked() and image_obj.type == 'G':
+                    self.layer.getcolor_expression = self.OVEREXPOSURE_GETCOLOR_EXPRESSION
+                else:
+                    del self.layer.getcolor_expression
+                self.live_image_page[0] = image_obj
+                return True
         return super().event(e)
 
     def post_new_image_event(self):
         # posting an event does not require calling thread to have an event loop,
         # unlike sending a signal
-        if not self.closing and self.isVisible():
+        if not self.servicing_image and not self.closing and self.isVisible():
             Qt.QCoreApplication.postEvent(self, Qt.QEvent(self.NEW_IMAGE_EVENT))
 
     def on_show_over_exposed_action_toggled(self, show_over_exposed):

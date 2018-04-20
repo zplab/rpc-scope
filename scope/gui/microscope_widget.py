@@ -6,6 +6,7 @@ from PyQt5 import Qt
 from . import device_widget
 from . import status_widget
 from ..simple_rpc import rpc_client
+from .. import util
 
 class MicroscopeWidget(device_widget.DeviceWidget):
     PROPERTY_ROOT = 'scope.'
@@ -113,7 +114,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         layout.addWidget(slider)
         spinbox = Qt.QSpinBox()
         layout.addWidget(spinbox)
-        handling_change = Condition() # acts as false, except when in a with-block, where it acts as true
+        handling_change = util.Condition() # acts as false, except when in a with-block, where it acts as true
 
         def range_changed(_):
             if handling_change:
@@ -318,7 +319,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
 
         # low limit sub-widget
         low_limit_property = self.PROPERTY_ROOT + 'stage.{}_low_soft_limit'.format(axis_name)
-        handling_low_soft_limit_change = Condition() # start out false, except when used as with-block context manager
+        handling_low_soft_limit_change = util.Condition() # start out false, except when used as with-block context manager
         def low_limit_prop_changed(value):
             if handling_low_soft_limit_change:
                 return
@@ -352,7 +353,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
             low_limit_text_widget.focus_lost.connect(low_limit_text_focus_lost)
 
         # position sub-widget
-        handling_pos_change = Condition()
+        handling_pos_change = util.Condition()
         def position_changed(value):
             if handling_pos_change:
                 return
@@ -386,7 +387,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
 
         # high limit sub-widget
         high_limit_property = self.PROPERTY_ROOT + 'stage.{}_high_soft_limit'.format(axis_name)
-        handling_high_soft_limit_change = Condition()
+        handling_high_soft_limit_change = util.Condition()
         def high_limit_prop_changed(value):
             if handling_high_soft_limit_change:
                 return
@@ -439,19 +440,6 @@ class MicroscopeWidget(device_widget.DeviceWidget):
             self.subscribe(self.PROPERTY_ROOT + 'nosepiece.position', objective_changed)
 
         return widget
-
-class Condition:
-    def __init__(self):
-        self.condition = False
-
-    def __bool__(self):
-        return self.condition
-
-    def __enter__(self):
-        self.condition = True
-
-    def __exit__(self, *exc_info):
-        self.condition = False
 
 class _ObjectivesModel(Qt.QAbstractListModel):
     def __init__(self, mags, font, parent=None):
