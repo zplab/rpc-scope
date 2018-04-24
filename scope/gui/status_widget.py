@@ -58,6 +58,11 @@ class StatusWidget(device_widget.DeviceWidget):
                 self.current_label.setText(f'Running "{job.parent.parent.name}/{job.parent.name}".')
 
     def timerEvent(self, event):
+        if self.scope._rpc_client.heartbeat_error:
+            self.scope._rpc_client.reconnect()
+            self.scope_properties.reconnect()
+            self.scope._image_transfer_client.reconnect()
+
         try:
             self.scope._rpc_client('_sleep', 0) # no op to see if server is responding
             self.server_running = True

@@ -50,8 +50,7 @@ class Client(threading.Thread):
     Parameters:
         interval_sec: interval to check for heartbeats. Should be larger than the server's interval.
         max_missed: maximum missed heartbeats before raising an error.
-        error_signal: signal number to use to produce an error in the foreground thread.
-        error_text: text of error to raise when no heartbeat was detected.
+        error_callback: function to call on heartbeat error.
     """
     def __init__(self, interval_sec, max_missed, error_callback):
         super().__init__(daemon=True)
@@ -59,52 +58,64 @@ class Client(threading.Thread):
         self.max_missed = max_missed
         self.missed = 0
         self.error_callback = error_callback
-        self.callback_called = False
         self.running = True
         self.start()
 
     def run(self):
-        while self.running:
-            if self._receive_beat():
+        while True:
+            beat = self._receive_beat()
+            if not self.running:
+                break
+            elif beat: # we did receive a heartbeat
                 self.missed = 0
             else:
                 self.missed += 1
-            if self.missed >= self.max_missed and not self.callback_called:
+            if self.missed >= self.max_missed:
                 self.error_callback()
+                break # stop running on error
+
+    def stop(self):
+        self.running = False
+        self.join()
 
     def _receive_beat(self):
-        "if a heartbeat is received within self.interval_sec, return True, otherwise False"
+        """if a heartbeat is received within self.interval_sec, return True, otherwise False.
+        If self.running goes to False, return ASAP"""
         raise NotImplementedError()
 
 
 class ZMQClient(Client):
-    def __init__(self, port, interval_sec, max_missed, error_callback, context=None):
+    def __init__(self, addr, interval_sec, max_missed, error_callback, context=None):
         """HeartbeatClient subclass that uses ZeroMQ PUB/SUB to receive beats.
 
         Parameters:
-            port: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
+            addr: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
             interval_sec: interval to check for heartbeats. Should be larger than the server's interval.
             max_missed: maximum missed heartbeats before raising an error.
             error_signal: signal number to use to produce an error in the foreground thread.
             context: a ZeroMQ context to share, if one already exists.
         """
         self.context = context if context is not None else zmq.Context()
-        self.socket = self.context.socket(zmq.SUB)
-        self.socket.RCVTIMEO = int(1000 * interval_sec)
-        self.socket.LINGER = 0
-        self.socket.SUBSCRIBE = ''
-        self.socket.connect(port)
+        self.addr = addr
         super().__init__(interval_sec, max_missed, error_callback)
 
     def run(self):
+        self.socket = self.context.socket(zmq.SUB)
+        self.socket.RCVTIMEO = 0 # we use poll to determine whether there's data to receive, so we don't want to wait on recv
+        self.socket.LINGER = 0
+        self.socket.SUBSCRIBE = ''
+        self.socket.connect(self.addr)
         try:
             super().run()
         finally:
             self.socket.close()
 
     def _receive_beat(self):
-        try:
-            self.socket.recv()
-            return True
-        except zmq.error.Again:
-            return False
+        hearbeat_deadline = time.time() + self.interval_sec
+        while self.running:
+            if time.time() > hearbeat_deadline:
+                return False
+            if self.socket.poll(500): # 500 ms wait before checking self.running again
+                # poll returns true of socket has data to recv
+                self.socket.recv()
+                return True

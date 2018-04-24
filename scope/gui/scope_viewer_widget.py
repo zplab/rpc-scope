@@ -5,7 +5,7 @@ import datetime
 import numpy
 from PyQt5 import Qt
 
-from  ris_widget import image
+from ris_widget import image
 from ris_widget import ris_widget
 import freeimage
 

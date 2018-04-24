@@ -154,7 +154,7 @@ class ClientNamespace:
         super().__setattr__(name, value)
 
 class ZMQClient(RPCClient):
-    def __init__(self, rpc_addr, timeout_sec=None, context=None):
+    def __init__(self, rpc_addr, timeout_sec=10, context=None):
         """RPCClient subclass that uses ZeroMQ REQ/REP to communicate.
         Parameters:
             rpc_addr: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
@@ -165,14 +165,13 @@ class ZMQClient(RPCClient):
         self.rpc_addr = rpc_addr
         self.heartbeat_client = None
         self.interrupt_socket = None
-        self.heartbeat_error = False
         # main timeout will be implemented with poll
         self.timeout_sec = timeout_sec
-        self.connect()
+        self._connect()
 
-    def connect(self):
+    def _connect(self):
         self.socket = self.context.socket(zmq.REQ)
-        self.socket.RCVTIMEO = 1000 # timeout receive after 1 sec, in case server dies after poll succeeds
+        self.socket.RCVTIMEO = 0 # we use poll to determine when a message is ready, so set a zero timeout
         self.socket.LINGER = 0
         self.socket.REQ_RELAXED = True
         self.socket.REQ_CORRELATE = True
@@ -181,10 +180,24 @@ class ZMQClient(RPCClient):
     def enable_interrupt(self, interrupt_addr):
         self.interrupt_socket = self.context.socket(zmq.PUSH)
         self.interrupt_socket.connect(interrupt_addr)
+        self.interrupt_addr = interrupt_addr
 
     def enable_heartbeat(self, heartbeat_addr, heartbeat_interval_sec):
+        self.heartbeat_error = False
+        self.heartbeat_addr = heartbeat_addr
+        self.heartbeat_interval_sec = heartbeat_interval_sec
         self.heartbeat_client = heartbeat.ZMQClient(heartbeat_addr, heartbeat_interval_sec,
             max_missed=3, error_callback=self._set_heartbeat_error, context=self.context)
+
+    def reconnect(self):
+        self.socket.close()
+        self._connect()
+        if self.interrupt_socket is not None:
+            self.interrupt_socket.close()
+            self.enable_interrupt(self.interrupt_addr)
+        if self.heartbeat_client is not None:
+            self.heartbeat_client.stop()
+            self.enable_heartbeat(self.heartbeat_addr, self.heartbeat_interval_sec)
 
     def _set_heartbeat_error(self):
         self.heartbeat_error = True
@@ -195,25 +208,21 @@ class ZMQClient(RPCClient):
 
     def _receive_reply(self):
         timeout_time = time.time() + self.timeout_sec
-        timeout_errtext = 'Timed out waiting for reply from server (is it running?)'
         while True:
             if time.time() > timeout_time:
-                raise RPCError(timeout_errtext)
+                raise RPCError('Timed out waiting for reply from server (is it running?)')
             if self.heartbeat_error:
                 raise RPCError('No "heartbeat" signal detected from server (is it still running?)')
             if self.socket.poll(500): # 500 ms timeout
-                # socket has data
+                # poll returns true if socket has data to recv.
                 break
-        try:
-            reply_type = self.socket.recv_string()
-            assert(self.socket.RCVMORE)
-            if reply_type == 'bindata':
-                reply = self.socket.recv(copy=False, track=False).buffer
-            else:
-                reply = self.socket.recv_json()
-            return reply, reply_type == 'error'
-        except zmq.error.Again:
-            raise RPCError(timeout_errtext)
+        reply_type = self.socket.recv_string()
+        assert(self.socket.RCVMORE)
+        if reply_type == 'bindata':
+            reply = self.socket.recv(copy=False, track=False).buffer
+        else:
+            reply = self.socket.recv_json()
+        return reply, reply_type == 'error'
 
     def send_interrupt(self):
         """Raise a KeyboardInterrupt exception in the server process"""

@@ -23,11 +23,22 @@ class PropertyClient(threading.Thread):
         super().__init__(name='PropertyClient', daemon=daemon)
         self.start()
 
+    def subscribe_from(self, other):
+        """Copy subscriptions from other PropertyClient"""
+        for property_name, callbacks in other.callbacks.items():
+            for callback, valueonly in callbacks:
+                self.subscribe(property_name, callback, valueonly)
+        for property_prefix, callbacks in other.prefix_callbacks.items():
+            for callback, valueonly in callbacks:
+                self.subscribe_prefix(property_prefix, callback, valueonly)
+
     def run(self):
         """Thread target: do not call directly."""
         self.running = True
-        while self.running:
+        while True:
             property_name, value = self._receive_update()
+            if not self.running:
+                break
             self.properties[property_name] = value
             for callbacks in [self.callbacks[property_name]] + list(self.prefix_callbacks.values(property_name)):
                 for callback, valueonly in callbacks:
@@ -39,6 +50,10 @@ class PropertyClient(threading.Thread):
                     except Exception as e:
                         print('Caught exception in PropertyClient callback:')
                         traceback.print_exception(type(e), e, e.__traceback__)
+
+    def stop(self):
+        self.running = False
+        self.join()
 
     def subscribe(self, property_name, callback, valueonly=False):
         """Register a callback to be called any time the named property is updated.
@@ -97,17 +112,39 @@ class PropertyClient(threading.Thread):
         raise NotImplementedError()
 
 class ZMQClient(PropertyClient):
-    def __init__(self, port, context=None, daemon=True):
+    def __init__(self, addr, context=None, daemon=True):
         """PropertyClient subclass that uses ZeroMQ PUB/SUB to receive out updates.
         Parameters:
-            port: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
+            addr: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
             context: a ZeroMQ context to share, if one already exists.
             daemon: exit the client when the foreground thread exits.
         """
         self.context = context if context is not None else zmq.Context()
-        self.socket = self.context.socket(zmq.SUB)
-        self.socket.connect(port)
+        self.addr = addr
+        self.socket = None
+        self._connected = threading.Event()
         super().__init__(daemon)
+
+    def run(self):
+        try:
+            super().run()
+        finally:
+            self.socket.close()
+
+    def reconnect(self):
+        self.connected.clear()
+        self.connected.wait()
+
+    def _connect(self):
+        if self.socket is not None:
+            self.socket.close()
+        self.socket = self.context.socket(zmq.SUB)
+        self.socket.RCVTIMEO = 0 # we use poll to determine whether there's data to receive, so we don't want to wait on recv
+        self.socket.LINGER = 0
+        self.socket.connect(self.addr)
+        for property_name in list(self.callbacks) + list(self.prefix_callbacks):
+            self.socket.setsockopt_string(zmq.SUBSCRIBE, property_name)
+        self.connected.set()
 
     def subscribe(self, property_name, callback, valueonly=False):
         self.socket.setsockopt_string(zmq.SUBSCRIBE, property_name)
@@ -130,7 +167,13 @@ class ZMQClient(PropertyClient):
     unsubscribe_prefix.__doc__ = PropertyClient.unsubscribe_prefix.__doc__
 
     def _receive_update(self):
-        property_name = self.socket.recv_string()
-        assert(self.socket.getsockopt(zmq.RCVMORE))
-        value = self.socket.recv_json()
-        return property_name, value
+        while self.running:
+            if not self.connected.is_set():
+                self._connect()
+            if self.socket.poll(500): # 500 ms wait before checking self.running again
+                # poll returns true of socket has data to recv
+                property_name = self.socket.recv_string()
+                assert(self.socket.getsockopt(zmq.RCVMORE))
+                value = self.socket.recv_json()
+                return property_name, value
+
