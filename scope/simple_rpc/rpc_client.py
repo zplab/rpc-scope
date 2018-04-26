@@ -163,6 +163,7 @@ class ZMQClient(RPCClient):
         """
         self.context = context if context is not None else zmq.Context()
         self.rpc_addr = rpc_addr
+        self.heartbeat_error = False
         self.heartbeat_client = None
         self.interrupt_socket = None
         # main timeout will be implemented with poll
@@ -183,11 +184,11 @@ class ZMQClient(RPCClient):
         self.interrupt_addr = interrupt_addr
 
     def enable_heartbeat(self, heartbeat_addr, heartbeat_interval_sec):
-        self.heartbeat_error = False
         self.heartbeat_addr = heartbeat_addr
         self.heartbeat_interval_sec = heartbeat_interval_sec
         self.heartbeat_client = heartbeat.ZMQClient(heartbeat_addr, heartbeat_interval_sec,
-            max_missed=3, error_callback=self._set_heartbeat_error, context=self.context)
+            max_missed=3, error_callback=self._set_heartbeat_error, clear_callback=self._clear_heartbeat_error,
+            context=self.context)
 
     def reconnect(self):
         self.socket.close()
@@ -197,10 +198,14 @@ class ZMQClient(RPCClient):
             self.enable_interrupt(self.interrupt_addr)
         if self.heartbeat_client is not None:
             self.heartbeat_client.stop()
+            self.heartbeat_error = False
             self.enable_heartbeat(self.heartbeat_addr, self.heartbeat_interval_sec)
 
     def _set_heartbeat_error(self):
         self.heartbeat_error = True
+
+    def _clear_heartbeat_error(self):
+        self.heartbeat_error = False
 
     def _send(self, command, args, kwargs):
         json = datafile.json_encode_compact_to_bytes((command, args, kwargs))

@@ -52,12 +52,13 @@ class Client(threading.Thread):
         max_missed: maximum missed heartbeats before raising an error.
         error_callback: function to call on heartbeat error.
     """
-    def __init__(self, interval_sec, max_missed, error_callback):
+    def __init__(self, interval_sec, max_missed, error_callback, clear_callback):
         super().__init__(daemon=True)
         self.interval_sec = interval_sec
         self.max_missed = max_missed
         self.missed = 0
         self.error_callback = error_callback
+        self.clear_callback = clear_callback
         self.running = True
         self.start()
 
@@ -67,12 +68,13 @@ class Client(threading.Thread):
             if not self.running:
                 break
             elif beat: # we did receive a heartbeat
+                if self.missed >= self.max_missed:
+                    self.clear_callback()
                 self.missed = 0
             else:
                 self.missed += 1
             if self.missed >= self.max_missed:
                 self.error_callback()
-                break # stop running on error
 
     def stop(self):
         self.running = False
@@ -85,7 +87,7 @@ class Client(threading.Thread):
 
 
 class ZMQClient(Client):
-    def __init__(self, addr, interval_sec, max_missed, error_callback, context=None):
+    def __init__(self, addr, interval_sec, max_missed, error_callback, clear_callback, context=None):
         """HeartbeatClient subclass that uses ZeroMQ PUB/SUB to receive beats.
 
         Parameters:
@@ -97,7 +99,7 @@ class ZMQClient(Client):
         """
         self.context = context if context is not None else zmq.Context()
         self.addr = addr
-        super().__init__(interval_sec, max_missed, error_callback)
+        super().__init__(interval_sec, max_missed, error_callback, clear_callback)
 
     def run(self):
         self.socket = self.context.socket(zmq.SUB)

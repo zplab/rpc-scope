@@ -64,7 +64,7 @@ class StatusWidget(device_widget.DeviceWidget):
             self.scope._image_transfer_client.reconnect()
 
         try:
-            self.scope._rpc_client('_sleep', 0) # no op to see if server is responding
+            self.scope._ping()
             self.server_running = True
         except:
             self.server_running = False

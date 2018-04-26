@@ -94,6 +94,8 @@ def _make_rpc_client(host, rpc_port, context, allow_interrupt):
             scope.camera.set_network_compression = get_data.set_network_compression
 
     _replace_in_state(scope) # monkeypatch in in_state context managers
+    scope._ping = client.proxy_function('_ping')
+    scope._sleep = client.proxy_function('_sleep')
     scope._get_data = get_data
     scope._is_local = is_local
     scope._rpc_client = client

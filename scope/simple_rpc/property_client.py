@@ -122,7 +122,7 @@ class ZMQClient(PropertyClient):
         self.context = context if context is not None else zmq.Context()
         self.addr = addr
         self.socket = None
-        self._connected = threading.Event()
+        self.connected = threading.Event()
         super().__init__(daemon)
 
     def run(self):
@@ -147,22 +147,26 @@ class ZMQClient(PropertyClient):
         self.connected.set()
 
     def subscribe(self, property_name, callback, valueonly=False):
+        self.connected.wait()
         self.socket.setsockopt_string(zmq.SUBSCRIBE, property_name)
         super().subscribe(property_name, callback, valueonly)
     subscribe.__doc__ = PropertyClient.subscribe.__doc__
 
     def unsubscribe(self, property_name, callback, valueonly=False):
         super().unsubscribe(property_name, callback, valueonly)
+        self.connected.wait()
         self.socket.setsockopt_string(zmq.UNSUBSCRIBE, property_name)
     unsubscribe.__doc__ = PropertyClient.unsubscribe.__doc__
 
     def subscribe_prefix(self, property_prefix, callback):
+        self.connected.wait()
         self.socket.setsockopt_string(zmq.SUBSCRIBE, property_prefix)
         super().subscribe_prefix(property_prefix, callback)
     subscribe_prefix.__doc__ = PropertyClient.subscribe_prefix.__doc__
 
     def unsubscribe_prefix(self, property_prefix, callback):
         super().unsubscribe_prefix(property_prefix, callback)
+        self.connected.wait()
         self.socket.setsockopt_string(zmq.UNSUBSCRIBE, property_prefix)
     unsubscribe_prefix.__doc__ = PropertyClient.unsubscribe_prefix.__doc__
 

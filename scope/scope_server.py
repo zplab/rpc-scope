@@ -68,7 +68,9 @@ class ScopeServer(base_daemon.Runner):
             interval_sec=self.config.server.HEARTBEAT_INTERVAL_SEC, context=self.context)
         property_update_server = property_server.ZMQServer(addresses['property'], context=self.context)
         scope_controller = scope.Scope(property_update_server)
-        scope_controller._sleep = time.sleep # way to provide a no-op RPC call for testing...
+        # Provide some basic RPC calls for testing...
+        scope_controller._sleep = time.sleep
+        scope_controller._ping = lambda: "pong"
 
         image_transfer_namespace = Namespace()
         # add transfer_ism_buffer as hidden elements of the namespace, which RPC clients can use for seamless buffer sharing
