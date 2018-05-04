@@ -116,6 +116,7 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
 class MonitorWidget(ScopeViewerWidget):
     def __init__(self, scope, window_title='Viewer', downsample=None, fps_max=None, app_prefs_name='scope-viewer', parent=None):
         super().__init__(scope, window_title, fps_max, app_prefs_name, parent)
+        self.live_streamer.image_ready_callback = None # don't allow image callbacks until scope is connected
         self.downsample = downsample
         self.removeToolBar(self.scope_toolbar)
         self.show_over_exposed_action.setChecked(False)
@@ -146,4 +147,5 @@ class MonitorWidget(ScopeViewerWidget):
         self.timer.stop()
         if not self.scope._is_local:
             self.scope._get_data.downsample = self.downsample
+        self.live_streamer.image_ready_callback = self.post_new_image_event
         self.scope.rebroadcast_properties()
