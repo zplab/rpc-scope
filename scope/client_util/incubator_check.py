@@ -21,7 +21,7 @@ def main(scope_host='127.0.0.1'):
 
     if to_email:
         # there's someone to alert, so let's see if there's an alert to send:
-        scope, scope_properties = scope_client.client_main(scope_host)
+        scope = scope_client.ScopeClient(scope_host)
 
         errors = []
         has_humidity = has_temperature = False

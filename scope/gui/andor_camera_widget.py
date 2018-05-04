@@ -47,15 +47,14 @@ class AndorCameraWidget(device_widget.DeviceWidget):
         'exposure_time': (0.001, 30000, 3)
     }
 
-    def __init__(self, scope, scope_properties, parent=None):
-        super().__init__(scope, scope_properties, parent)
-        self.camera = scope.camera
+    def __init__(self, scope, parent=None):
+        super().__init__(scope, parent)
         self.build_gui()
 
     def build_gui(self):
         self.setWindowTitle('Camera')
         properties = ['live_mode'] + self.PROPERTIES
-        property_types = dict(self.camera.andor_property_types)
+        property_types = dict(self.scope.camera.andor_property_types)
         property_types['live_mode'] = ('Bool', False)
         self.add_property_rows(properties, property_types)
 
@@ -95,7 +94,7 @@ class AndorCameraWidget(device_widget.DeviceWidget):
 
     def make_readonly_widget(self, property):
         widget = Qt.QLabel()
-        self.subscribe(self.PROPERTY_ROOT + property, callback=lambda value: widget.setText(str(value)))
+        self.subscribe(self.PROPERTY_ROOT + property, callback=lambda value: widget.setText(str(value)), readonly=True)
         return widget
 
     def make_numeric_widget(self, property, type):
@@ -113,7 +112,7 @@ class AndorCameraWidget(device_widget.DeviceWidget):
                 Qt.QMessageBox.warning(self, 'Invalid Value', e.args[0])
             except rpc_client.RPCError as e: # from the update
                 if e.args[0].find('OUTOFRANGE') != -1:
-                    min, max = getattr(self.camera, property+'_range')
+                    min, max = getattr(self.scope.camera, property+'_range')
                     if min is None:
                         min = '?'
                     if max is None:
@@ -150,7 +149,7 @@ class AndorCameraWidget(device_widget.DeviceWidget):
 
     def make_enum_widget(self, property):
         widget = Qt.QComboBox()
-        values = sorted(getattr(self.camera, property+'_values').keys())
+        values = sorted(getattr(self.scope.camera, property+'_values').keys())
         indices = {v:i for i, v in enumerate(values)}
         widget.addItems(values)
         update = self.subscribe(self.PROPERTY_ROOT + property, callback=lambda value: widget.setCurrentIndex(indices[value]))
@@ -163,7 +162,7 @@ class AndorCameraWidget(device_widget.DeviceWidget):
                 if e.args[0].find('NOTWRITABLE') != -1:
                     error = "Given the camera state, {} can't be changed.".format(property)
                 elif e.args[0].find('NOTAVAILABLE') != -1:
-                    accepted_values = sorted(k for k, v in getattr(self.camera, property+'_values').items() if v)
+                    accepted_values = sorted(k for k, v in getattr(self.scope.camera, property+'_values').items() if v)
                     error = 'Given the camera state, {} can only be one of [{}].'.format(property, ', '.join(accepted_values))
                 else:
                     error = 'Could not set {} ({}).'.format(property, e.args[0])
@@ -192,6 +191,6 @@ class AndorCameraWidget(device_widget.DeviceWidget):
 class AndorAdvancedCameraWidget(AndorCameraWidget):
     def build_gui(self):
         self.setWindowTitle('Adv. Camera')
-        property_types = dict(self.camera.andor_property_types)
+        property_types = dict(self.scope.camera.andor_property_types)
         advanced_properties = sorted(property_types.keys() - set(self.PROPERTIES))
         self.add_property_rows(advanced_properties, property_types)

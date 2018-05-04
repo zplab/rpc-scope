@@ -64,7 +64,7 @@ class TimepointHandler:
 
         if scope_host is not None:
             from .. import scope_client
-            self.scope, self.scope_properties = scope_client.client_main(scope_host)
+            self.scope = scope_client.ScopeClient(scope_host)
             if hasattr(self.scope, 'camera'):
                 self.scope.camera.return_to_default_state()
         else:

@@ -25,8 +25,7 @@ def get_addresses(host=None, config=None):
         rpc=make_tcp_host(host, config.server.RPC_PORT),
         interrupt=make_tcp_host(host, config.server.RPC_INTERRUPT_PORT),
         property=make_tcp_host(host, config.server.PROPERTY_PORT),
-        image_transfer_rpc=make_tcp_host(host, config.server.IMAGE_TRANSFER_RPC_PORT),
-        heartbeat=make_tcp_host(host, config.server.HEARTBEAT_PORT)
+        image_transfer_rpc=make_tcp_host(host, config.server.IMAGE_TRANSFER_RPC_PORT)
      )
 
 _CONFIG = None

@@ -45,8 +45,15 @@ class PropertyServer(threading.Thread):
 
     def run(self):
         while self.running:
-            property_name, value = self.task_queue.get() # block until something's in the queue
-            self._publish_update(property_name, value)
+            try:
+                property_name, value = self.task_queue.get(timeout=0.5) # wake up if something in queue, or if it's time to check self.running
+                self._publish_update(property_name, value)
+            except queue.Empty:
+                pass
+
+    def stop(self):
+        self.running = False
+        self.join()
 
     def rebroadcast_properties(self):
         """Re-send an update about all known property values. Useful for

@@ -59,14 +59,11 @@ class ScopeServer(base_daemon.Runner):
         from . import scope
         from .simple_rpc import rpc_server
         from .simple_rpc import property_server
-        from .simple_rpc import heartbeat
         from .util import transfer_ism_buffer
 
         addresses = scope_configuration.get_addresses(self.host)
         self.context = zmq.Context()
-        self.heartbeat_server = heartbeat.ZMQServer(addresses['heartbeat'],
-            interval_sec=self.config.server.HEARTBEAT_INTERVAL_SEC, context=self.context)
-        property_update_server = property_server.ZMQServer(addresses['property'], context=self.context)
+        self.property_update_server = property_server.ZMQServer(addresses['property'], context=self.context)
         scope_controller = scope.Scope(property_update_server)
         # Provide some basic RPC calls for testing...
         scope_controller._sleep = time.sleep
@@ -77,9 +74,9 @@ class ScopeServer(base_daemon.Runner):
         image_transfer_namespace._transfer_ism_buffer = transfer_ism_buffer
         if hasattr(scope_controller, 'camera'):
             image_transfer_namespace.latest_image=scope_controller.camera.latest_image
-        image_transfer_server = rpc_server.BackgroundBaseZMQServer(image_transfer_namespace,
+        self.image_transfer_server = rpc_server.BackgroundBaseZMQServer(image_transfer_namespace,
             addresses['image_transfer_rpc'], context=self.context)
-        interrupter = rpc_server.ZMQInterrupter(addresses['interrupt'], context=self.context)
+        self.interrupter = rpc_server.ZMQInterrupter(addresses['interrupt'], context=self.context)
         self.scope_server = rpc_server.ZMQServer(scope_controller, interrupter,
             addresses['rpc'], context=self.context)
         logger.info('Scope Server Ready (Listening on {})', self.host)
@@ -88,6 +85,9 @@ class ScopeServer(base_daemon.Runner):
         try:
             self.scope_server.run()
         finally:
+            self.property_update_server.stop()
+            self.image_transfer_server.stop()
+            self.interrupter.stop()
             self.context.term()
 
 
@@ -100,7 +100,7 @@ class ScopeClientTester(threading.Thread):
     def run(self):
         from . import scope_client
         try:
-            scope_client.client_main()
+            scope_client.ScopeClient()
             self.connected = True
         except:
             pass

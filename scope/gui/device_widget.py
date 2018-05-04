@@ -23,12 +23,10 @@ class DeviceWidget(Qt.QWidget):
         """Report on whether the current scope object supports a given widget."""
         return has_component(scope, cls.PROPERTY_ROOT)
 
-    def __init__(self, scope, scope_properties, parent):
+    def __init__(self, scope, parent):
         super().__init__(parent)
         self.setAttribute(Qt.Qt.WA_DeleteOnClose, True)
-        self.rpc_client = scope._rpc_client
-        self.rpc_functions = scope._functions_proxied
-        self.scope_properties = scope_properties
+        self.scope = scope
         self._subscribed_properties = collections.defaultdict(set)
         # It is not safe to manipulate Qt widgets from another thread, and our property change callbacks
         # are executed by the property client thread.  It is safe to emit a signal from a non-Qt thread,
@@ -39,7 +37,7 @@ class DeviceWidget(Qt.QWidget):
 
     def closeEvent(self, event):
         for property in self._subscribed_properties:
-            self.scope_properties.unsubscribe(property, self._emit_property_changed)
+            self.scope.properties.unsubscribe(property, self._emit_property_changed)
         event.accept()
 
     def _emit_property_changed(self, property, value):
@@ -56,23 +54,26 @@ class DeviceWidget(Qt.QWidget):
         scope, *device_path, property_name = property.split('.')
         # all property names start with 'scope.', but the rpc server doesn't "see" the top-most namespace.
         property_setter = '.'.join(device_path) + '.set_' + property_name
-        if property_setter in self.rpc_functions:
-            return self.rpc_client.proxy_function(property_setter)
+        if property_setter in self.scope._functions_proxied:
+            return self.scope._rpc_client.proxy_function(property_setter)
         else:
             return None
 
     def is_property_readonly(self, property):
         return self._get_property_setter(property) is None
 
-    def subscribe(self, property, callback):
+    def subscribe(self, property, callback, readonly=False):
         """Register a callback to be updated with new values for a given property.
 
         If the property is writable, this function returns an "update" function to
         call to provide new property values. Otherwise None is returned.
         """
-        rpc_updater = self._get_property_setter(property)
+        if readonly:
+            rpc_updater = None
+        else:
+            rpc_updater = self._get_property_setter(property)
         handler = _PropertyHandler(rpc_updater, callback)
-        self.scope_properties.subscribe(property, self._emit_property_changed)
+        self.scope.properties.subscribe(property, self._emit_property_changed)
         self._subscribed_properties[property].add(handler)
         if rpc_updater is not None:
             return handler.update_device_if_needed

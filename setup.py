@@ -7,7 +7,7 @@ setuptools.setup(
     version = '2',
     description = 'zplab microscope package',
     packages = setuptools.find_packages(),
-    package_data = {'scope.gui':['limit_icons/*.svg']},
+    package_data = {'scope.gui':['limit_icons/*.svg', 'icon.svg']},
     entry_points = {
         'console_scripts': [
             'scope_gui=scope.cli.scope_gui:main',

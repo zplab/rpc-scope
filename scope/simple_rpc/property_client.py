@@ -4,7 +4,7 @@ import collections
 import threading
 import traceback
 import zmq
-from . import trie
+from ..util import trie
 
 class PropertyClient(threading.Thread):
     """A client for receiving property updates in a background thread.
@@ -37,8 +37,6 @@ class PropertyClient(threading.Thread):
         self.running = True
         while True:
             property_name, value = self._receive_update()
-            if not self.running:
-                break
             self.properties[property_name] = value
             for callbacks in [self.callbacks[property_name]] + list(self.prefix_callbacks.values(property_name)):
                 for callback, valueonly in callbacks:
@@ -108,11 +106,12 @@ class PropertyClient(threading.Thread):
             del self.prefix_callbacks[property_prefix]
 
     def _receive_update(self):
-        """Receive an update from the server"""
+        """Receive an update from the server, or raise an error if self.running
+        goes False."""
         raise NotImplementedError()
 
 class ZMQClient(PropertyClient):
-    def __init__(self, addr, context=None, daemon=True):
+    def __init__(self, addr, heartbeat_sec=None, context=None, daemon=True):
         """PropertyClient subclass that uses ZeroMQ PUB/SUB to receive out updates.
         Parameters:
             addr: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
@@ -121,11 +120,12 @@ class ZMQClient(PropertyClient):
         """
         self.context = context if context is not None else zmq.Context()
         self.addr = addr
-        self.socket = None
+        self.heartbeat_sec = heartbeat_sec
         self.connected = threading.Event()
         super().__init__(daemon)
 
     def run(self):
+        self._connect()
         try:
             super().run()
         finally:
@@ -136,11 +136,14 @@ class ZMQClient(PropertyClient):
         self.connected.wait()
 
     def _connect(self):
-        if self.socket is not None:
-            self.socket.close()
         self.socket = self.context.socket(zmq.SUB)
         self.socket.RCVTIMEO = 0 # we use poll to determine whether there's data to receive, so we don't want to wait on recv
         self.socket.LINGER = 0
+        if self.heartbeat_sec is not None:
+            heartbeat_ms = self.heartbeat_sec * 1000
+            self.socket.HEARTBEAT_IVL = heartbeat_ms
+            self.socket.HEARTBEAT_TIMEOUT = heartbeat_ms * 2
+            self.socket.HEARTBEAT_TTL = heartbeat_ms * 2
         self.socket.connect(self.addr)
         for property_name in list(self.callbacks) + list(self.prefix_callbacks):
             self.socket.setsockopt_string(zmq.SUBSCRIBE, property_name)
@@ -148,36 +151,39 @@ class ZMQClient(PropertyClient):
 
     def subscribe(self, property_name, callback, valueonly=False):
         self.connected.wait()
-        self.socket.setsockopt_string(zmq.SUBSCRIBE, property_name)
+        self.socket.subscribe(property_name)
         super().subscribe(property_name, callback, valueonly)
     subscribe.__doc__ = PropertyClient.subscribe.__doc__
 
     def unsubscribe(self, property_name, callback, valueonly=False):
         super().unsubscribe(property_name, callback, valueonly)
         self.connected.wait()
-        self.socket.setsockopt_string(zmq.UNSUBSCRIBE, property_name)
+        self.socket.unsubscribe(property_name)
     unsubscribe.__doc__ = PropertyClient.unsubscribe.__doc__
 
     def subscribe_prefix(self, property_prefix, callback):
         self.connected.wait()
-        self.socket.setsockopt_string(zmq.SUBSCRIBE, property_prefix)
+        self.socket.subscribe(property_prefix)
         super().subscribe_prefix(property_prefix, callback)
     subscribe_prefix.__doc__ = PropertyClient.subscribe_prefix.__doc__
 
     def unsubscribe_prefix(self, property_prefix, callback):
         super().unsubscribe_prefix(property_prefix, callback)
         self.connected.wait()
-        self.socket.setsockopt_string(zmq.UNSUBSCRIBE, property_prefix)
+        self.socket.unsubscribe(property_prefix)
     unsubscribe_prefix.__doc__ = PropertyClient.unsubscribe_prefix.__doc__
 
     def _receive_update(self):
-        while self.running:
+        while not self.socket.poll(500): # 500 ms wait before checking self.running again
+            if not self.running:
+                raise RuntimeError()
             if not self.connected.is_set():
+                # reconnect was requested
+                self.socket.close()
                 self._connect()
-            if self.socket.poll(500): # 500 ms wait before checking self.running again
-                # poll returns true of socket has data to recv
-                property_name = self.socket.recv_string()
-                assert(self.socket.getsockopt(zmq.RCVMORE))
-                value = self.socket.recv_json()
-                return property_name, value
+        # poll returned true: socket has data to recv
+        property_name = self.socket.recv_string()
+        assert(self.socket.getsockopt(zmq.RCVMORE))
+        value = self.socket.recv_json()
+        return property_name, value
 

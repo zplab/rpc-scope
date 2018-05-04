@@ -29,8 +29,6 @@ scope_configuration = dict(
         RPC_INTERRUPT_PORT = '6001',
         PROPERTY_PORT = '6002',
         IMAGE_TRANSFER_RPC_PORT = '6003',
-        HEARTBEAT_PORT = '6004',
-        HEARTBEAT_INTERVAL_SEC = 3
     ),
 
     stand = dict(

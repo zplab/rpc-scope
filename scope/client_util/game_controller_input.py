@@ -210,7 +210,7 @@ class GameControllerInput:
     def __init__(self, scope, device=0, warnings_enabled=False):
         """
         Parameters:
-            scope: microscope client, returned by scope_client.client_main().
+            scope: microscope client, instance of scope_client.ScopeClient.
             device: the numerical index or string name of the input device (from output of enumerate_devices()).
             warnings_enabled: if True, print debug information to stderr.
         """

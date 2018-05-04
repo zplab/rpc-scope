@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from PyQt5 import Qt
+import pkg_resources
 
 from . import device_widget
 from . import status_widget
@@ -51,8 +52,8 @@ class MicroscopeWidget(device_widget.DeviceWidget):
             return True
         return False
 
-    def __init__(self, scope, scope_properties, parent=None):
-        super().__init__(scope, scope_properties, parent)
+    def __init__(self, scope, parent=None):
+        super().__init__(scope, parent)
         self.limit_pixmaps_and_tooltips = LimitPixmapsAndToolTips()
         self.setWindowTitle('Stand')
         form = Qt.QFormLayout(self)
@@ -60,11 +61,10 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         form.setVerticalSpacing(4)
         form.setLabelAlignment(Qt.Qt.AlignRight | Qt.Qt.AlignVCenter)
         form.setFieldGrowthPolicy(Qt.QFormLayout.ExpandingFieldsGrow)
-        self.scope = scope
         for property, widget_type, *widget_args in self.PROPERTIES:
             self.make_widgets_for_property(self.PROPERTY_ROOT + property, widget_type, widget_args)
         if hasattr(scope, 'job_runner'):
-            form.addRow(status_widget.StatusWidget(scope, scope_properties))
+            form.addRow(status_widget.StatusWidget(scope))
 
     def get_scope_attr(self, property):
         """look up an attribute on the scope object by property name, which is
@@ -123,7 +123,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 range = self.get_scope_attr(self.PROPERTY_ROOT + range_property)
                 slider.setRange(*range)
                 spinbox.setRange(*range)
-        self.subscribe(self.PROPERTY_ROOT + range_depends_on_property, callback=range_changed)
+        self.subscribe(self.PROPERTY_ROOT + range_depends_on_property, callback=range_changed, readonly=True)
 
         def prop_changed(value):
             if handling_change:
@@ -196,7 +196,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
         vlayout.setContentsMargins(0, 0, 0, 0)
         widget.setLayout(vlayout)
         axis_name = property.split('.')[-1]
-        props = self.scope_properties.properties # dict of tracked properties, updated by property client
+        props = self.scope.properties.properties # dict of tracked properties, updated by property client
 
         # [low limits status indicator] [-------<slider>-------] [high limits status indicator]
         slider_layout = Qt.QHBoxLayout()
@@ -244,8 +244,8 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 tt = self.limit_pixmaps_and_tooltips.low_no_limit_tt
             low_limit_status_label.setPixmap(pm)
             low_limit_status_label.setToolTip(tt)
-        self.subscribe(at_ls_property, at_low_limit_prop_changed)
-        self.subscribe(at_lh_property, at_low_limit_prop_changed)
+        self.subscribe(at_ls_property, at_low_limit_prop_changed, readonly=True)
+        self.subscribe(at_lh_property, at_low_limit_prop_changed, readonly=True)
         def at_high_limit_prop_changed(_):
             try:
                 at_s = props[at_hs_property]
@@ -266,8 +266,8 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 tt = self.limit_pixmaps_and_tooltips.high_no_limit_tt
             high_limit_status_label.setPixmap(pm)
             high_limit_status_label.setToolTip(tt)
-        self.subscribe(at_hs_property, at_high_limit_prop_changed)
-        self.subscribe(at_hh_property, at_high_limit_prop_changed)
+        self.subscribe(at_hs_property, at_high_limit_prop_changed, readonly=True)
+        self.subscribe(at_hh_property, at_high_limit_prop_changed, readonly=True)
 
         # [stop] [low soft limit text edit] [position text edit] [high soft limit text edit] [reset high soft limit button]
         buttons_layout = Qt.QHBoxLayout()
@@ -305,7 +305,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
 
         def moving_along_axis_changed(value):
             stop_button.setEnabled(value)
-        self.subscribe('{}stage.moving_along_{}'.format(self.PROPERTY_ROOT, axis_name), moving_along_axis_changed)
+        self.subscribe('{}stage.moving_along_{}'.format(self.PROPERTY_ROOT, axis_name), moving_along_axis_changed, readonly=True)
 
         def stop_moving_along_axis():
             try:
@@ -361,7 +361,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                 pos_text_widget.setText(str(value))
                 pos_slider.setValue(int(value * pos_slider_factor))
 
-        self.subscribe(property, position_changed)
+        self.subscribe(property, position_changed, readonly=True)
         get_pos = getattr(self.scope.stage, '_get_{}'.format(axis_name))
         set_pos = getattr(self.scope.stage, '_set_{}'.format(axis_name))
 
@@ -437,7 +437,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                     return
                 with handling_high_soft_limit_change:
                     high_limit_text_widget.setText(str(self.get_scope_attr(self.PROPERTY_ROOT + 'stage.z_high_soft_limit')))
-            self.subscribe(self.PROPERTY_ROOT + 'nosepiece.position', objective_changed)
+            self.subscribe(self.PROPERTY_ROOT + 'nosepiece.position', objective_changed, readonly=True)
 
         return widget
 
@@ -473,19 +473,19 @@ class _ObjectivesModel(Qt.QAbstractListModel):
                 return Qt.QVariant(self.empty_pos_font)
         return Qt.QVariant()
 
+
 class LimitPixmapsAndToolTips:
     def __init__(self, height=25):
-        def load(fpath):
-            im = Qt.QImage(str(fpath)).scaledToHeight(height)
-            setattr(self, 'low_'+fpath.stem+'_pm', Qt.QPixmap.fromImage(im))
-            setattr(self, 'high_'+fpath.stem+'_pm', Qt.QPixmap.fromImage(im.transformed(flip)))
-            setattr(self, 'low_'+fpath.stem+'_tt', fpath.stem[0].capitalize() + fpath.stem[1:].replace('_', ' ') + ' reached.')
-            setattr(self, 'high_'+fpath.stem+'_tt', fpath.stem[0].capitalize() + fpath.stem[1:].replace('_', ' ') + ' reached.')
-        dpath = Path(__file__).parent / 'limit_icons'
         flip = Qt.QTransform()
         flip.rotate(180)
-        for fname in ('no_limit.svg', 'soft_limit.svg', 'hard_limit.svg', 'hard_and_soft_limits.svg'):
-            load(dpath / fname)
+        for icon in ('no_limit', 'soft_limit', 'hard_limit', 'hard_and_soft_limits'):
+            fname = pkg_resources.resource_filename(__name__, f'limit_icons/{icon}.svg')
+            im = Qt.QImage(fname).scaledToHeight(height)
+            setattr(self, 'low_'+icon+'_pm', Qt.QPixmap.fromImage(im))
+            setattr(self, 'high_'+icon+'_pm', Qt.QPixmap.fromImage(im.transformed(flip)))
+            setattr(self, 'low_'+icon+'_tt', icon[0].capitalize() + icon[1:].replace('_', ' ') + ' reached.')
+            setattr(self, 'high_'+icon+'_tt', icon[0].capitalize() + icon[1:].replace('_', ' ') + ' reached.')
+
 
 class FocusLossSignalingLineEdit(Qt.QLineEdit):
     focus_lost = Qt.pyqtSignal()

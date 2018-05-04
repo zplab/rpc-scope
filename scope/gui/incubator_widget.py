@@ -8,8 +8,8 @@ class IncubatorWidget(device_widget.DeviceWidget):
     def can_run(scope):
         return hasattr(scope, 'temperature_controller') and hasattr(scope, 'humidity_controller')
 
-    def __init__(self, scope, scope_properties, parent=None):
-        super().__init__(scope, scope_properties, parent)
+    def __init__(self, scope, parent=None):
+        super().__init__(scope, parent)
         self.setWindowTitle('Incubator')
         layout = Qt.QGridLayout()
         self.setLayout(layout)
@@ -37,5 +37,5 @@ class IncubatorWidget(device_widget.DeviceWidget):
         layout.addWidget(target, row, 1)
         label = Qt.QLabel('{}\t{}: - {}'.format(unit, name, unit))
         layout.addWidget(label, row, 2)
-        self.subscribe(value_property, callback=lambda value: label.setText('{}\t{}: {} {}'.format(unit, name, value, unit)))
+        self.subscribe(value_property, callback=lambda value: label.setText('{}\t{}: {} {}'.format(unit, name, value, unit)), readonly=True)
 

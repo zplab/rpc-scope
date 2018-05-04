@@ -8,8 +8,8 @@ class LampWidget(device_widget.DeviceWidget):
     def can_run(scope):
         return device_widget.has_component(scope, 'scope.tl.lamp') or device_widget.has_component(scope, 'scope.il.spectra')
 
-    def __init__(self, scope, scope_properties, parent=None):
-        super().__init__(scope, scope_properties, parent)
+    def __init__(self, scope, parent=None):
+        super().__init__(scope, parent)
         self.setWindowTitle('Lamps')
         container_layout = Qt.QVBoxLayout()
         container_layout.setContentsMargins(0, 0, 0, 0)

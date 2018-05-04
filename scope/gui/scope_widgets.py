@@ -3,9 +3,9 @@
 from PyQt5 import Qt
 
 class WidgetWindow(Qt.QMainWindow):
-    def __init__(self, scope, scope_properties, widgets, window_title='Scope Widgets', parent=None):
+    def __init__(self, scope, widgets, window_title='Scope Widgets', parent=None):
         """Arguments:
-            scope, scope_properties: as returned by scope.scope_client.client_main(..).
+            scope: instance of scope.scope_client.ScopeClient.
             widgets: list of widget information dictionaries as defined in build_gui
             parent: defaults to None, which is what you want if WidgetWindow is a top level window."""
         super().__init__(parent)
@@ -26,7 +26,7 @@ class WidgetWindow(Qt.QMainWindow):
         for widget_info in widgets:
             widget_class = widget_info['cls']
             if widget_class.can_run(scope):
-                widget = widget_class(scope=scope, scope_properties=scope_properties)
+                widget = widget_class(scope=scope)
                 if isinstance(widget, Qt.QAction):
                     if self.action_toolbar is None:
                         self.action_toolbar = self.addToolBar('Actions')
@@ -35,6 +35,7 @@ class WidgetWindow(Qt.QMainWindow):
                 else:
                     self.add_widget(widget, widget_info['name'], widget_info.get('docked', False),
                         widget_info.get('start_visible', False), widget_info.get('pad', False))
+        self.show()
         scope.rebroadcast_properties()
 
     def add_widget(self, widget, name, docked, visible, pad):

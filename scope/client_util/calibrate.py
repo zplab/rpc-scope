@@ -123,7 +123,7 @@ def meter_exposure_and_intensity(scope, lamp, max_exposure=200, max_intensity=25
     # First, find a decent lamp intensity setting: one where the pixels
     # are under the max allowed value, for the minimum exposure time
     scope.camera.exposure_time = 4
-    bit_depth = int(scope.camera.sensor_gain[:2])
+    bit_depth = int(scope.camera.bit_depth[:2])
     max_good_value = max_intensity_fraction * (2**bit_depth-1)
     good_intensity = None
     with scope.camera.image_sequence_acquisition(len(intensities), trigger_mode='Software'), lamp.in_state(enabled=True):
@@ -187,7 +187,7 @@ def meter_exposure(scope, lamp, max_exposure=200, min_intensity_fraction=0.3,
     # of the overexposed range).
     # So avoid exposures < 4 ms...
     # TODO: verify that this is still the case (last checked 2017)
-    bit_depth = int(scope.camera.sensor_gain[:2])
+    bit_depth = int(scope.camera.bit_depth[:2])
     min_good_value = min_intensity_fraction * (2**bit_depth-1)
     max_good_value = max_intensity_fraction * (2**bit_depth-1)
     # calculate exposure as int(4 * 1.25**i) for various i.

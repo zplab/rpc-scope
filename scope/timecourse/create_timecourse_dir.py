@@ -174,7 +174,7 @@ def _name_positions(num_positions, name_prefix):
     return names
 
 
-def get_positions_with_roi(scope, scope_properties):
+def get_positions_with_roi(scope):
     """Interactively obtain scope stage positions and an elliptical ROI for each.
 
     A viewer showing the live scope image is displayed, with a movable, resizable
@@ -185,13 +185,13 @@ def get_positions_with_roi(scope, scope_properties):
     if DO_COARSE_FOCUS is True.
 
     Parameters:
-        scope, scope_properties: microscope and properties objects.
+        scope: microscope object
 
     Returns: positions, rois
         positions: list of (x, y, z) positions
         rois: list of Qt.QRectF objects describing the ROI for each position.
     """
-    viewer = scope_viewer_widget.ScopeViewerWidget(scope, scope_properties)
+    viewer = scope_viewer_widget.ScopeViewerWidget(scope)
     viewer.show()
     focus_roi = roi.EllipseROI(viewer, geometry=((400, 200), (2200, 2000)))
     focus_roi.setSelected(True)

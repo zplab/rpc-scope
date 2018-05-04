@@ -30,7 +30,7 @@ class GameControllerInputWidget(Qt.QAction):
     def can_run(scope):
         return has_game_controller_input and hasattr(scope, 'stage')
 
-    def __init__(self, scope, scope_properties, device=-1, parent=None):
+    def __init__(self, scope, device=-1, parent=None):
         """If -1 (the default) is supplied for device_id, GameControllerInputWidget attempts to use the gamepad/joystick with
         the lowest ID if on one is available, displays a device selection dialog if multiple are available, and remains
         in the disconnected state if none are available.  Supplying None for device_id results in the

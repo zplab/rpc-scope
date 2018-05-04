@@ -23,8 +23,10 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
     def can_run(scope):
         return hasattr(scope, 'camera')
 
-    def __init__(self, scope, scope_properties, window_title='Viewer', fps_max=None, app_prefs_name='scope-viewer', parent=None):
+    def __init__(self, scope, window_title='Viewer', fps_max=None, app_prefs_name='scope-viewer', parent=None):
         super().__init__(window_title=window_title, app_prefs_name=app_prefs_name, parent=parent)
+        self.scope = scope
+
         self.main_view_toolbar.removeAction(self.snapshot_action)
 
         self.scope_toolbar = self.addToolBar('Scope')
@@ -39,7 +41,6 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
         self.flipbook_dock_widget.hide()
         self.image = None
 
-        self.camera = scope.camera
         self.snap_action = Qt.QAction('Snap Image', self)
         self.snap_action.triggered.connect(self.snap_image)
         self.scope_toolbar.addAction(self.snap_action)
@@ -50,12 +51,13 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
 
         self.servicing_image = util.Condition()
         self.closing = False
-        self.live_streamer = scope_client.LiveStreamer(scope, scope_properties, self.post_new_image_event)
         if fps_max is None:
             self.interval_min = None
         else:
             self.interval_min = 1/fps_max
         self.last_image_time = 0
+        self.live_streamer = scope_client.LiveStreamer(scope, self.post_new_image_event)
+
 
     def closeEvent(self, e):
         if self.closing:
@@ -71,15 +73,15 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
             with self.servicing_image:
                 if self.interval_min is not None:
                     t = time.time()
-                    if t - self.last_image_time > self.interval_min:
+                    if t - self.last_image_time < self.interval_min:
                         return True
                 try:
                     image_data, timestamp, frame_no = self.live_streamer.get_image(timeout=4)
                 except scope_client.LiveStreamer.Timeout:
                     return True
                 self.last_image_time = time.time()
-                image_bits = 12 if self.live_streamer.bit_depth == '12 Bit' else 16
-                image_obj = image.Image(image_data, image_bits=image_bits)
+                bit_depth = int(self.live_streamer.bit_depth[:2])
+                image_obj = image.Image(image_data, image_bits=bit_depth)
                 if self.show_over_exposed_action.isChecked() and image_obj.type == 'G':
                     self.layer.getcolor_expression = self.OVEREXPOSURE_GETCOLOR_EXPRESSION
                 else:
@@ -103,7 +105,7 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
             del self.layer.getcolor_expression
 
     def snap_image(self):
-        self.flipbook.pages.append_named(self.camera.acquire_image(), datetime.datetime.now().isoformat(' ', 'seconds'))
+        self.flipbook.pages.append_named(self.scope.camera.acquire_image(), datetime.datetime.now().isoformat(' ', 'seconds'))
         self.flipbook.current_page_idx = -1
 
     def save_image(self):
@@ -112,8 +114,9 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
             freeimage.write(self.image.data, fn)
 
 class MonitorWidget(ScopeViewerWidget):
-    def __init__(self, scope, scope_properties, window_title='Viewer', fps_max=None, app_prefs_name='scope-viewer', parent=None):
-        super().__init__(scope, scope_properties, window_title, fps_max, app_prefs_name, parent)
+    def __init__(self, scope, window_title='Viewer', downsample=None, fps_max=None, app_prefs_name='scope-viewer', parent=None):
+        super().__init__(scope, window_title, fps_max, app_prefs_name, parent)
+        self.downsample = downsample
         self.removeToolBar(self.scope_toolbar)
         self.show_over_exposed_action.setChecked(False)
         self.histogram_dock_widget.hide()
@@ -125,8 +128,22 @@ class MonitorWidget(ScopeViewerWidget):
         vbox = Qt.QVBoxLayout(new_central)
         vbox.setContentsMargins(0,3,0,0)
         vbox.setSpacing(3)
-        status = status_widget.StatusWidget(scope, scope_properties)
+        status = status_widget.StatusWidget(scope)
         status.layout().insertSpacing(0, 5)
         vbox.addWidget(status)
         vbox.addWidget(self.centralWidget())
         self.setCentralWidget(new_central)
+        self.show()
+        self.timer = Qt.QBasicTimer()
+        self.timer.start(10000, Qt.Qt.VeryCoarseTimer, self) # run self.timerEvent every 10 sec until scope connection achieved
+        self.timerEvent(None)
+
+    def timerEvent(self, event):
+        if not self.scope._can_connect():
+            return
+        if not self.scope._connected:
+            self.scope._connect()
+        self.timer.stop()
+        if not self.scope._is_local:
+            self.scope._get_data.downsample = self.downsample
+        self.scope.rebroadcast_properties()

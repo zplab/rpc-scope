@@ -2,17 +2,6 @@
 
 import contextlib
 
-@contextlib.contextmanager
-def in_state(device, **state):
-    """Context manager to set a number of device parameters at once using
-    keyword arguments. The old values of those parameters will be restored
-    upon exiting the with-block."""
-    device.push_state(**state)
-    try:
-        yield
-    finally:
-        device.pop_state()
-
 class StateStackDevice:
     def __init__(self):
         self._state_stack = []
@@ -63,8 +52,13 @@ class StateStackDevice:
             properties_and_values = self._order(old_state, self._get_pop_weights(old_state))
             self._set_state(properties_and_values)
 
+    @contextlib.contextmanager
     def in_state(self, **state):
         """Context manager to set a number of device parameters at once using
         keyword arguments. The old values of those parameters will be restored
         upon exiting the with-block."""
-        return in_state(self, **state)
+        self.push_state(**state)
+        try:
+            yield
+        finally:
+            self.pop_state()

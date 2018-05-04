@@ -7,8 +7,6 @@ import time
 
 from zplib import datafile
 
-from . import heartbeat
-
 class RPCError(RuntimeError):
     pass
 
@@ -154,7 +152,7 @@ class ClientNamespace:
         super().__setattr__(name, value)
 
 class ZMQClient(RPCClient):
-    def __init__(self, rpc_addr, timeout_sec=10, context=None):
+    def __init__(self, rpc_addr, interrupt_addr=None, heartbeat_sec=None, timeout_sec=10, context=None):
         """RPCClient subclass that uses ZeroMQ REQ/REP to communicate.
         Parameters:
             rpc_addr: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
@@ -163,11 +161,9 @@ class ZMQClient(RPCClient):
         """
         self.context = context if context is not None else zmq.Context()
         self.rpc_addr = rpc_addr
-        self.heartbeat_error = False
-        self.heartbeat_client = None
-        self.interrupt_socket = None
-        # main timeout will be implemented with poll
-        self.timeout_sec = timeout_sec
+        self.interrupt_addr = interrupt_addr
+        self.heartbeat_sec = heartbeat_sec
+        self._timeout_ms = timeout_sec * 1000
         self._connect()
 
     def _connect(self):
@@ -176,51 +172,45 @@ class ZMQClient(RPCClient):
         self.socket.LINGER = 0
         self.socket.REQ_RELAXED = True
         self.socket.REQ_CORRELATE = True
+        if self.heartbeat_sec is not None:
+            heartbeat_ms = self.heartbeat_sec * 1000
+            self.socket.HEARTBEAT_IVL = heartbeat_ms
+            self.socket.HEARTBEAT_TIMEOUT = heartbeat_ms * 2
+            self.socket.HEARTBEAT_TTL = heartbeat_ms * 2
         self.socket.connect(self.rpc_addr)
 
-    def enable_interrupt(self, interrupt_addr):
-        self.interrupt_socket = self.context.socket(zmq.PUSH)
-        self.interrupt_socket.connect(interrupt_addr)
-        self.interrupt_addr = interrupt_addr
-
-    def enable_heartbeat(self, heartbeat_addr, heartbeat_interval_sec):
-        self.heartbeat_addr = heartbeat_addr
-        self.heartbeat_interval_sec = heartbeat_interval_sec
-        self.heartbeat_client = heartbeat.ZMQClient(heartbeat_addr, heartbeat_interval_sec,
-            max_missed=3, error_callback=self._set_heartbeat_error, clear_callback=self._clear_heartbeat_error,
-            context=self.context)
+        if self.interrupt_addr is not None:
+            self.interrupt_socket = self.context.socket(zmq.PUSH)
+            self.interrupt_socket.LINGER = 0
+            if self.heartbeat_sec is not None:
+                self.interrupt_socket.HEARTBEAT_IVL = heartbeat_ms
+                self.interrupt_socket.HEARTBEAT_TIMEOUT = heartbeat_ms * 2
+                self.interrupt_socket.HEARTBEAT_TTL = heartbeat_ms * 2
+            self.interrupt_socket.connect(self.interrupt_addr)
 
     def reconnect(self):
         self.socket.close()
-        self._connect()
-        if self.interrupt_socket is not None:
+        if self.interrupt_addr is not None:
             self.interrupt_socket.close()
-            self.enable_interrupt(self.interrupt_addr)
-        if self.heartbeat_client is not None:
-            self.heartbeat_client.stop()
-            self.heartbeat_error = False
-            self.enable_heartbeat(self.heartbeat_addr, self.heartbeat_interval_sec)
+        self._connect()
 
-    def _set_heartbeat_error(self):
-        self.heartbeat_error = True
-
-    def _clear_heartbeat_error(self):
-        self.heartbeat_error = False
+    @contextlib.contextmanager
+    def timeout_sec(self, timeout_sec):
+        """Context manager to alter the timeout time."""
+        old_timeout_ms = self._timeout_ms
+        self._timeout_ms = timeout_sec * 1000
+        try:
+            yield
+        finally:
+            self._timeout_ms = old_timeout_ms
 
     def _send(self, command, args, kwargs):
         json = datafile.json_encode_compact_to_bytes((command, args, kwargs))
         self.socket.send(json)
 
     def _receive_reply(self):
-        timeout_time = time.time() + self.timeout_sec
-        while True:
-            if time.time() > timeout_time:
-                raise RPCError('Timed out waiting for reply from server (is it running?)')
-            if self.heartbeat_error:
-                raise RPCError('No "heartbeat" signal detected from server (is it still running?)')
-            if self.socket.poll(500): # 500 ms timeout
-                # poll returns true if socket has data to recv.
-                break
+        if not self.socket.poll(self._timeout_ms):
+            raise RPCError('Timed out waiting for reply from server (is it running?)')
         reply_type = self.socket.recv_string()
         assert(self.socket.RCVMORE)
         if reply_type == 'bindata':
@@ -231,7 +221,7 @@ class ZMQClient(RPCClient):
 
     def send_interrupt(self):
         """Raise a KeyboardInterrupt exception in the server process"""
-        if self.interrupt_socket is not None:
+        if self.interrupt_addr is not None:
             self.interrupt_socket.send(b'interrupt')
 
 def _rich_proxy_function(doc, argspec, name, rpc_client, rpc_function, client_wrap_function=None):

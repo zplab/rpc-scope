@@ -27,14 +27,10 @@ class BaseRPCServer:
         """Run the RPC server. To quit the server from another thread,
         set the 'running' attribute to False."""
         self.running = True
-        while self.running:
-            received = self._receive()
-            if received is not None:
-                command, args, kwargs = received
-                logger.debug("Received command: {}\n    args: {}\n    kwargs: {}", command, args, kwargs)
-                self.call(command, args, kwargs)
-            else:
-                logger.debug("_receive() returned None!?")
+        while True:
+            command, args, kwargs = self._receive()
+            logger.debug("Received command: {}\n    args: {}\n    kwargs: {}", command, args, kwargs)
+            self.call(command, args, kwargs)
 
     def call(self, command, args, kwargs):
         """Call the named command with *args and **kwargs"""
@@ -73,20 +69,22 @@ class BaseRPCServer:
         raise NotImplementedError()
 
     def _receive(self):
-        """Block until an RPC call is received from the client, then return the call
-        as (command_name, args, kwargs)."""
+        """Wait until an RPC call is received from the client, then return the call
+        as (command_name, args, kwargs). If self.running goes to False while waiting,
+        raise an error."""
         raise NotImplementedError()
 
 class ZMQServerMixin:
-    def __init__(self, port, context=None):
+    def __init__(self, address, context=None):
         """Mixin for RPC servers that uses ZeroMQ REQ/REP to communicate with clients.
         Parameters:
-            port: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
+            address: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
             context: a ZeroMQ context to share, if one already exists.
         """
         self.context = context if context is not None else zmq.Context()
         self.socket = self.context.socket(zmq.REP)
-        self.socket.bind(port)
+        self.socket.RCVTIMEO = 0
+        self.socket.bind(address)
 
     def run(self):
         try:
@@ -95,6 +93,10 @@ class ZMQServerMixin:
             self.socket.close()
 
     def _receive(self):
+        while not self.socket.poll(500):
+            # every 500 ms, check if still running while we wait for data
+            if not self.running:
+                raise RuntimeError()
         json = self.socket.recv()
         try:
             command, args, kwargs = zmq.utils.jsonapi.loads(json)
@@ -138,6 +140,10 @@ class BackgroundBaseZMQServer(BaseZMQServer, threading.Thread):
         BaseZMQServer.__init__(self, namespace, port, context)
         threading.Thread.__init__(self, name='background RPC server', daemon=True)
         self.start()
+
+    def stop(self):
+        self.running = False
+        self.join()
 
 
 class RPCServer(BaseRPCServer):
@@ -227,16 +233,16 @@ class RPCServer(BaseRPCServer):
 
 
 class ZMQServer(ZMQServerMixin, RPCServer):
-    def __init__(self, namespace, interrupter, port, context=None):
+    def __init__(self, namespace, interrupter, address, context=None):
         """RPCServer subclass that uses ZeroMQ REQ/REP to communicate with clients.
         Parameters:
             namespace: contains a hierarchy of callable objects to expose to clients.
             interrupter: Interrupter instance for simulating control-c on server
-            port: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
+            address: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
             context: a ZeroMQ context to share, if one already exists.
         """
         RPCServer.__init__(self, namespace, interrupter)
-        ZMQServerMixin.__init__(self, port, context)
+        ZMQServerMixin.__init__(self, address, context)
 
 class Interrupter(threading.Thread):
     """Interrupter runs in a background thread and creates KeyboardInterrupt
@@ -256,25 +262,30 @@ class Interrupter(threading.Thread):
 
     def run(self):
         self.running = True
-        while self.running:
+        while True:
             message = self._receive()
             logger.debug('Interrupt received: {}, armed={}', message, self._armed)
             if message == 'interrupt' and self._armed:
                 os.kill(os.getpid(), signal.SIGINT)
 
+    def stop(self):
+        self.running = False
+        self.join()
+
     def _receive(self):
         raise NotImplementedError()
 
 class ZMQInterrupter(Interrupter):
-    def __init__(self, port, context=None):
+    def __init__(self, address, context=None):
         """InterruptServer subclass that uses ZeroMQ PUSH/PULL to communicate with clients.
         Parameters:
-            port: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
+            address: a string ZeroMQ port identifier, like 'tcp://127.0.0.1:5555'.
             context: a ZeroMQ context to share, if one already exists.
         """
         self.context = context if context is not None else zmq.Context()
         self.socket = self.context.socket(zmq.PULL)
-        self.socket.bind(port)
+        self.socket.RCVTIMEO = 0
+        self.socket.bind(address)
         super().__init__()
 
     def run(self):
@@ -284,5 +295,9 @@ class ZMQInterrupter(Interrupter):
             self.socket.close()
 
     def _receive(self):
+        while not self.socket.poll(500):
+            # every 500 ms, check if still running while we wait for data
+            if not self.running:
+                raise RuntimeError()
         return str(self.socket.recv(), encoding='ascii')
 

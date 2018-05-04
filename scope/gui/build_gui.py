@@ -23,44 +23,21 @@ WIDGETS = [
     dict(name='game_controller', cls=game_controller_input_widget.GameControllerInputWidget)
 ]
 
-WIDGET_NAMES = set(widget['name'] for widget in WIDGETS)
-
-def gui_main(host, desired_widgets=None):
-    app = shared_resources.init_qapplication(icon_resource_path=None)
-    scope, scope_properties = scope_client.client_main(host)
-    if desired_widgets is None:
-        widgets = WIDGETS
-    else:
-        desired_widgets = set(desired_widgets)
-        for widget in desired_widgets:
-            if not widget in WIDGET_NAMES:
-                raise ValueError('Unknown GUI widget "{}"'.format(widget))
-            # keep widget order from WIDGETS list
-            widgets = [widget for widget in WIDGETS if widget['name'] in desired_widgets]
-
+def gui_main(host):
+    app = shared_resources.init_qapplication(icon_resource_path=(__name__, 'icon.svg'))
+    scope = scope_client.ScopeClient(host)
     title = "Microscope Control"
     if host not in {'localhost', '127.0.0.1'}:
         title += ': {}'.format(host)
-    main_window = scope_widgets.WidgetWindow(scope, scope_properties, widgets, window_title=title)
-    main_window.show()
+    main_window = scope_widgets.WidgetWindow(scope, WIDGETS, window_title=title)
     app.exec()
 
 def monitor_main(hosts, downsample=None, fps_max=None):
-    app = shared_resources.init_qapplication(icon_resource_path=None)
+    app = shared_resources.init_qapplication(icon_resource_path=(__name__, 'icon.svg'))
     viewers = []
     for host in hosts:
-        try:
-            scope, scope_properties = scope_client.client_main(host, allow_interrupt=False)
-            if hasattr(scope, 'camera'):
-                if not scope._is_local:
-                    scope._get_data.downsample = downsample
-                app_prefs_name = 'viewer-{}'.format(host)
-                viewer = scope_viewer_widget.MonitorWidget(scope, scope_properties, host, fps_max, app_prefs_name)
-                viewers.append(viewer)
-        except rpc_client.RPCError: # from the update
-            print('could not connect to host ' + host)
-    if len(viewers) > 0:
-        scope.rebroadcast_properties()
-        for viewer in viewers:
-            viewer.show()
-        app.exec()
+        scope = scope_client.ScopeClient(host, allow_interrupt=False, auto_connect=False)
+        app_prefs_name = 'viewer-{}'.format(host)
+        viewer = scope_viewer_widget.MonitorWidget(scope, host, downsample, fps_max, app_prefs_name)
+        viewers.append(viewer)
+    app.exec()
