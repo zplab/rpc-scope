@@ -220,7 +220,10 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             if 'fine_z' in m:
                 z = m['fine_z']
                 break
-        self.scope.stage.position = x, y, z
+        # before  moving the stage, set the scope z to a safe distance so we don't hit anything en route
+        safe_z = self.experiment_metadata['z_max'] - 0.5
+        self.scope.stage.position = x, y, safe_z
+        self.scope.stage.z = z
 
         # now find a good exposure time and intensity
         self.tl_intensity, self.bf_exposure, actual_bounds, requested_bounds = calibrate.meter_exposure_and_intensity(
@@ -234,7 +237,13 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.heartbeat()
 
         # calculate the BF flatfield image and reference intensity value
-        self.scope.stage.position = ref_positions[0]
+
+        # when moving to the reference slide, again go to a safe z position
+        # (don't worry about doing this when moving *on* the reference slide)
+        x, y, z = ref_positions[0]
+        self.scope.stage.position = x, y, safe_z
+        self.scope.stage.z = z
+
         with self.scope.tl.lamp.in_state(enabled=True):
             exposure = calibrate.meter_exposure(self.scope, self.scope.tl.lamp,
                 max_exposure=32, min_intensity_fraction=0.3, max_intensity_fraction=0.85)[:1]
@@ -277,6 +286,8 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             self.image_io.write(cal_images, cal_image_paths)
 
         self.scope.camera.exposure_time = self.bf_exposure
+        # return to a safe z position
+        self.scope.stage.z = safe_z
 
     def get_next_run_time(self):
         interval_mode = self.INTERVAL_MODE
