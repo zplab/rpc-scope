@@ -120,10 +120,13 @@ class ScopeClient:
         return type(self)(self.host, self._allow_interrupt, auto_connect=is_connected)
 
     def __setattr__(self, name, value):
-        if self._scope is not None and hasattr(self._scope, name):
-            setattr(self._scope, name, value)
-        elif not hasattr(self, name):
-            raise AttributeError(f'Attribute "{name}" is not known, so its state cannot be communicated to the server.')
+        if self._scope is not None:
+            if hasattr(self._scope, name):
+                setattr(self._scope, name, value)
+            elif not hasattr(self, name):
+                raise AttributeError(f'Attribute "{name}" is not known, so its state cannot be communicated to the server.')
+            else:
+                raise AttributeError(f'Attribute "{name}" cannot be modified')
         else:
             super().__setattr__(name, value)
     
