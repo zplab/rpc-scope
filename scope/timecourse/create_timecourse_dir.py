@@ -116,7 +116,7 @@ def create_acquire_file(data_dir, run_interval, filter_cube, fluorescence_flatfi
         f.write(code)
 
 
-def create_metadata_file(data_dir, positions, z_max, reference_positions):
+def create_metadata_file(data_dir, positions, z_max, reference_positions, save_focus_stacks=None):
     """ Create the experiment_metadata.json file for timecourse acquisitions.
 
     Parameters:
@@ -126,6 +126,9 @@ def create_metadata_file(data_dir, positions, z_max, reference_positions):
         z_max: maximum z-value allowed during autofocus
         reference_positions: list of (x,y,z) positions to be used to generate
             brightfield and optionally fluorescence flat-field images.
+        save_focus_stacks: if None, don't save any focus stacks. If a list of position
+            names, save focus stacks for those positions. If a number, save
+            focus stacks for that number of positions.
     """
     data_dir = pathlib.Path(data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -140,6 +143,17 @@ def create_metadata_file(data_dir, positions, z_max, reference_positions):
     bf_meter_position_name = _choose_bf_metering_pos(named_positions)
     metadata = dict(z_max=z_max, reference_positions=reference_positions,
         positions=named_positions, bf_meter_position_name=bf_meter_position_name)
+    if save_focus_stacks:
+        try:
+            # check if it's iterable
+            for pos in save_focus_stacks:
+                assert pos in named_positions
+        except TypeError:
+            num_to_save = int(save_focus_stacks)
+            save_indices = numpy.random.permutation(len(named_positions))[:num_to_save]
+            names = list(named_positions.keys())
+            save_focus_stacks = [names[i] for i in save_indices]
+        metadata['save_focus_stacks'] = save_focus_stacks
     with (data_dir / 'experiment_metadata.json').open('w') as f:
         datafile.json_encode_legible_to_file(metadata, f)
 
