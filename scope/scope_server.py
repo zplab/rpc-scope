@@ -63,8 +63,8 @@ class ScopeServer(base_daemon.Runner):
 
         addresses = scope_configuration.get_addresses(self.host)
         self.context = zmq.Context()
-        self.property_update_server = property_server.ZMQServer(addresses['property'], context=self.context)
-        scope_controller = scope.Scope(property_update_server)
+        self.property_server = property_server.ZMQServer(addresses['property'], context=self.context)
+        scope_controller = scope.Scope(self.property_server)
         # Provide some basic RPC calls for testing...
         scope_controller._sleep = time.sleep
         scope_controller._ping = lambda: "pong"
@@ -73,10 +73,10 @@ class ScopeServer(base_daemon.Runner):
         # add transfer_ism_buffer as hidden elements of the namespace, which RPC clients can use for seamless buffer sharing
         image_transfer_namespace._transfer_ism_buffer = transfer_ism_buffer
         if hasattr(scope_controller, 'camera'):
-            image_transfer_namespace.latest_image=scope_controller.camera.latest_image
+            image_transfer_namespace.latest_image = scope_controller.camera.latest_image
         self.image_transfer_server = rpc_server.BackgroundBaseZMQServer(image_transfer_namespace,
             addresses['image_transfer_rpc'], context=self.context)
-        self.interrupter = rpc_server.ZMQInterrupter(addresses['interrupt'], context=self.context)
+        interrupter = rpc_server.ZMQInterrupter(addresses['interrupt'], context=self.context)
         self.scope_server = rpc_server.ZMQServer(scope_controller, interrupter,
             addresses['rpc'], context=self.context)
         logger.info('Scope Server Ready (Listening on {})', self.host)
@@ -85,9 +85,9 @@ class ScopeServer(base_daemon.Runner):
         try:
             self.scope_server.run()
         finally:
-            self.property_update_server.stop()
+            self.property_server.stop()
             self.image_transfer_server.stop()
-            self.interrupter.stop()
+            self.scope_server.interrupter.stop()
             self.context.term()
 
 

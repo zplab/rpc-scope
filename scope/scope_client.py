@@ -115,7 +115,7 @@ class ScopeClient:
         self._image_transfer_client.reconnect()
         self.properties.reconnect()
 
-    def _clone(self, connect_timeout):
+    def _clone(self):
         """Create an identical client with distinct ZMQ sockets, so that it may be safely used
         from a separate thread."""
         is_connected = self._scope is not None
