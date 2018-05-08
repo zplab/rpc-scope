@@ -33,6 +33,7 @@ class ScopeClient:
         self._sleep = self._rpc_client.proxy_function('_sleep')
         self.send_interrupt = self._rpc_client.send_interrupt
         self._connected = False
+        self._scope = None
         if auto_connect:
             self._connect()
 
@@ -104,9 +105,6 @@ class ScopeClient:
         self._get_data = get_data
         self._is_local = is_local
         self._functions_proxied = scope._functions_proxied
-        for attr in dir(scope):
-            if not attr.startswith('_'):
-                setattr(self, attr, getattr(scope, attr))
         self._connected = True
         self._scope = scope
 
@@ -122,13 +120,25 @@ class ScopeClient:
         return type(self)(self.host, self._allow_interrupt, auto_connect=is_connected)
 
     def __setattr__(self, name, value):
-        if self._scope is not None:
-            if hasattr(self, name):
-                raise AttributeError(f'Attribute "{name}" cannot be modified.')
-            else:
-                raise AttributeError(f'Attribute "{name}" is not known, so its state cannot be communicated to the server.')
+        if self._scope is not None and not hasattr(self, name):
+            # below will error if not a known attribute
+            setattr(self._scope, name, value)
         else:
             super().__setattr__(name, value)
+    
+    def __getattr__(self, name):
+        if self._scope is not None and hasattr(self._scope, name):
+            return getattr(self._scope, name)
+        raise AttributeError(f"'ScopeClient' object has no attribute '{name}'")
+
+    
+    def __dir__(self, name):
+        listing = super().__dir__()
+        if self._scope is not None:
+            scope_list = set(dir(self._scope))
+            scope_list.update(listing)
+            listing = sorted(scope_list)
+        return listing
 
 
 def _replace_in_state(scope):
