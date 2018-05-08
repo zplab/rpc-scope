@@ -117,10 +117,11 @@ class Autofocus:
             **camera_state: additional state information for the camera during
                 autofocus.
 
-        Returns: best_z, positions_and_scores, [images]
+        Returns: best_z, positions_and_scores, images
             best_z: z position of best focus
             positions_and_scores: list of (z, focus_score) tuples.
-            images: if return_images is True, a list of images acquired.
+            images: if return_images is True, a list of images acquired, otherwise
+                an empty list.
         """
         self._start_autofocus(focus_filter_period_range, focus_filter_mask, **camera_state)
         frame_rate, overlap = self._camera.calculate_streaming_mode(steps, trigger_mode='Software', desired_frame_rate=1000) # try to get the max possible frame rate...
@@ -136,10 +137,9 @@ class Autofocus:
                     time.sleep(sleep_time)
             image_names, camera_timestamps = runner.join()
         best_z, positions_and_scores = self._stop_autofocus(z_positions)
-        if return_images:
-            return best_z, positions_and_scores, image_names
-        else:
-            return best_z, positions_and_scores
+        if not return_images:
+            image_names = []
+        return best_z, positions_and_scores, image_names
 
     def autofocus_continuous_move(self, start, end, steps=None, max_speed=0.2,
             focus_filter_period_range=(None, 10), focus_filter_mask=None,
@@ -167,10 +167,11 @@ class Autofocus:
             **camera_state: additional state information for the camera during
                 autofocus.
 
-        Returns: best_z, positions_and_scores, [images]
+        Returns: best_z, positions_and_scores, images
             best_z: z position of best focus
             positions_and_scores: list of (z, focus_score) tuples.
-            images: if return_images is True, a list of images acquired.
+            images: if return_images is True, a list of images acquired, otherwise
+                an empty list
         """
         self._start_autofocus(focus_filter_period_range, focus_filter_mask, **camera_state)
         distance = abs(end - start)
@@ -210,10 +211,9 @@ class Autofocus:
             raise RuntimeError('Autofocus image acquisition failed: Expected {} images, got {}.'.format(steps, len(camera_timestamps)))
         z_positions = zrecorder.interpolate_zs(camera_timestamps)
         best_z, positions_and_scores = self._stop_autofocus(z_positions)
-        if return_images:
-            return best_z, positions_and_scores, image_names
-        else:
-            return best_z, positions_and_scores
+        if not return_images:
+            image_names = []
+        return best_z, positions_and_scores, image_names
 
 class MetricRunner(threading.Thread):
     def __init__(self, camera, frame_rate, frame_count, metric, retain_images):

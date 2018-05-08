@@ -209,9 +209,8 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
 
         # first, go to a good xyz position to look at brightfield exposure
         data_positions = self.experiment_metadata['positions']
-        if 'bf_meter_position_name' in self.experiment_metadata:
-            position_name = self.experiment_metadata['bf_meter_position_name']
-        else:
+        position_name = self.experiment_metadata.get('bf_meter_position_name')
+        if position_name is None:
             position_name = sorted(data_positions.keys())[0]
         position_dir, metadata_path, position_metadata = self._position_metadata(position_name)
         x, y, z = data_positions[position_name]
@@ -316,23 +315,35 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             start = self.end_time
         return start + interval_seconds
 
-    def run_autofocus(self, position_name, current_timepoint_metadata):
+    def run_autofocus(self, position_name, current_timepoint_metadata, save_image_dir=None):
         z_start = self.scope.stage.z
         z_max = self.experiment_metadata['z_max']
+        return_images = save_image_dir is not None
         with self.heartbeat_timer(), self.scope.tl.lamp.in_state(enabled=True), self.scope.camera.in_state(readout_rate='280 MHz', shutter_mode='Rolling'):
             if self.DO_COARSE_FOCUS:
-                coarse_z, fine_z = autofocus.coarse_fine_autofocus(self.scope, z_start, z_max,
+                result = autofocus.coarse_fine_autofocus(self.scope, z_start, z_max,
                     self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
                     self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS)
+                (coarse_z, coarse_images), (fine_z, fine_images) = result
                 current_timepoint_metadata['coarse_z'] = coarse_z
             else:
                 mask_file = self.data_dir / 'Focus Masks' / (position_name + '.png')
                 mask = str(mask_file) if mask_file.exists() else None
                 if mask:
                     self.logger.info('Using autofocus mask: {}', mask)
-                fine_z = autofocus.autofocus(self.scope, z_start, z_max, self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS,
-                    speed=0.3, mask=mask, return_images=False)
-            current_timepoint_metadata['fine_z'] = fine_z
+                fine_z, fine_images = autofocus.autofocus(self.scope, z_start, z_max,
+                    self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS,
+                    speed=0.3, mask=mask, return_images=return_images)
+
+        current_timepoint_metadata['fine_z'] = fine_z
+
+        if return_images and self.write_files:
+            save_image_dir = pathlib.Path(save_image_dir)
+            save_image_dir.mkdir(exist_ok=True)
+            pad = int(numpy.ceil(numpy.log10(self.FINE_FOCUS_STEPS - 1)))
+            image_paths = [save_image_dir / f'{i:0{pad}}.png' for i in range(self.FINE_FOCUS_STEPS)]
+            with self.heartbeat_timer():
+                self.image_io.write(fine_images, image_paths, self.IMAGE_COMPRESSION)
 
     def acquire_images(self, position_name, position_dir, position_metadata):
         t0 = time.time()
@@ -350,8 +361,8 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             self.scope.stage.z = last_z
 
         override_autofocus = False
-        if 'z_updates' in self.experiment_metadata and len(self.experiment_metadata['z_updates']) > 0:
-            z_updates = self.experiment_metadata['z_updates']
+        z_updates = self.experiment_metadata.get('z_updates', {})
+        if len(z_updates) > 0:
             latest_update_isotime = sorted(z_updates.keys())[-1]
             last_autofocus_isotime = datetime.datetime.fromtimestamp(last_autofocus_time).isoformat()
             if latest_update_isotime > last_autofocus_isotime:
@@ -364,7 +375,10 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
                     override_autofocus = True
 
         if not override_autofocus and t0 - last_autofocus_time > self.REFOCUS_INTERVAL_MINS * 60:
-            self.run_autofocus(position_name, metadata)
+            save_image_dir = None
+            if position_name in self.experiment_metadata.get('save_focus_stacks', []):
+                save_image_dir = position_dir / f'{self.timepoint_prefix} focus'
+            self.run_autofocus(position_name, metadata, save_image_dir)
             t1 = time.time()
             self.logger.debug('Autofocused ({:.1f} seconds)', t1-t0)
             self.logger.info('Autofocus z: {}', metadata['fine_z'])

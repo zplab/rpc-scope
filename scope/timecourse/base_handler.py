@@ -45,7 +45,7 @@ class TimepointHandler:
             dry_run: if True, do not write any files (including log files; log entries
                 will be printed to the console).
         """
-        self.data_dir = pathlib.Path(data_dir)
+        self.data_dir = pathlib.Path(data_dir).resolve() # get an absolute path
         self.experiment_metadata_path = self.data_dir / 'experiment_metadata.json'
         with self.experiment_metadata_path.open('r') as f:
             self.experiment_metadata = json.load(f)
@@ -54,13 +54,13 @@ class TimepointHandler:
         position_annotations = load_data.read_annotations(self.data_dir)
 
         self.annotated_dead = set()
-        for position in sorted(self.positions.keys()):
+        for position in self.positions.keys():
             if position in position_annotations:
-                annotations = list(position_annotations[position][1].values())
-                if len(annotations) > 0:
-                    latest_annotation = annotations[-1]
-                    if latest_annotation.get('stage', None) == 'dead':
+                timepoint_annotations = position_annotations[position][1]
+                for annotation in timepoint_annotations.values():
+                    if annotation.get('stage', None) == 'dead':
                         self.annotated_dead.add(position)
+                        break
 
         if scope_host is not None:
             from .. import scope_client

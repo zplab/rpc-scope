@@ -51,18 +51,14 @@ class ScopeClient:
         is_local, get_data = transfer_ism_buffer.client_get_data_getter(self._image_transfer_client)
 
         # define additional client wrapper functions
-        def get_many_data(data_list):
-            return [get_data(name) for name in data_list]
+        def get_many_data(image_names):
+            return [get_data(name) for name in image_names]
         def get_stream_data(return_values):
             images_names, timestamps, attempted_frame_rate = return_values
             return get_many_data(images_names), timestamps, attempted_frame_rate
         def get_autofocus_data(return_values):
-            best_z, positions_and_scores = return_values[:2]
-            if len(return_values) == 3:
-                image_names = return_values[2]
-                return best_z, positions_and_scores, get_many_data(image_names)
-            else:
-                return best_z, positions_and_scores
+            best_z, positions_and_scores, image_names = return_values
+            return best_z, positions_and_scores, get_many_data(image_names)
 
         client_wrappers = {
             'camera.acquire_image': get_data,

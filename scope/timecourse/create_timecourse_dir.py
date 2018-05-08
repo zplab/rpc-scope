@@ -2,7 +2,6 @@
 
 import string
 import pathlib
-import math
 import datetime
 import json
 import numpy
@@ -169,8 +168,8 @@ def simple_get_positions(scope):
     return positions
 
 def _name_positions(num_positions, name_prefix):
-    padding = int(math.ceil(math.log10(max(1, num_positions-1))))
-    names = ['{}{:0{pad}}'.format(name_prefix, i, pad=padding) for i in range(num_positions)]
+    pad = int(numpy.ceil(numpy.log10(max(1, num_positions-1))))
+    names = [f'{name_prefix}{i:0{pad}}' for i in range(num_positions)]
     return names
 
 
