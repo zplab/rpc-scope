@@ -4,6 +4,7 @@ import numpy
 import logging
 import time
 import datetime
+import pathlib
 
 from . import base_handler
 from ..client_util import autofocus
