@@ -132,7 +132,7 @@ class ScopeClient:
         raise AttributeError(f"'ScopeClient' object has no attribute '{name}'")
 
     
-    def __dir__(self, name):
+    def __dir__(self):
         listing = super().__dir__()
         if self._scope is not None:
             scope_list = set(dir(self._scope))
