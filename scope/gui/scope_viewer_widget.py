@@ -142,7 +142,7 @@ class MonitorWidget(ScopeViewerWidget):
     def timerEvent(self, event):
         if not self.scope._can_connect():
             return
-        if not self.scope._connected:
+        if not self.scope._is_connected():
             self.scope._connect()
         self.timer.stop()
         if not self.scope._is_local:

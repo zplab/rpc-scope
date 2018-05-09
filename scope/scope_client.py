@@ -32,8 +32,6 @@ class ScopeClient:
         self._ping = self._rpc_client.proxy_function('_ping')
         self._sleep = self._rpc_client.proxy_function('_sleep')
         self.send_interrupt = self._rpc_client.send_interrupt
-        self._connected = False
-        self._scope = None
         if auto_connect:
             self._connect()
 
@@ -44,6 +42,9 @@ class ScopeClient:
                 return True
             except rpc_client.RPCError:
                 return False
+
+    def _is_connected(self):
+        return self._scope is not None
 
     def _connect(self):
         if not self._can_connect():
@@ -105,7 +106,6 @@ class ScopeClient:
         self._get_data = get_data
         self._is_local = is_local
         self._functions_proxied = scope._functions_proxied
-        self._connected = True
         self._scope = scope
 
     def reconnect(self):
@@ -116,26 +116,24 @@ class ScopeClient:
     def _clone(self):
         """Create an identical client with distinct ZMQ sockets, so that it may be safely used
         from a separate thread."""
-        is_connected = self._scope is not None
-        return type(self)(self.host, self._allow_interrupt, auto_connect=is_connected)
+        return type(self)(self.host, self._allow_interrupt, auto_connect=self._is_connected())
 
     def __setattr__(self, name, value):
         if self._scope is not None:
             if hasattr(self._scope, name):
                 setattr(self._scope, name, value)
             elif not hasattr(self, name):
-                raise AttributeError(f'Attribute "{name}" is not known, so its state cannot be communicated to the server.')
+                raise AttributeError(f"Attribute '{name}' is not known, so its state cannot be communicated to the server.")
             else:
-                raise AttributeError(f'Attribute "{name}" cannot be modified')
+                raise AttributeError(f"Attribute '{name}' cannot be modified")
         else:
             super().__setattr__(name, value)
-    
+
     def __getattr__(self, name):
         if self._scope is not None and hasattr(self._scope, name):
             return getattr(self._scope, name)
         raise AttributeError(f"'ScopeClient' object has no attribute '{name}'")
 
-    
     def __dir__(self):
         listing = super().__dir__()
         if self._scope is not None:
