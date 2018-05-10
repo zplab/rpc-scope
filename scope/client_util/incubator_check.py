@@ -21,8 +21,14 @@ def main(scope_host='127.0.0.1'):
 
     if to_email:
         # there's someone to alert, so let's see if there's an alert to send:
-        scope = scope_client.ScopeClient(scope_host)
+        has_scope = False
+        try:
+            scope = scope_client.ScopeClient(scope_host)
+            has_scope = True
+        except RuntimeError:
+            print('Could not communicate with scope server. Is it running?')
 
+    if to_email and has_scope:
         errors = []
         has_humidity = has_temperature = False
         try:

@@ -319,7 +319,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     def run_autofocus(self, position_name, current_timepoint_metadata, return_images=False):
         z_start = self.scope.stage.z
         z_max = self.experiment_metadata['z_max']
-        with self.heartbeat_timer(), self.scope.tl.lamp.in_state(enabled=True), self.scope.camera.in_state(readout_rate='280 MHz', shutter_mode='Rolling'):
+        with self.heartbeat_timer(), self.scope.tl.lamp.in_state(enabled=True):
             if self.DO_COARSE_FOCUS:
                 coarse_result = autofocus(self.scope, z_start, z_max,
                     self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
