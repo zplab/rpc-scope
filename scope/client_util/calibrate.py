@@ -118,13 +118,14 @@ def meter_exposure_and_intensity(scope, lamp, max_exposure=200, max_intensity=25
         requested_bounds: (min, max) tuple of requested bounds based on the
             intensity_fraction paramteters
     """
-    intensities = numpy.linspace(255, 32, 16, dtype=numpy.uint8)
+    intensities = numpy.linspace(255, 16, 18, dtype=numpy.uint8)
     intensities = intensities[intensities <= max_intensity]
     # First, find a decent lamp intensity setting: one where the pixels
     # are under the max allowed value, for the minimum exposure time
-    scope.camera.exposure_time = 4
-    bit_depth = int(scope.camera.bit_depth[:2])
-    max_good_value = max_intensity_fraction * (2**bit_depth-1)
+    scope.camera.exposure_time = 2
+    bit_depth = int(scope.camera.sensor_gain[:2])
+    max_value = (2**bit_depth-1)
+    max_good_value = max_intensity_fraction * max_value
     good_intensity = None
     with scope.camera.image_sequence_acquisition(len(intensities), trigger_mode='Software'), lamp.in_state(enabled=True):
         for intensity in intensities:
@@ -134,7 +135,7 @@ def meter_exposure_and_intensity(scope, lamp, max_exposure=200, max_intensity=25
             time.sleep(0.25)
             scope.camera.send_software_trigger()
             image = scope.camera.next_image(1000)
-            if image_order_statistic(image, -26) < max_good_value:
+            if image_order_statistic(image, -200) < max_good_value and image.max() < max_value:
                 good_intensity = intensity
                 break
     if good_intensity is None:
@@ -182,17 +183,18 @@ def meter_exposure(scope, lamp, max_exposure=200, min_intensity_fraction=0.3,
     """
     # Exposure range is controlled by the curious property of the Zyla camera that
     # short exposures with bright lights yield really noisy images. Worse,
-    # dark banding in the center can appear with exposures < 4 ms and too many
+    # dark banding in the center can appear with exposures < 2 ms and too many
     # photons per second (which overwhelm the anti-bloom circuits, even outside
     # of the overexposed range).
-    # So avoid exposures < 4 ms...
+    # So avoid exposures < 2 ms...
     # TODO: verify that this is still the case (last checked 2017)
-    bit_depth = int(scope.camera.bit_depth[:2])
-    min_good_value = min_intensity_fraction * (2**bit_depth-1)
-    max_good_value = max_intensity_fraction * (2**bit_depth-1)
-    # calculate exposure as int(4 * 1.25**i) for various i.
+    bit_depth = int(scope.camera.sensor_gain[:2])
+    max_value = (2**bit_depth-1)
+    min_good_value = min_intensity_fraction * max_value
+    max_good_value = max_intensity_fraction * max_value
+    # calculate exposure as int(2 * 1.25**i) for various i.
     max_i = (numpy.log(max_exposure)-numpy.log(4))/numpy.log(1.25)
-    exposures = list((4 * 1.25**numpy.arange(int(max_i))).astype(int))
+    exposures = list((2 * 1.25**numpy.arange(int(max_i))).astype(int))
     if exposures[-1] < max_exposure:
         exposures.append(max_exposure)
     good_exposure = None
@@ -201,19 +203,19 @@ def meter_exposure(scope, lamp, max_exposure=200, min_intensity_fraction=0.3,
             scope.camera.exposure_time = exposure
             scope.camera.send_software_trigger()
             image = scope.camera.next_image(max(1000, 2*exposure))
-            image_max = image_order_statistic(image, -26)
-            image_min = image_order_statistic(image, int(image.size * 0.90))
-            if image_max < max_good_value:
+            image_near_max = image_order_statistic(image, -200)
+            image_90th = image_order_statistic(image, int(image.size * 0.90))
+            if image_near_max < max_good_value and image.max() < max_value:
                 good_exposure = exposure
             else:
                 break
-            if image_min > min_good_value:
+            if image_90th > min_good_value:
                 break
     if good_exposure is None:
         raise RuntimeError('Could not find a valid exposure time: intensity {}, exposure {}, image max {}, image min {}, max good {}, min good {}'.format(
             lamp.intensity, exposure, image_max, image_min, max_good_value, min_good_value))
     scope.camera.exposure_time = good_exposure
-    return good_exposure, (image_min, image_max), (max_good_value, min_good_value)
+    return good_exposure, (image_90th, image_near_max), (min_good_value, max_good_value)
 
 def get_vignette_mask(image, percent_vignetted=5):
     """Convert a well-exposed image (ideally a brightfield image with ~uniform
@@ -304,8 +306,8 @@ def get_flat_field(image, vignette_mask):
 
 
 def _circular_mask(s):
-  xs, ys = numpy.indices((s, s)).astype(float) / (s-1)
-  return (xs**2 + ys**2) <= 1
+    xs, ys = numpy.indices((s, s)).astype(float) / (s-1)
+    return (xs**2 + ys**2) <= 1
 
 _m9 = _circular_mask(9)
 

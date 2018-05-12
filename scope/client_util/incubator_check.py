@@ -9,7 +9,7 @@ from .. import scope_client
 from .. import scope_job_runner
 from ..config import scope_configuration
 
-def main(scope_host='127.0.0.1'):
+def main():
     runner = scope_job_runner.JobRunner()
     jobs = runner.jobs.get_jobs()
     to_email = set()
