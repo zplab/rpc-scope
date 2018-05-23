@@ -129,25 +129,6 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         """
         pass
 
-
-    def should_skip(self, position_name, position_dir, position_metadata, images):
-        """Return whether this position should be skipped for future timepoints.
-
-        Parameters:
-            position_name: name of the position in the experiment metadata file.
-            position_dir: pathlib.Path object representing the directory where
-                position-specific data files and outputs are written. Useful for
-                reading previous image data.
-            position_metadata: list of all the stored position metadata from the
-                previous timepoints, in chronological order.
-            images: list of images acquired at this timepoint.
-
-        Returns: True if the position should be skipped in future runs, False
-            if not.
-        """
-        # TODO: determine appropriate thresholds for deciding if a worm is dead...
-        return False
-
     # Internal implementation functions are below. Override with care.
     def configure_timepoint(self):
         t0 = time.time()
@@ -387,8 +368,6 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             timestamps = [t if t is not None else numpy.nan for t in timestamps]
         timestamps = (numpy.array(timestamps) - timestamps[0]) / self.scope.camera.timestamp_hz
         metadata['image_timestamps']=dict(zip(self.image_names, timestamps))
-        if self.should_skip(position_name, position_dir, position_metadata, images):
-            self.skip_positions.append(position_name)
 
         if save_focus_stack and self.write_files:
             save_image_dir = position_dir / f'{self.timepoint_prefix} focus'

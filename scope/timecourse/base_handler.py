@@ -50,17 +50,19 @@ class TimepointHandler:
         with self.experiment_metadata_path.open('r') as f:
             self.experiment_metadata = json.load(f)
         self.positions = self.experiment_metadata['positions'] # dict mapping names to (x,y,z) stage positions
-        self.skip_positions = set(self.experiment_metadata.setdefault('skip_positions', []))
-        position_annotations = load_data.read_annotations(self.data_dir)
 
-        self.annotated_dead = set()
+        self.skip_positions = set()
+        annotations = load_data.read_annotations(self.data_dir)
         for position in self.positions.keys():
-            if position in position_annotations:
-                timepoint_annotations = position_annotations[position][1]
-                for annotation in timepoint_annotations.values():
-                    if annotation.get('stage', None) == 'dead':
-                        self.annotated_dead.add(position)
-                        break
+            if position in annotations:
+                position_annotations, timepoint_annotations = position_annotations[position]
+                if position_annotations.get('exclude'):
+                        self.skip_positions.add(position)
+                else:
+                    for annotation in timepoint_annotations.values():
+                        if annotation.get('stage') == 'dead':
+                            self.skip_positions.add(position)
+                            break
 
         if scope_host is not None:
             from .. import scope_client
@@ -111,10 +113,9 @@ class TimepointHandler:
             self.configure_timepoint()
             self.heartbeat()
             for position_name, position_coords in sorted(self.positions.items()):
-                if position_name not in self.skip_positions and position_name not in self.annotated_dead:
+                if position_name not in self.skip_positions:
                     self.run_position(position_name, position_coords)
                     self.heartbeat()
-            self.experiment_metadata['skip_positions'] = list(self.skip_positions)
             self.finalize_timepoint()
             self.heartbeat()
             self.end_time = time.time()
@@ -165,9 +166,6 @@ class TimepointHandler:
         """Override this method with global finalization after the images have been
         acquired for each position. Useful for altering the self.experiment_metadata
         dictionary before it is saved out.
-
-        Note that positions added to self.skip_positions are automatically added
-        to the metadata, so it is unnecessary to do this here.
         """
         pass
 
