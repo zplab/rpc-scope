@@ -212,8 +212,7 @@ def meter_exposure(scope, lamp, max_exposure=200, min_intensity_fraction=0.3,
             if image_90th > min_good_value:
                 break
     if good_exposure is None:
-        raise RuntimeError('Could not find a valid exposure time: intensity {}, exposure {}, image max {}, image min {}, max good {}, min good {}'.format(
-            lamp.intensity, exposure, image_max, image_min, max_good_value, min_good_value))
+        raise RuntimeError(f'Could not find a valid exposure time: intensity {lamp.intensity}, exposure {exposure}, image_90th {image_90th}, image_near_max {image_near_max}, image max {image.max()}, min_good {min_good_value}, max_good {max_good_value}')
     scope.camera.exposure_time = good_exposure
     return good_exposure, (image_90th, image_near_max), (min_good_value, max_good_value)
 
