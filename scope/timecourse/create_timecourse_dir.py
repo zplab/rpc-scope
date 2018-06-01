@@ -9,7 +9,6 @@ from scipy.spatial import distance
 
 from PyQt5 import Qt
 from zplib import datafile
-from ris_widget import util as rw_util
 from ris_widget.overlay import roi
 
 from ..gui import scope_viewer_widget
@@ -170,6 +169,9 @@ def _choose_bf_metering_pos(positions):
 
 def simple_get_positions(scope):
     """Return a list of interactively-obtained scope stage positions."""
+    reinit = input('press enter when ready to reinit stage (or press n and enter to skip reinit) ')
+    if reinit.lower() != 'n':
+        scope.stage.reinit()
     positions = []
     print('Press enter after each position has been found; press control-c to end')
     while True:
@@ -204,6 +206,9 @@ def get_positions_with_roi(scope):
         positions: list of (x, y, z) positions
         rois: list of Qt.QRectF objects describing the ROI for each position.
     """
+    reinit = input('press enter when ready to reinit stage (or press n and enter to skip reinit) ')
+    if reinit.lower() != 'n':
+        scope.stage.reinit()
     viewer = scope_viewer_widget.ScopeViewerWidget(scope)
     viewer.show()
     focus_roi = roi.EllipseROI(viewer, geometry=((400, 200), (2200, 2000)))
@@ -214,7 +219,7 @@ def get_positions_with_roi(scope):
     print('Press enter after each position has been found; press control-c to end')
     while True:
         try:
-            rw_util.input()
+            viewer.input()
         except KeyboardInterrupt:
             break
         rect = focus_roi.rect()

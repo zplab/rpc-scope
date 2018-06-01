@@ -55,7 +55,7 @@ class TimepointHandler:
         annotations = load_data.read_annotations(self.data_dir)
         for position in self.positions.keys():
             if position in annotations:
-                position_annotations, timepoint_annotations = position_annotations[position]
+                position_annotations, timepoint_annotations = annotations[position]
                 if position_annotations.get('exclude'):
                         self.skip_positions.add(position)
                 else:
