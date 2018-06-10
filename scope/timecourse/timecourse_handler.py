@@ -168,18 +168,23 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.image_names = ['bf.png']
         self.configure_additional_acquisition_steps()
 
-        humidity = self.experiment_metadata.setdefault('humidity', {})
-        temperature = self.experiment_metadata.setdefault('temperature', {})
+        temperature = target_temperature = None
+        humidity = target_humidity = None
         if hasattr(self.scope, 'humidity_controller'):
-            hc = self.scope.humidity_controller
-            humidity[self.timepoint_prefix] = dict(humidity=hc.humidity, target_humidity=hc.target_humidity)
             # Use the humidity controller temperature: the anova circulator temp measurement gives the
             # internal bath temperature, not the probe temperature...
-            temps = dict(temperature=hc.temperature)
-            if hasattr(self.scope, 'temperature_controller'):
-                temps.update(target_temperature=self.scope.temperature_controller.target_temperature)
-            temperature[self.timepoint_prefix] = temps
-
+            try:
+                temperature = self.scope.humidity_controller.temperature
+                humidity = self.scope.humidity_controller.humidity
+                target_humidity = self.scope.humidity_controller.target_humidity
+                if hasattr(self.scope, 'temperature_controller'):
+                    target_temperature = self.scope.temperature_controller.target_temperature
+            except:
+                self.logger.error('Could not read humidity or temperature', exc_info=True)
+        humidity_log = self.experiment_metadata.setdefault('humidity', {})
+        temperature_log = self.experiment_metadata.setdefault('temperature', {})
+        humidity_log[self.timepoint_prefix] = dict(humidity=humidity, target_humidity=target_humidity)
+        temperature_log[self.timepoint_prefix] = dict(temperature=temperature, target_temperature=target_temperature)
         t1 = time.time()
         self.logger.debug('Configuration done ({:.1f} seconds)', t1-t0)
 
@@ -364,7 +369,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.post_acquisition_sequence(position_name, position_dir, position_metadata, metadata, images, exposures, timestamps)
         images = [self.dark_corrector.correct(image, exposure) for image, exposure in zip(images, exposures)]
         if None in timestamps:
-            logger.warning('None value found in timestamp! Timestamps = {}', timestamps)
+            self.logger.warning('None value found in timestamp! Timestamps = {}', timestamps)
             timestamps = [t if t is not None else numpy.nan for t in timestamps]
         timestamps = (numpy.array(timestamps) - timestamps[0]) / self.scope.camera.timestamp_hz
         metadata['image_timestamps']=dict(zip(self.image_names, timestamps))
