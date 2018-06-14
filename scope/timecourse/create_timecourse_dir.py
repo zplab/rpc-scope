@@ -32,7 +32,7 @@ class Handler(timecourse_handler.BasicAcquisitionHandler):
     PIXEL_READOUT_RATE = '100 MHz'
     USE_LAST_FOCUS_POSITION = True # if False, start autofocus from original z position rather than last autofocused position.
     INTERVAL_MODE = 'scheduled start'
-    IMAGE_COMPRESSION = COMPRESSION.DEFAULT # useful options include PNG_FAST, PNG_NONE, TIFF_NONE.
+    IMAGE_COMPRESSION = timecourse_handler.COMPRESSION.DEFAULT # useful options include PNG_FAST, PNG_NONE, TIFF_NONE.
     # If using the FAST or NONE levels, consider using the below option to recompress after the fact.
     RECOMPRESS_IMAGE_LEVEL = None # if not None, start a background job to recompress saved images to the specified level.
     LOG_LEVEL = timecourse_handler.logging.INFO # DEBUG may be useful

@@ -41,7 +41,6 @@ class ThreadedIO:
         # error out has a chance to finish before we barf an exception.
         [f.result() for f in futures_out]
 
-
     def read(self, paths):
         """Return an iterator over image arrays read from the given paths."""
         paths = map(str, paths)

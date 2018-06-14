@@ -43,6 +43,7 @@ def compress_main(argv=None):
     args = parser.parse_args(argv)
     compress_pngs(**args.__dict__)
 
+
 def segment_images(experiment_root, timepoints, segmenter_path, overwrite_existing=False):
     """Segment image files from an experiment directory.
 
@@ -89,6 +90,7 @@ def segment_main(argv=None):
     args = parser.parse_args(argv)
     segment_images(**args.__dict__)
 
+
 def _get_timepoint_files(experiment_root, file_match, timepoints=None):
     """Generate a list of files to process from all positions.
 
@@ -105,6 +107,7 @@ def _get_timepoint_files(experiment_root, file_match, timepoints=None):
     for position_root in sorted(p.parent for p in experiment_root.glob('*/position_metadata.json')):
         for timepoint in timepoints:
             yield from sorted(position_root.glob(timepoint + ' ' + file_match))
+
 
 def run_in_background(function, *args, logfile=None, nice=None, delete_logfile=True, **kws):
     """Run a function in a background process (by forking the foreground process)
