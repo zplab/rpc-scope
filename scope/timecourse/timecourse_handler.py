@@ -7,6 +7,7 @@ import datetime
 import pathlib
 
 from . import base_handler
+from . import process_experiment
 from ..client_util import autofocus
 from ..client_util import calibrate
 
@@ -74,13 +75,16 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     PIXEL_READOUT_RATE = '100 MHz'
     USE_LAST_FOCUS_POSITION = True # if False, start autofocus from original z position rather than last autofocused position.
     INTERVAL_MODE = 'scheduled start'
-    IMAGE_COMPRESSION = COMPRESSION.DEFAULT # useful options include PNG_FAST, PNG_NONE, TIFF_NONE
+    IMAGE_COMPRESSION = COMPRESSION.DEFAULT # useful options include PNG_FAST, PNG_NONE, TIFF_NONE.
+    # If using the FAST or NONE levels, consider using the below option to recompress after the fact.
+    RECOMPRESS_IMAGE_LEVEL = None # if not None, start a background job to recompress saved images to the specified level.
     LOG_LEVEL = logging.INFO
     # Set the following to have the script set the microscope apertures as desired:
     TL_FIELD_DIAPHRAGM = None
     TL_APERTURE_DIAPHRAGM = None
     IL_FIELD_WHEEL = None # 'circle:3' is a good choice.
     VIGNETTE_PERCENT = 5 # 5 is a good number when using a 1x optocoupler. If 0.7x, use 35.
+    SEGMENTATION_EXECUTABLE = None # path to image-segmentation executable to run in the background after the job ends.
 
     def configure_additional_acquisition_steps(self):
         """Add more steps to the acquisition_sequencer's sequence as desired,
@@ -386,3 +390,17 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
                 self.image_io.write(focus_images, image_paths, self.IMAGE_COMPRESSION)
 
         return images, self.image_names, metadata
+
+    def cleanup(self):
+        if self.RECOMPRESS_IMAGE_LEVEL is not None:
+            process_experiment.run_in_background(process_experiment.compress_pngs,
+                experiment_root=self.data_dir, timepoints=[self.timepoint_prefix],
+                level=self.RECOMPRESS_IMAGE_LEVEL, nice=20, delete_logfile=False,
+                logfile=self.data_dir / 'compress.log')
+
+        if self.SEGMENTATION_EXECUTABLE is not None:
+            process_experiment.run_in_background(process_experiment.segment_images,
+                experiment_root=self.data_dir, timepoints=[self.timepoint_prefix],
+                segmenter_path=self.SEGMENTATION_EXECUTABLE, overwrite_existing=False,
+                nice=20, delete_logfile=False, logfile=self.data_dir / 'compress.log')
+

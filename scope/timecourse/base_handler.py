@@ -86,7 +86,7 @@ class TimepointHandler:
             handler = logging.StreamHandler()
         handler.setFormatter(log_util.get_formatter())
         self.logger.addHandler(handler)
-        self._job_thread = futures.ThreadPoolExecutor(max_workers=1)
+        self._job_thread = None
 
     def heartbeat(self):
         print('heartbeat') # write a line to stdout to serve as a heartbeat
@@ -136,6 +136,7 @@ class TimepointHandler:
                 # during the execution.
                 [f.result() for f in self._job_futures]
                 self.logger.debug('Background jobs complete ({:.1f} seconds)', time.time()-t0)
+            self.cleanup()
             self.logger.info('Timepoint {} ended ({:.0f} minutes after starting)', self.timepoint_prefix,
                              (time.time()-self.start_time)/60)
             if run_again:
@@ -154,6 +155,8 @@ class TimepointHandler:
         ends. Any exceptions will be propagated to the foreground after all
         functions queued either finish or raise an exception.
         """
+        if self._job_thread is None:
+            self._job_thread = futures.ThreadPoolExecutor(max_workers=1)
         self._job_futures.append(self._job_thread.submit(function, *args, **kws))
 
     def configure_timepoint(self):
@@ -167,6 +170,11 @@ class TimepointHandler:
         acquired for each position. Useful for altering the self.experiment_metadata
         dictionary before it is saved out.
         """
+        pass
+
+    def cleanup(self):
+        """Override this method with any global cleanup/finalization tasks
+        that may be necessary."""
         pass
 
     def get_next_run_time(self):
@@ -209,7 +217,8 @@ class TimepointHandler:
         new_metadata['timepoint'] = self.timepoint_prefix
         position_metadata.append(new_metadata)
         if self.write_files:
-            self.image_io.write(images, image_paths, self.IMAGE_COMPRESSION)
+            futures_out = self.image_io.write(images, image_paths, self.IMAGE_COMPRESSION, wait=False)
+            self._job_futures.extend(futures_out)
             self._write_atomic_json(metadata_path, position_metadata)
         t3 = time.time()
         self.logger.debug('Images saved ({:.1f} seconds)', t3-t2)
