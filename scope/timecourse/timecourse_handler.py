@@ -85,6 +85,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     IL_FIELD_WHEEL = None # 'circle:3' is a good choice.
     VIGNETTE_PERCENT = 5 # 5 is a good number when using a 1x optocoupler. If 0.7x, use 35.
     SEGMENTATION_EXECUTABLE = None # path to image-segmentation executable to run in the background after the job ends.
+    TO_SEGMENT = ['bf'] # image name or names to segment
 
     def configure_additional_acquisition_steps(self):
         """Add more steps to the acquisition_sequencer's sequence as desired,
@@ -401,6 +402,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         if self.SEGMENTATION_EXECUTABLE is not None:
             process_experiment.run_in_background(process_experiment.segment_images,
                 experiment_root=self.data_dir, timepoints=[self.timepoint_prefix],
-                segmenter_path=self.SEGMENTATION_EXECUTABLE, overwrite_existing=False,
-                nice=20, delete_logfile=False, logfile=self.data_dir / 'compress.log')
+                image_types=self.TO_SEGMENT, segmenter_path=self.SEGMENTATION_EXECUTABLE,
+                overwrite_existing=False, nice=20, delete_logfile=False,
+                logfile=self.data_dir / 'compress.log')
 

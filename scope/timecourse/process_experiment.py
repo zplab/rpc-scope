@@ -44,7 +44,7 @@ def compress_main(argv=None):
     compress_pngs(**args.__dict__)
 
 
-def segment_images(experiment_root, timepoints, segmenter_path, overwrite_existing=False):
+def segment_images(experiment_root, timepoints, segmenter_path, image_types=['bf'], overwrite_existing=False):
     """Segment image files from an experiment directory.
 
     Parameters:
@@ -58,6 +58,9 @@ def segment_images(experiment_root, timepoints, segmenter_path, overwrite_existi
             where image_list is a file with pairs of lines, where each pair lists
             the path to an image file and then on the next line the path to where
             the mask file should be written.
+        image_types: list of image types to segment (files will be matched as
+            '{experiment_root}/{position}/{timepoint} {image_type}.png' for all
+            positions in the experiment and all image types in the list.)
         overwrite_existing: if False, the segmenter will not be run on existing
             mask files.
 
@@ -66,12 +69,14 @@ def segment_images(experiment_root, timepoints, segmenter_path, overwrite_existi
     experiment_root = pathlib.Path(experiment_root)
     mask_root = experiment_root / 'derived_data' / 'mask'
     to_segment = []
-    for image_file in _get_timepoint_files(experiment_root, 'bf.png', timepoints):
-        timepoint = image_file.name.split(' ', 1)[0]
-        mask_file = mask_root / image_file.parent / (timepoint + '.png')
-        if overwrite_existing or not mask_file.exists():
-            mask_file.parent.mkdir(exist_ok=True, parents=True)
-            to_segment.append((image_file, mask_file))
+    for image_type in image_types:
+        for image_file in _get_timepoint_files(experiment_root, f'{image_type}.png', timepoints):
+            timepoint = image_file.name.split(' ', 1)[0]
+            position_name = image_file.parent
+            mask_file = mask_root / position_name / f'{timepoint} {image_type}.png'
+            if overwrite_existing or not mask_file.exists():
+                mask_file.parent.mkdir(exist_ok=True, parents=True)
+                to_segment.append((image_file, mask_file))
     with tempfile.NamedTemporaryFile(dir=experiment_root, prefix='to_segment_', delete=False) as temp:
         for image_file, mask_file in to_segment:
             temp.write(str(image_file)+'\n')
@@ -81,12 +86,15 @@ def segment_images(experiment_root, timepoints, segmenter_path, overwrite_existi
     return returncode
 
 def segment_main(argv=None):
-    parser = argparse.ArgumentParser(description="re-compress image files from experiment")
+    parser = argparse.ArgumentParser(description="segment image files from experiment")
     parser.add_argument('experiment_root', help='the experiment to segment')
     parser.add_argument('segmenter_path', help='path to segmentation executable')
     parser.add_argument('timepoints', nargs="*", metavar='timepoint', help='timepoint(s) to segment')
     parser.add_argument('--overwrite', dest='overwrite_existing', action='store_true',
         help="don't skip existing masks")
+    parser.add_argument('--type', '-t', action='append', default=argparse.SUPPRESS,
+        dest='image_types', metavar='image_type',
+        help='type of image to segment; can be specified multiple times. If not specified, segment "bf" images')
     args = parser.parse_args(argv)
     segment_images(**args.__dict__)
 
