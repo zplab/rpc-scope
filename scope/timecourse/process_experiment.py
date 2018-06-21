@@ -84,14 +84,7 @@ def segment_images(experiment_root, timepoints, segmenter_path, image_types=['bf
             temp.write(str(mask_file)+'\n')
     returncode = subprocess.call([segmenter_path, temp.name])
     os.unlink(temp.name)
-    annotators = []
-    for image_type in image_types:
-        if image_type == 'bf':
-            dest_annotation = 'pose'
-        else:
-            dest_annotation = f'{image_type} pose'
-        annotators.append(process_data.PoseFromMaskAnnotator(image_type, dest_annotation))
-    process_data.annotate(experiment_root, annotators)
+    process_data.annotate(experiment_root, [process_data.annotate_poses])
     return returncode
 
 def segment_main(argv=None):
@@ -108,7 +101,7 @@ def segment_main(argv=None):
     # as a bonus also update the timestamps... This is not needed when called
     # automatically (i.e. not at the CLI) because the base handler does it
     # eslewhere.
-    process_data.annotate(args.experiment_root, [process_data.TimestampAnnotator()])
+    process_data.annotate(args.experiment_root, [process_data.annotate_timestamps])
     segment_images(**args.__dict__)
 
 
