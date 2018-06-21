@@ -9,6 +9,7 @@ import tempfile
 import traceback
 
 import freeimage
+from elegant import process_data
 
 def compress_pngs(experiment_root, timepoints=None, level=freeimage.IO_FLAGS.PNG_Z_DEFAULT_COMPRESSION):
     """Recompress image files from an experiment directory.
@@ -83,19 +84,31 @@ def segment_images(experiment_root, timepoints, segmenter_path, image_types=['bf
             temp.write(str(mask_file)+'\n')
     returncode = subprocess.call([segmenter_path, temp.name])
     os.unlink(temp.name)
+    annotators = []
+    for image_type in image_types:
+        if image_type == 'bf':
+            dest_annotation = 'pose'
+        else:
+            dest_annotation = f'{image_type} pose'
+        annotators.append(process_data.PoseFromMaskAnnotator(image_type, dest_annotation))
+    process_data.annotate(experiment_root, annotators)
     return returncode
 
 def segment_main(argv=None):
     parser = argparse.ArgumentParser(description="segment image files from experiment")
     parser.add_argument('experiment_root', help='the experiment to segment')
     parser.add_argument('segmenter_path', help='path to segmentation executable')
-    parser.add_argument('timepoints', nargs="*", metavar='timepoint', help='timepoint(s) to segment')
+    parser.add_argument('timepoints', nargs="*", metavar='timepoint', help='timepoint(s) to segment; if none, segment all')
     parser.add_argument('--overwrite', dest='overwrite_existing', action='store_true',
         help="don't skip existing masks")
     parser.add_argument('--type', '-t', action='append', default=argparse.SUPPRESS,
         dest='image_types', metavar='image_type',
         help='type of image to segment; can be specified multiple times. If not specified, segment "bf" images')
     args = parser.parse_args(argv)
+    # as a bonus also update the timestamps... This is not needed when called
+    # automatically (i.e. not at the CLI) because the base handler does it
+    # eslewhere.
+    process_data.annotate(args.experiment_root, [process_data.TimestampAnnotator()])
     segment_images(**args.__dict__)
 
 

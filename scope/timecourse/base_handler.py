@@ -13,6 +13,7 @@ import pickle
 
 from zplib import datafile
 from elegant import load_data
+from elegant import process_data
 
 from ..util import threaded_image_io
 from ..util import log_util
@@ -137,6 +138,9 @@ class TimepointHandler:
                 [f.result() for f in self._job_futures]
                 self.logger.debug('Background jobs complete ({:.1f} seconds)', time.time()-t0)
             self.cleanup()
+            # transfer timepoint information to annotations dicts
+            process_data.annotate(self.data_dir, [process_data.TimestampAnnotator()])
+
             self.logger.info('Timepoint {} ended ({:.0f} minutes after starting)', self.timepoint_prefix,
                              (time.time()-self.start_time)/60)
             if run_again:
