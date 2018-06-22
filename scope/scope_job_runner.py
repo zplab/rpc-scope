@@ -52,7 +52,7 @@ def main(timepoint_function):
 
 class JobRunner(base_daemon.Runner):
     def __init__(self):
-        self.base_dir = pathlib.Path(scope_configuration.CONFIG_DIR)
+        self.base_dir = scope_configuration.CONFIG_DIR
         self.jobs = _JobList(self.base_dir / 'scope_jobs.json')
         self.current_job = _JobFile(self.base_dir / 'scope_job_current')
         self.log_dir = self.base_dir / 'scope_job_logs'

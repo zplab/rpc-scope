@@ -10,7 +10,7 @@ from . import base_handler
 from . import process_experiment
 from ..client_util import autofocus
 from ..client_util import calibrate
-
+from ..config import scope_configuration
 from ..util.threaded_image_io import COMPRESSION
 
 class BasicAcquisitionHandler(base_handler.TimepointHandler):
@@ -393,16 +393,17 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         return images, self.image_names, metadata
 
     def cleanup(self):
+        lock = scope_configuration.CONFIG_DIR / 'timecourse_background_job'
+
         if self.RECOMPRESS_IMAGE_LEVEL is not None:
             process_experiment.run_in_background(process_experiment.compress_pngs,
                 experiment_root=self.data_dir, timepoints=[self.timepoint_prefix],
                 level=self.RECOMPRESS_IMAGE_LEVEL, nice=20, delete_logfile=False,
-                logfile=self.data_dir / 'compress.log')
+                logfile=self.data_dir / 'compress.log', lock=lock)
 
         if self.SEGMENTATION_EXECUTABLE is not None:
             process_experiment.run_in_background(process_experiment.segment_images,
-                experiment_root=self.data_dir, timepoints=[self.timepoint_prefix],
-                image_types=self.TO_SEGMENT, segmenter_path=self.SEGMENTATION_EXECUTABLE,
-                overwrite_existing=False, nice=20, delete_logfile=False,
-                logfile=self.data_dir / 'compress.log')
+                experiment_root=self.data_dir, segmenter_path=self.SEGMENTATION_EXECUTABLE,
+                image_types=self.TO_SEGMENT, overwrite_existing=False, nice=20,
+                delete_logfile=False, logfile=self.data_dir / 'segment.log', lock=lock)
 

@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import traceback
+import lockfile
 
 import freeimage
 from elegant import process_data
@@ -45,14 +46,14 @@ def compress_main(argv=None):
     compress_pngs(**args.__dict__)
 
 
-def segment_images(experiment_root, timepoints, segmenter_path, image_types=['bf'], overwrite_existing=False):
+def segment_images(experiment_root, segmenter_path, timepoints=None, image_types=['bf'], overwrite_existing=False):
     """Segment image files from an experiment directory.
 
     Parameters:
         experiment_root: top-level experiment directory
+        segmenter_path: path to segmentation tool executable
         timepoints: list of timepoints to compress (or list of glob expressions
             to match multiple timepoints). If None, compress all.
-        segmenter_path: path to segmentation tool executable
         segmenter_args: arguments, if any, to segmenter. The executable will be
             called as:
                 segmenter_path image_list
@@ -123,7 +124,7 @@ def _get_timepoint_files(experiment_root, file_match, timepoints=None):
             yield from sorted(position_root.glob(timepoint + ' ' + file_match))
 
 
-def run_in_background(function, *args, logfile=None, nice=None, delete_logfile=True, **kws):
+def run_in_background(function, *args, logfile=None, nice=None, delete_logfile=True, lock=None, **kws):
     """Run a function in a background process (by forking the foreground process)
 
     Parameters:
@@ -137,6 +138,8 @@ def run_in_background(function, *args, logfile=None, nice=None, delete_logfile=T
         delete_logfile: if True, the logfile will be deleted after the function
             exits, except in case of an exception, where the file will be retained
             to aid in debugging. (It will contain the traceback information.)
+        lock: if not None, path to a file lock to acquire before running the
+            function (to prevent multiple backround jobs from running at once.)
         **kws: keyword arguments to function.
     """
     if _detach_process_context():
@@ -158,6 +161,9 @@ def run_in_background(function, *args, logfile=None, nice=None, delete_logfile=T
         _redirect_stream(sys.stderr, log)
         if nice is not None:
             os.nice(nice)
+        if lock is not None:
+            lock = lockfile.LockFile(lock)
+            lock.acquire()
         function(*args, **kws)
     except:
         # don't remove the logfile...
@@ -167,6 +173,8 @@ def run_in_background(function, *args, logfile=None, nice=None, delete_logfile=T
         log.close()
         if delete_logfile:
             logfile.unlink()
+        if lock is not None:
+            lock.release()
         # if we don't exit with os._exit(), then if this function was called from
         # ipython, the child will try to return back to the ipython shell, with all
         # manner of hilarity ensuing.
