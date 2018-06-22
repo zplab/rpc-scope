@@ -393,15 +393,17 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         return images, self.image_names, metadata
 
     def cleanup(self):
-        lock = scope_configuration.CONFIG_DIR / 'timecourse_background_job'
-
+        # use separate locks to let compression and segmentation run in parallel
+        # but prevent multiple compression or segmentation jobs from piling up
         if self.RECOMPRESS_IMAGE_LEVEL is not None:
+            lock = scope_configuration.CONFIG_DIR / 'compress_job'
             process_experiment.run_in_background(process_experiment.compress_pngs,
                 experiment_root=self.data_dir, timepoints=[self.timepoint_prefix],
                 level=self.RECOMPRESS_IMAGE_LEVEL, nice=20, delete_logfile=False,
                 logfile=self.data_dir / 'compress.log', lock=lock)
 
         if self.SEGMENTATION_EXECUTABLE is not None:
+            lock = scope_configuration.CONFIG_DIR / 'segment_job'
             process_experiment.run_in_background(process_experiment.segment_images,
                 experiment_root=self.data_dir, segmenter_path=self.SEGMENTATION_EXECUTABLE,
                 image_types=self.TO_SEGMENT, overwrite_existing=False, nice=20,
