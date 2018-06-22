@@ -53,9 +53,9 @@ def main(timepoint_function):
 class JobRunner(base_daemon.Runner):
     def __init__(self):
         self.base_dir = scope_configuration.CONFIG_DIR
-        self.jobs = _JobList(self.base_dir / 'scope_jobs.json')
-        self.current_job = _JobFile(self.base_dir / 'scope_job_current')
-        self.log_dir = self.base_dir / 'scope_job_logs'
+        self.jobs = _JobList(self.base_dir / 'jobs.json')
+        self.current_job = _JobFile(self.base_dir / 'job_current')
+        self.log_dir = self.base_dir / 'job_logs'
         super().__init__(name='Scope Job Manager', pidfile_path=self.base_dir / 'scope_job_runner.pid')
 
     # THE FOLLOWING FUNCTIONS ARE FOR COMMUNICATING WITH / STARTING A RUNNING DAEMON

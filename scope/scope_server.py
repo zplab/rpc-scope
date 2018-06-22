@@ -15,7 +15,7 @@ logger = logging.get_logger(__name__)
 class ScopeServer(base_daemon.Runner):
     def __init__(self):
         self.base_dir = scope_configuration.CONFIG_DIR
-        self.log_dir = self.base_dir / 'scope_server_logs'
+        self.log_dir = self.base_dir / 'server_logs'
         self.arg_file = self.base_dir / 'server_options.json'
         super().__init__(name='Scope Server', pidfile_path=self.base_dir / 'scope_server.pid')
 

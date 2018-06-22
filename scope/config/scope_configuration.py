@@ -11,7 +11,7 @@ import shutil
 from . import default_config
 
 CONFIG_DIR = pathlib.Path('/usr/local/scope')
-CONFIG_FILE = CONFIG_DIR / 'scope_configuration.py'
+CONFIG_FILE = CONFIG_DIR / 'configuration.py'
 
 def make_tcp_host(host, port):
     return 'tcp://{}:{}'.format(host, port)
