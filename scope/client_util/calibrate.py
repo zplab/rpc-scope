@@ -121,10 +121,10 @@ def meter_exposure_and_intensity(scope, lamp, max_exposure=200, max_intensity=25
     intensities = numpy.linspace(255, 16, 18, dtype=numpy.uint8)
     intensities = intensities[intensities <= max_intensity]
     # First, find a decent lamp intensity setting: one where the pixels
-    # are under the max allowed value, for just above the minimum exposure time.
+    # are under the max allowed value, for a little above the minimum exposure time.
     # We don't use the bare minimum, because we want a value where the bare minimum
     # exposure has plenty of headroom (to allow for random noise, etc.)
-    scope.camera.exposure_time = 2.5 # min exposure time is 2
+    scope.camera.exposure_time = 3.5 # min exposure time is 2
     bit_depth = int(scope.camera.sensor_gain[:2])
     max_value = (2**bit_depth-1)
     max_good_value = max_intensity_fraction * max_value
