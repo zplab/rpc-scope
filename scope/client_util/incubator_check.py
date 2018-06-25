@@ -23,7 +23,7 @@ def main():
         # there's someone to alert, so let's see if there's an alert to send:
         has_scope = False
         try:
-            scope = scope_client.ScopeClient(scope_host)
+            scope = scope_client.ScopeClient()
             has_scope = True
         except RuntimeError:
             print('Could not communicate with scope server. Is it running?')
