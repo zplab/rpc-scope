@@ -205,16 +205,16 @@ def meter_exposure(scope, lamp, max_exposure=200, min_intensity_fraction=0.3,
             scope.camera.exposure_time = exposure
             scope.camera.send_software_trigger()
             image = scope.camera.next_image(max(1000, 2*exposure))
-            image_near_max = image_order_statistic(image, -200)
+            image_near_max, image_max = image_order_statistic(image, [-200, -5]) # allow 5 saturated pixels...
             image_90th = image_order_statistic(image, int(image.size * 0.90))
-            if image_near_max < max_good_value and image.max() < max_value:
+            if image_near_max < max_good_value and image_max < max_value:
                 good_exposure = exposure
             else:
                 break
             if image_90th > min_good_value:
                 break
     if good_exposure is None:
-        raise RuntimeError(f'Could not find a valid exposure time: intensity {lamp.intensity}, exposure {exposure}, image_90th {image_90th}, image_near_max {image_near_max}, image max {image.max()}, min_good {min_good_value}, max_good {max_good_value}')
+        raise RuntimeError(f'Could not find a valid exposure time: intensity {lamp.intensity}, exposure {exposure}, image_90th {image_90th}, image_near_max {image_near_max}, image max {image_max}, min_good {min_good_value}, max_good {max_good_value}')
     scope.camera.exposure_time = good_exposure
     return good_exposure, (image_90th, image_near_max), (min_good_value, max_good_value)
 
