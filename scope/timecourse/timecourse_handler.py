@@ -237,7 +237,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
 
         with self.scope.tl.lamp.in_state(enabled=True):
             exposure = calibrate.meter_exposure(self.scope, self.scope.tl.lamp,
-                max_exposure=32, min_intensity_fraction=0.3, max_intensity_fraction=0.85)[:1]
+                max_exposure=32, min_intensity_fraction=0.3, max_intensity_fraction=0.85)[0]
             bf_avg = calibrate.get_averaged_images(self.scope, ref_positions, self.dark_corrector, frames_to_average=2)
         self.vignette_mask = calibrate.get_vignette_mask(bf_avg, self.VIGNETTE_PERCENT)
         bf_flatfield, bf_ref_intensity = calibrate.get_flat_field(bf_avg, self.vignette_mask)
