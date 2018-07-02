@@ -403,6 +403,10 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
                 logfile=self.data_dir / 'compress.log', lock=lock)
 
         if self.SEGMENTATION_EXECUTABLE is not None:
+            # ask to segment all un-segmented images for all timepoints, just to
+            # make sure everything gets segmented. Thus, even if a background
+            # segmentation job dies midway, the files will get picked up the
+            # next time...
             lock = scope_configuration.CONFIG_DIR / 'segment_job'
             process_experiment.run_in_background(process_experiment.segment_images,
                 experiment_root=self.data_dir, segmenter_path=self.SEGMENTATION_EXECUTABLE,
