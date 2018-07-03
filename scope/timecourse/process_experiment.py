@@ -74,15 +74,15 @@ def segment_images(experiment_root, segmenter_path, timepoints=None, image_types
     for image_type in image_types:
         for image_file in _get_timepoint_files(experiment_root, f'{image_type}.png', timepoints):
             timepoint = image_file.name.split(' ', 1)[0]
-            position_name = image_file.parent
+            position_name = image_file.parent.name
             mask_file = mask_root / position_name / f'{timepoint} {image_type}.png'
             if overwrite_existing or not mask_file.exists():
                 mask_file.parent.mkdir(exist_ok=True, parents=True)
                 to_segment.append((image_file, mask_file))
     with tempfile.NamedTemporaryFile(dir=experiment_root, prefix='to_segment_', delete=False) as temp:
         for image_file, mask_file in to_segment:
-            temp.write(str(image_file)+'\n')
-            temp.write(str(mask_file)+'\n')
+            temp.write((str(image_file)+'\n').encode())
+            temp.write((str(mask_file)+'\n').encode())
     returncode = subprocess.call([segmenter_path, temp.name])
     os.unlink(temp.name)
     process_data.annotate(experiment_root, [process_data.annotate_poses])
