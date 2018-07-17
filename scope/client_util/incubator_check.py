@@ -45,7 +45,8 @@ def main():
             target_temperature = 'NO DATA'
             errors.append('TEMPERATURE CONTROLLER NOT AVAILABLE')
 
-        if has_humidity and (humidity > 95 or abs(humidity - target_humidity) >= 10):
+        if has_humidity and (humidity > 98 or target_humidity - humidity > 8):
+            # humidity over 98%, or more than 8% less than desired.
             errors.append('HUMIDITY DEVIATION')
         if has_humidity and has_temperature and abs(temperature - target_temperature) >= 2:
             errors.append('TEMPERATURE DEVIATION')
