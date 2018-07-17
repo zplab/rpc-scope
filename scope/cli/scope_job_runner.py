@@ -52,6 +52,8 @@ def main(argv=None):
     parser_resume.add_argument('-d', '--delay', metavar='DELAY', type=parse_delay, dest='next_run_time',
         help='time to delay before next running the job (h, h:m, or h:m:s). If not specified, use the currently scheduled next-run time')
 
+    parser_status = subparsers.add_parser('purge', help='purge jobs that are queued but have no future runs scheduled')
+
     parser_duty = subparsers.add_parser('duty', help='print the recent duty cycle (i.e. %% utilization)')
     parser_duty.set_defaults(func='duty_cycle')
 

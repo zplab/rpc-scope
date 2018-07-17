@@ -106,6 +106,14 @@ class JobRunner(base_daemon.Runner):
         else:
             print('NOTE: The job-runner is NOT CURRENTLY RUNNING. Until it is started again, queued jobs WILL NOT BE RUN.')
 
+    def purge(self):
+        """Remove all jobs that have no scheduled runs remaining."""
+        jobs = self.jobs.get_jobs()
+        for job in jobs:
+            if job.status == STATUS_QUEUED and job.next_run_time is None:
+            print('Removing job {}.'.format(job.exec_file))
+                self.jobs.remove(job.exec_file)
+
     def status(self):
         """Print a status message listing the running and queued jobs, if any."""
         is_running = self.is_running()
