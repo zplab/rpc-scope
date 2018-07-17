@@ -111,7 +111,7 @@ class JobRunner(base_daemon.Runner):
         jobs = self.jobs.get_jobs()
         for job in jobs:
             if job.status == STATUS_QUEUED and job.next_run_time is None:
-            print('Removing job {}.'.format(job.exec_file))
+                print('Removing job {}.'.format(job.exec_file))
                 self.jobs.remove(job.exec_file)
 
     def status(self):
