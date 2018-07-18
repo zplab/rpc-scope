@@ -76,18 +76,17 @@ class JobRunner(base_daemon.Runner):
         self.jobs.add(exec_file, alert_emails, next_run_time, STATUS_QUEUED)
         if self.is_running():
             self._awaken_daemon()
+        else:
+            print('NOTE: The job-runner is NOT CURRENTLY RUNNING. Until it is started again, this job WILL NOT BE RUN.')
 
     def remove_job(self, exec_file):
         """Remove the job specified by the given exec_file.
 
         Note: this will NOT terminate a currenlty-running job."""
-        exec_file = canonical_path(exec_file)
         self.jobs.remove(exec_file)
         print('Job {} has been removed from the queue for future execution.'.format(exec_file))
         if self.current_job.get() == exec_file:
             print('This job is running. The current run has NOT been terminated.')
-        if self.is_running():
-            self._awaken_daemon()
 
     def resume_job(self, exec_file, next_run_time=None):
         """Resume a job that was suspended due to an error.
@@ -104,7 +103,7 @@ class JobRunner(base_daemon.Runner):
         if self.is_running():
             self._awaken_daemon()
         else:
-            print('NOTE: The job-runner is NOT CURRENTLY RUNNING. Until it is started again, queued jobs WILL NOT BE RUN.')
+            print('NOTE: The job-runner is NOT CURRENTLY RUNNING. Until it is started again, this job WILL NOT BE RUN.')
 
     def purge(self):
         """Remove all jobs that have no scheduled runs remaining."""
@@ -121,6 +120,10 @@ class JobRunner(base_daemon.Runner):
             if job.status == STATUS_ERROR:
                 print('Resuming job {}.'.format(job.exec_file))
                 self.jobs.update(job.exec_file, status=STATUS_QUEUED)
+        if self.is_running():
+            self._awaken_daemon()
+        else:
+            print('NOTE: The job-runner is NOT CURRENTLY RUNNING. Until it is started again, jobs WILL NOT BE RUN.')
 
     def status(self):
         """Print a status message listing the running and queued jobs, if any."""
