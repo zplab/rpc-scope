@@ -114,6 +114,14 @@ class JobRunner(base_daemon.Runner):
                 print('Removing job {}.'.format(job.exec_file))
                 self.jobs.remove(job.exec_file)
 
+    def resume_all(self):
+        """Resume all jobs that are in the error state."""
+        jobs = self.jobs.get_jobs()
+        for job in jobs:
+            if job.status == STATUS_ERROR:
+                print('Resuming job {}.'.format(job.exec_file))
+                self.jobs.update(job.exec_file, status=STATUS_QUEUED)
+
     def status(self):
         """Print a status message listing the running and queued jobs, if any."""
         is_running = self.is_running()
@@ -473,7 +481,7 @@ class _JobList:
             else:
                 raise ValueError('No job queued for {}'.format(exec_file))
 
-    def add(self, exec_file, alert_emails, next_run_time, status):
+    def add(self, exec_file, alert_emails, next_run_time, status, check_exists=True):
         """Add a new job to the list.
 
         Parameters:
@@ -481,10 +489,10 @@ class _JobList:
             alert_emails: None, tuple-of-strings, or single string
             next_run_time: timestamp float, 'now' or None
             status: current job status
-
+            check_exists: raise error if exec_file does not exist
         """
         exec_file = canonical_path(exec_file)
-        if not exec_file.exists():
+        if check_exists and not exec_file.exists():
             raise ValueError('Executable file {} does not exist.'.format(exec_file))
         alert_emails = _validate_alert_emails(alert_emails)
         if next_run_time is 'now':
@@ -502,10 +510,13 @@ class _JobList:
         will be copied from the old job."""
         with self.jobs_lock:
             old_job = self._get_job(exec_file)
-            for field in _Job._fields[1:]: # all fields but exec_file
+            assert set(_Job._fields[1:]).issuperset(kws.keys()) # kws can include any known field but exec_file
+            for field in _Job._fields: # make sure all fields, including exec_file, are in kws
                 if field not in kws:
                     kws[field] = getattr(old_job, field)
-            self.add(exec_file, **kws)
+            # don't check if the file exists: it's already in our database so we
+            # need SOME way of changing its status (i.e. to error!)
+            self.add(check_exists=False, **kws)
 
     def get_jobs(self):
         """Return a list of Job objects, sorted by their next_run_time attribute.

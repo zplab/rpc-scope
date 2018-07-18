@@ -223,7 +223,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         if actual_bounds[1] < 3000:
             # the almost-brightest point of the image is really dim, when really
             # we wanted it somewhere around 32000. Something's wrong.
-            raise RuntimeError('Exposure metering failed to identify an appropriate brightfield lamp setting.')
+            raise RuntimeError('Exposure metering failed to find a sufficiently bright brightfield lamp setting. (Is the lamp on?)')
 
         self.heartbeat()
 
