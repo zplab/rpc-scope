@@ -119,7 +119,7 @@ class Circulator(TemperatureController):
 
     def _test_connection(self):
         result = self._call_response('temp')
-        if result == '':
+        if result.strip() == '':
             # sometimes after a reboot (?) it takes two pings to wake up the circulator...
             result = self._call_response('temp')
         try:
