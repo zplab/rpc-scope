@@ -125,7 +125,7 @@ class Circulator(TemperatureController):
         try:
             float(result)
         except:
-            raise RuntimeError(f'Could not communicate properly with circulator. Expecting floating-point temperature reading, got "{result}"'.)
+            raise RuntimeError(f'Could not communicate properly with circulator. Expecting floating-point temperature reading, got "{result}".')
 
     def _get_temperature(self):
         return float(self._call_response('temp'))
