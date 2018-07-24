@@ -17,7 +17,7 @@ class TemperatureController(property_device.PropertyDevice):
         self._serial_port.clear_input_buffer() # bad configurations can leave garbage in the Anova input buffer
         self._serial_port_lock = threading.RLock()
         try:
-            self.get_temperature()
+            self._test_connection()
         except smart_serial.SerialTimeout:
             # explicitly clobber traceback from SerialTimeout exception
             raise smart_serial.SerialException('Could not read data from temperature controller -- is it turned on?')
@@ -35,6 +35,9 @@ class TemperatureController(property_device.PropertyDevice):
     def _update_properties(self):
         self.get_temperature()
         self.get_target_temperature()
+
+    def _test_connection(self):
+        self.get_temperature()
 
     def get_temperature(self):
         temp = self._get_temperature()
@@ -113,6 +116,16 @@ class Circulator(TemperatureController):
             if echo != val: # read back echo
                 raise RuntimeError('unexpected serial response: "{}"'.format(echo))
             return self._read()
+
+    def _test_connection(self):
+        result = self._call_response('temp')
+        if result == '':
+            # sometimes after a reboot (?) it takes two pings to wake up the circulator...
+            result = self._call_response('temp')
+        try:
+            float(result)
+        except:
+            raise RuntimeError(f'Could not communicate properly with circulator. Expecting floating-point temperature reading, got "{result}"'.)
 
     def _get_temperature(self):
         return float(self._call_response('temp'))
