@@ -137,11 +137,16 @@ def meter_exposure_and_intensity(scope, lamp, max_exposure=200, max_intensity=25
             time.sleep(0.25)
             scope.camera.send_software_trigger()
             image = scope.camera.next_image(1000)
-            if image_order_statistic(image, -200) < max_good_value and image.max() < max_value:
+            image_near_max, image_max = image_order_statistic(image, [-200, -10]) # allow 10 saturated pixels...
+            if image_near_max < max_good_value and image_max < max_value:
                 good_intensity = intensity
                 break
     if good_intensity is None:
-        raise RuntimeError('Could not find a non-overexposed lamp intensity')
+        if image_max == max_value:
+            saturated = (image == max_value).sum()
+            raise RuntimeError(f'Too many saturated pixels: at lowest brightness {saturated} pixels were at {max_val}, but only 10 are allowed.')
+        else:
+            raise RuntimeError(f'Could not find a non-overexposed lamp intensity: at lowest brightness, image near-max of {image_near_max} is >= cutoff of {max_good_value}.')
     # Now given the intensity setting, find the shortest-possible exposure time
     # that fully complies with the min and max requirements
     good_exposure, actual_bounds, requested_bounds = meter_exposure(scope, lamp, max_exposure, min_intensity_fraction, max_intensity_fraction)
@@ -205,8 +210,7 @@ def meter_exposure(scope, lamp, max_exposure=200, min_intensity_fraction=0.3,
             scope.camera.exposure_time = exposure
             scope.camera.send_software_trigger()
             image = scope.camera.next_image(max(1000, 2*exposure))
-            image_near_max, image_max = image_order_statistic(image, [-200, -5]) # allow 5 saturated pixels...
-            image_90th = image_order_statistic(image, int(image.size * 0.90))
+            image_90th, image_near_max, image_max = image_order_statistic(image, [int(image.size * 0.90), -200, -10]) # allow 10 saturated pixels...
             if image_near_max < max_good_value and image_max < max_value:
                 good_exposure = exposure
             else:
@@ -214,7 +218,7 @@ def meter_exposure(scope, lamp, max_exposure=200, min_intensity_fraction=0.3,
             if image_90th > min_good_value:
                 break
     if good_exposure is None:
-        raise RuntimeError(f'Could not find a valid exposure time: intensity {lamp.intensity}, exposure {exposure}, image_90th {image_90th}, image_near_max {image_near_max}, image max {image_max}, min_good {min_good_value}, max_good {max_good_value}')
+        raise RuntimeError(f'Could not find a valid exposure time: intensity {lamp.intensity}, exposure {exposure}, image_90th {image_90th}, image_near_max {image_near_max}, image_max {image_max}, min_good {min_good_value}, max_good {max_good_value}')
     scope.camera.exposure_time = good_exposure
     return good_exposure, (image_90th, image_near_max), (min_good_value, max_good_value)
 

@@ -120,7 +120,7 @@ class Circulator(TemperatureController):
     def _test_connection(self):
         result = self._call_response('temp')
         if result.strip() == '':
-            # sometimes after a reboot (?) it takes two pings to wake up the circulator...
+            # sometimes after a reboot (?) the circulator sends extra newlines...
             result = self._call_response('temp')
         try:
             float(result)
