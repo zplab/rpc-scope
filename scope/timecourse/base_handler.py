@@ -98,6 +98,12 @@ class TimepointHandler:
         yield
         heartbeat_timer.stop()
 
+    def iterate_on_positions():
+        for position_name, position_coords in sorted(self.positions.items()):
+            if position_name not in self.skip_positions:
+                self.run_position(position_name, position_coords)
+                self.heartbeat()
+
     def run_timepoint(self, scheduled_start):
         try:
             self.heartbeat()
@@ -113,10 +119,7 @@ class TimepointHandler:
             self.experiment_metadata.setdefault('timestamps', []).append(self.start_time)
             self.configure_timepoint()
             self.heartbeat()
-            for position_name, position_coords in sorted(self.positions.items()):
-                if position_name not in self.skip_positions:
-                    self.run_position(position_name, position_coords)
-                    self.heartbeat()
+            self.iterate_on_positions()
             self.finalize_timepoint()
             self.heartbeat()
             self.end_time = time.time()
@@ -307,4 +310,3 @@ class TimepointHandler:
         next_run_time = handler.run_timepoint(scheduled_start)
         if next_run_time:
             print('next run:{}'.format(next_run_time))
-
