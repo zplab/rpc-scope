@@ -46,7 +46,7 @@ def compress_main(argv=None):
     compress_pngs(**args.__dict__)
 
 
-def segment_images(experiment_root, segmenter_path, timepoints=None, image_types=['bf'], overwrite_existing=False):
+def segment_images(experiment_root, segmenter_wrapper_path, timepoints=None, image_types=['bf'], overwrite_existing=False):
     """Segment image files from an experiment directory.
 
     Parameters:
@@ -83,7 +83,7 @@ def segment_images(experiment_root, segmenter_path, timepoints=None, image_types
         for image_file, mask_file in to_segment:
             temp.write((str(image_file)+'\n').encode())
             temp.write((str(mask_file)+'\n').encode())
-    returncode = subprocess.call([segmenter_path, temp.name])
+    returncode = subprocess.call(['python', segmenter_path, temp.name])
     os.unlink(temp.name)
     process_data.annotate(experiment_root, [process_data.annotate_poses])
     return returncode
