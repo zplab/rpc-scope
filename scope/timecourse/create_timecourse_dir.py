@@ -168,12 +168,18 @@ def _choose_bf_metering_pos(positions):
     distance_sums = distances[:,:8].sum(axis=1)
     return pos_names[distance_sums.argmin()]
 
+def safe_reinit(scope):
+    old_x, old_y, old_z = scope.stage.position
+    scope.stage.reinit()
+    scope.stage.z = 15
+    scope.stage.x, scope.stage.y = old_x, old_y
+    scope.stage.z = min(0.95*scope.stage.z_high_soft_limit, old_z)
 
 def simple_get_positions(scope):
     """Return a list of interactively-obtained scope stage positions."""
     reinit = input('press enter when ready to reinit stage (or press n and enter to skip reinit) ')
     if reinit.lower() != 'n':
-        scope.stage.reinit()
+        safe_reinit(scope)
     positions = []
     print('Press enter after each position has been found; press control-c to end')
     while True:
@@ -210,7 +216,7 @@ def get_positions_with_roi(scope):
     """
     reinit = input('press enter when ready to reinit stage (or press n and enter to skip reinit) ')
     if reinit.lower() != 'n':
-        scope.stage.reinit()
+        safe_reinit(scope)
     viewer = scope_viewer_widget.ScopeViewerWidget(scope)
     viewer.show()
     focus_roi = roi.EllipseROI(viewer, geometry=((400, 200), (2200, 2000)))
