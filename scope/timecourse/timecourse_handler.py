@@ -409,6 +409,9 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             # make sure everything gets segmented. Thus, even if a background
             # segmentation job dies midway, the files will get picked up the
             # next time...
+            if self.MODEL_TO_USE is None:
+                raise ValueError('MODEL_TO_USE cannot be None when performing segmentation')
+
             lock = scope_configuration.CONFIG_DIR / 'segment_job'
             process_experiment.run_in_background(process_experiment.segment_images,
                 experiment_root=self.data_dir, segmenter_path=self.SEGMENTATION_EXECUTABLE, model_path=self.MODEL_TO_USE,
