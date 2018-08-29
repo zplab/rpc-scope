@@ -171,9 +171,8 @@ def _choose_bf_metering_pos(positions):
 def safe_reinit(scope):
     old_x, old_y, old_z = scope.stage.position
     scope.stage.reinit()
-    scope.stage.z = 15
+    scope.stage.z = 20
     scope.stage.x, scope.stage.y = old_x, old_y
-    scope.stage.z = min(0.95*scope.stage.z_high_soft_limit, old_z)
 
 def simple_get_positions(scope):
     """Return a list of interactively-obtained scope stage positions."""
