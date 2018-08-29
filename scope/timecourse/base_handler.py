@@ -139,7 +139,9 @@ class TimepointHandler:
                 self.logger.debug('Background jobs complete ({:.1f} seconds)', time.time()-t0)
             self.cleanup()
             # transfer timepoint information to annotations dicts
-            process_data.annotate(self.data_dir, [process_data.annotate_timestamps])
+            process_data.annotate(self.data_dir,
+                annotators=[process_data.annotate_timestamps, process_data.annotate_z],
+                position_annotators=[process_data.annotate_stage_pos])
 
             self.logger.info('Timepoint {} ended ({:.0f} minutes after starting)', self.timepoint_prefix,
                              (time.time()-self.start_time)/60)
