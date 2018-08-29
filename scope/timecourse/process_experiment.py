@@ -47,14 +47,13 @@ def compress_main(argv=None):
     compress_pngs(**args.__dict__)
 
 
-def segment_images(experiment_root, segmenter_path, model_path=None, timepoints=None, image_types=['bf'], overwrite_existing=False):
+def segment_images(experiment_root, segmenter_path, model_path, timepoints=None, image_types=['bf'], overwrite_existing=False):
     """Segment image files from an experiment directory.
 
     Parameters:
         experiment_root: top-level experiment directory
         segmenter_path: path to segmentation tool executable
-        model_path: path to the desired model; this can be an absolute path or a
-            relative path of the form 'models/(MODEL).mat' 
+        model_path: path to the desired model 
         timepoints: list of timepoints to compress (or list of glob expressions
             to match multiple timepoints). If None, compress all.
         segmenter_args: arguments, if any, to segmenter. The executable will be
@@ -71,8 +70,6 @@ def segment_images(experiment_root, segmenter_path, model_path=None, timepoints=
 
     Returns: return code of segmenter executable
     """
-    if model_path is None:
-        model_path = pkg_resources.resource_filename('worm_segmenter', 'models/default_CF.mat')
 
     experiment_root = pathlib.Path(experiment_root)
     mask_root = experiment_root / 'derived_data' / 'mask'
