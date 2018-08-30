@@ -5,6 +5,7 @@ import logging
 import time
 import datetime
 import pathlib
+import pkg_resources
 
 from . import base_handler
 from . import process_experiment
@@ -85,6 +86,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     IL_FIELD_WHEEL = None # 'circle:3' is a good choice.
     VIGNETTE_PERCENT = 5 # 5 is a good number when using a 1x optocoupler. If 0.7x, use 35.
     SEGMENTATION_EXECUTABLE = None # path to image-segmentation executable to run in the background after the job ends.
+    MODEL_TO_USE = None # path to segmentation model used by the executable
     TO_SEGMENT = ['bf'] # image name or names to segment
 
     def configure_additional_acquisition_steps(self):
@@ -407,9 +409,11 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             # make sure everything gets segmented. Thus, even if a background
             # segmentation job dies midway, the files will get picked up the
             # next time...
+            if self.MODEL_TO_USE is None:
+                raise ValueError('MODEL_TO_USE cannot be None when performing segmentation')
+
             lock = scope_configuration.CONFIG_DIR / 'segment_job'
             process_experiment.run_in_background(process_experiment.segment_images,
-                experiment_root=self.data_dir, segmenter_path=self.SEGMENTATION_EXECUTABLE,
+                experiment_root=self.data_dir, segmenter_path=self.SEGMENTATION_EXECUTABLE, model_path=self.MODEL_TO_USE,
                 image_types=self.TO_SEGMENT, overwrite_existing=False, nice=20,
                 delete_logfile=False, logfile=self.data_dir / 'segment.log', lock=lock)
-

@@ -8,6 +8,7 @@ import sys
 import tempfile
 import traceback
 import lockfile
+import pkg_resources
 
 import freeimage
 from elegant import process_data
@@ -46,12 +47,13 @@ def compress_main(argv=None):
     compress_pngs(**args.__dict__)
 
 
-def segment_images(experiment_root, segmenter_path, timepoints=None, image_types=['bf'], overwrite_existing=False):
+def segment_images(experiment_root, segmenter_path, model_path, timepoints=None, image_types=['bf'], overwrite_existing=False):
     """Segment image files from an experiment directory.
 
     Parameters:
         experiment_root: top-level experiment directory
         segmenter_path: path to segmentation tool executable
+        model_path: path to the desired model 
         timepoints: list of timepoints to compress (or list of glob expressions
             to match multiple timepoints). If None, compress all.
         segmenter_args: arguments, if any, to segmenter. The executable will be
@@ -68,6 +70,7 @@ def segment_images(experiment_root, segmenter_path, timepoints=None, image_types
 
     Returns: return code of segmenter executable
     """
+
     experiment_root = pathlib.Path(experiment_root)
     mask_root = experiment_root / 'derived_data' / 'mask'
     to_segment = []
@@ -83,7 +86,7 @@ def segment_images(experiment_root, segmenter_path, timepoints=None, image_types
         for image_file, mask_file in to_segment:
             temp.write((str(image_file)+'\n').encode())
             temp.write((str(mask_file)+'\n').encode())
-    returncode = subprocess.call([segmenter_path, temp.name])
+    returncode = subprocess.call([segmenter_path, temp.name, model_path])
     os.unlink(temp.name)
     process_data.annotate(experiment_root, [process_data.annotate_poses])
     return returncode
