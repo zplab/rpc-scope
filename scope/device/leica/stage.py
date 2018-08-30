@@ -318,12 +318,12 @@ class Stage(stand.LeicaComponent):
 
     def reset_x_high_soft_limit(self):
         self.send_message(
-            SET_X2_LIMIT, -1, async=False, 
+            SET_X2_LIMIT, -1, async=False,
             intent="reset x soft max to maximum allowed value by sending SET_X2_LIMIT with the special argument value -1.")
 
     def reset_y_high_soft_limit(self):
         self.send_message(
-            SET_Y2_LIMIT, -1, async=False, 
+            SET_Y2_LIMIT, -1, async=False,
             intent="reset y soft max to maximum allowed value by sending SET_Y2_LIMIT with the special argument value -1.")
 
     def reset_z_high_soft_limit(self):
@@ -472,6 +472,7 @@ class Stage(stand.LeicaComponent):
     def reinit_z(self):
         """Reinitialize z axis to correct for drift or "stuck" stage. Executes synchronously."""
         self.send_message(INIT_RANGE_Z, async=False, intent="init stage z axis")
+        self.z -= 5
 
     def set_xy_fine_control(self, fine):
         self.send_message(SET_XY_STEP_MODE, int(not fine), async=False)
@@ -715,4 +716,3 @@ def _calibrate_z_speed_coefficients(times, distances, speeds, ramps):
     Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT *= ramp_factor
     Z_MOVE_FUDGE_FACTOR = fudge_factor
     return time_estimates
-
