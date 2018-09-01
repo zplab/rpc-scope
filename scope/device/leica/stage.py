@@ -457,6 +457,10 @@ class Stage(stand.LeicaComponent):
         return self._z_speed_min, self._z_speed_max
 
     def reinit(self):
+        """Reinitialize all stage axes to correct for drift or "stuck" stage.
+
+        CAUTION: Moves stage to top of z range (at position x=0, y=0). This
+        could crash the objective if there is any obstruction."""
         self.reinit_x()
         self.reinit_y()
         self.reinit_z()
@@ -470,8 +474,13 @@ class Stage(stand.LeicaComponent):
         self.send_message(INIT_Y, async=False, intent="init stage y axis")
 
     def reinit_z(self):
-        """Reinitialize z axis to correct for drift or "stuck" stage. Executes synchronously."""
+        """Reinitialize z axis to correct for drift or "stuck" stage. Executes synchronously.
+
+        CAUTION: Moves stage to top of z range, which could crash the objective if
+        there is any obstruction at the current position."""
         self.send_message(INIT_RANGE_Z, async=False, intent="init stage z axis")
+        # now back off from the z position that the stage is left in, which is
+        # the closest to the objective (dangerous!)
         self.z -= 5
 
     def set_xy_fine_control(self, fine):

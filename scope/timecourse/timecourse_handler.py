@@ -5,10 +5,11 @@ import logging
 import time
 import datetime
 import pathlib
-import pkg_resources
+
+from zplib import background_process
+from elegant import process_experiment
 
 from . import base_handler
-from . import process_experiment
 from ..client_util import autofocus
 from ..client_util import calibrate
 from ..config import scope_configuration
@@ -85,8 +86,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     TL_APERTURE_DIAPHRAGM = None
     IL_FIELD_WHEEL = None # 'circle:3' is a good choice.
     VIGNETTE_PERCENT = 5 # 5 is a good number when using a 1x optocoupler. If 0.7x, use 35.
-    SEGMENTATION_EXECUTABLE = None # path to image-segmentation executable to run in the background after the job ends.
-    MODEL_TO_USE = None # path to segmentation model used by the executable
+    SEGMENTATION_MODEL = None # path to image-segmentation model to run in the background after the job ends.
     TO_SEGMENT = ['bf'] # image name or names to segment
 
     def configure_additional_acquisition_steps(self):
@@ -398,22 +398,21 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         # use separate locks to let compression and segmentation run in parallel
         # but prevent multiple compression or segmentation jobs from piling up
         if self.RECOMPRESS_IMAGE_LEVEL is not None:
+            logfile = self.data_dir / 'compress.log'
             lock = scope_configuration.CONFIG_DIR / 'compress_job'
-            process_experiment.run_in_background(process_experiment.compress_pngs,
+            background_process.run_in_background(process_experiment.compress_pngs,
                 experiment_root=self.data_dir, timepoints=[self.timepoint_prefix],
-                level=self.RECOMPRESS_IMAGE_LEVEL, nice=20, delete_logfile=False,
-                logfile=self.data_dir / 'compress.log', lock=lock)
+                level=self.RECOMPRESS_IMAGE_LEVEL,
+                nice=20, delete_logfile=False, logfile=logfile, lock=lock)
 
-        if self.SEGMENTATION_EXECUTABLE is not None:
+        if self.SEGMENTATION_MODEL is not None:
             # ask to segment all un-segmented images for all timepoints, just to
             # make sure everything gets segmented. Thus, even if a background
             # segmentation job dies midway, the files will get picked up the
             # next time...
-            if self.MODEL_TO_USE is None:
-                raise ValueError('MODEL_TO_USE cannot be None when performing segmentation')
-
+            logfile = self.data_dir / 'segment.log'
             lock = scope_configuration.CONFIG_DIR / 'segment_job'
-            process_experiment.run_in_background(process_experiment.segment_images,
-                experiment_root=self.data_dir, segmenter_path=self.SEGMENTATION_EXECUTABLE, model_path=self.MODEL_TO_USE,
-                image_types=self.TO_SEGMENT, overwrite_existing=False, nice=20,
-                delete_logfile=False, logfile=self.data_dir / 'segment.log', lock=lock)
+            background_process.run_in_background(process_experiment.segment_experiment,
+                experiment_root=self.data_dir, model=self.SEGMENTATION_MODEL,
+                channels=self.TO_SEGMENT, overwrite_existing=False,
+                nice=20, delete_logfile=False, logfile=logfile, lock=lock)
