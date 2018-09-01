@@ -1,6 +1,5 @@
 # This code is licensed under the MIT License (see LICENSE file for details)
 
-import string
 import pathlib
 import datetime
 import json
@@ -13,13 +12,13 @@ from ris_widget.overlay import roi
 
 from ..gui import scope_viewer_widget
 
-handler_template = string.Template(
+handler_template = \
 '''import pathlib
 from scope.timecourse import timecourse_handler
 
 class Handler(timecourse_handler.BasicAcquisitionHandler):
-    FILTER_CUBE = $filter_cube
-    FLUORESCENCE_FLATFIELD_LAMP = $fl_flatfield_lamp
+    FILTER_CUBE = {filter_cube!r}
+    FLUORESCENCE_FLATFIELD_LAMP = {fl_flatfield_lamp!r}
     OBJECTIVE = 10
     REFOCUS_INTERVAL_MINS = 45 # re-run autofocus at least this often. Useful for not autofocusing every timepoint.
     DO_COARSE_FOCUS = False
@@ -41,6 +40,8 @@ class Handler(timecourse_handler.BasicAcquisitionHandler):
     TL_APERTURE_DIAPHRAGM = None
     IL_FIELD_WHEEL = None # 'circle:3' is a good choice.
     VIGNETTE_PERCENT = 5 # 5 is a good number when using a 1x optocoupler. If 0.7x, use 35.
+    SEGMENTATION_MODEL = None # path to image-segmentation model to run in the background after the job ends.
+    TO_SEGMENT = ['bf'] # image name or names to segment
 
     def configure_additional_acquisition_steps(self):
         """Add more steps to the acquisition_sequencer's sequence as desired,
@@ -89,7 +90,7 @@ class Handler(timecourse_handler.BasicAcquisitionHandler):
             experiment_hours: number of hours between the start of the first
                 timepoint and the start of this timepoint.
         """
-        return $run_interval
+        return {run_interval!r}
 
 if __name__ == '__main__':
     # note: can add any desired keyword arguments to the Handler init method
@@ -111,11 +112,10 @@ def create_acquire_file(data_dir, run_interval, filter_cube, fluorescence_flatfi
     """
     data_dir = pathlib.Path(data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
-    code = handler_template.substitute(filter_cube=repr(filter_cube),
-        fl_flatfield_lamp=repr(fluorescence_flatfield_lamp), run_interval=repr(run_interval))
+    code = handler_template.format(filter_cube=filter_cube,
+        fl_flatfield_lamp=fluorescence_flatfield_lamp, run_interval=run_interval)
     with (data_dir / 'acquire.py').open('w') as f:
         f.write(code)
-
 
 def create_metadata_file(data_dir, positions, z_max, reference_positions, save_focus_stacks=None):
     """ Create the experiment_metadata.json file for timecourse acquisitions.
@@ -195,7 +195,6 @@ def _maybe_reinit_stage(scope):
         scope.stage.reinit_y()
         scope.stage.x, scope.stage.y = current_position
 
-
 def get_positions_with_roi(scope):
     """Interactively obtain scope stage positions and an elliptical ROI for each.
 
@@ -238,7 +237,6 @@ def get_positions_with_roi(scope):
     viewer.close()
     return positions, rois
 
-
 def write_roi_mask_files(data_dir, rois):
     """ Create a "Focus Masks" directory of ROIs for timecourse acquisitions.
 
@@ -273,7 +271,6 @@ def write_roi_mask_files(data_dir, rois):
             painter.end()
             image.save(str(mask_dir / name)+'.png')
     del image # image must be deleted before painter to avoid warning. So delete now...
-
 
 def update_z_positions(data_dir, scope):
     """Interactively update the z positions for an existing experiment.
