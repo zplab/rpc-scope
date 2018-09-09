@@ -59,15 +59,16 @@ class Handler(timecourse_handler.BasicAcquisitionHandler):
             revisit_queue = []
             for position_name, position_coords in sorted(self.positions.items()):
                 if revisit_queue:
-                    # Check queue for things to run (time.time < previuos value?)
-                    # if something to run
-                    self.run_position(position_to_run,prev_position_coords, False)
+                    for (position, position_coords, revisit_time) in revisit_queue:
+                        if (time.time() - revisit_time)/3600 < self.REVISIT_INTERVAL_MINS:
+                            break
+                        self.run_position(position_to_run, position_coords, False)
 
                 if position_name not in self.skip_positions:
                     self.run_position(position_name, position_coords,True)
 
                     # TODO: Read in the recently made metadata and grab position coords
-                    revisit_queue.append({'position':position_name,'position_coords':, 'revisit_time':time.time()+REVISIT_INTERVAL_MINS*3600}) # TODO pull coords from last entry in metadata (assume written)
+                    revisit_queue.append([position_name, position_coords, time.time()+REVISIT_INTERVAL_MINS*3600}) # TODO pull coords from last entry in metadata (assume written)
                     self.heartbeat()
 
 
@@ -103,7 +104,7 @@ class Handler(timecourse_handler.BasicAcquisitionHandler):
             self.logger.error('Exception in timepoint:', exc_info=True)
             raise
 
-    def run_position(self, position_name, position_coords,revisiting):
+    def run_position(self, position_name, position_coords, revisiting):
         """Do everything required for taking a timepoint at a single position
         EXCEPT focusing / image acquisition. This includes moving the stage to
         the right x,y position, loading and saving metadata, and saving image
