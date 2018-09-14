@@ -17,9 +17,6 @@ handler_template = \
 from scope.timecourse import timecourse_handler
 
 class Handler(timecourse_handler.BasicAcquisitionHandler):
-    FILTER_CUBE = {filter_cube!r}
-    FLUORESCENCE_FLATFIELD_LAMP = {fl_flatfield_lamp!r}
-    OBJECTIVE = 10
     REFOCUS_INTERVAL_MINS = 45 # re-run autofocus at least this often. Useful for not autofocusing every timepoint.
     DO_COARSE_FOCUS = False
     # 1 mm distance in 50 steps = 20 microns/step. So we should be somewhere within 20-40 microns of the right plane after coarse autofocus.
@@ -98,17 +95,13 @@ if __name__ == '__main__':
     Handler.main(pathlib.Path(__file__).parent)
 ''')
 
-def create_acquire_file(data_dir, run_interval, filter_cube, fluorescence_flatfield_lamp=None):
+def create_acquire_file(data_dir, run_interval):
     """Create a skeleton acquisition file for timecourse acquisitions.
 
     Parameters:
         data_dir: directory to write python file into
         run_interval: desired number of hours between starts of timepoint
             acquisitions.
-        filter_cube: name of the filter cube to use
-        fluorescence_flatfield_lamp: if fluorescent flatfield images are
-            desired, provide the name of an appropriate spectra x lamp that is
-            compatible with the specified filter cube.
     """
     data_dir = pathlib.Path(data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -117,7 +110,9 @@ def create_acquire_file(data_dir, run_interval, filter_cube, fluorescence_flatfi
     with (data_dir / 'acquire.py').open('w') as f:
         f.write(code)
 
-def create_metadata_file(data_dir, positions, z_max, reference_positions, save_focus_stacks=None):
+def create_metadata_file(data_dir, positions, z_max, reference_positions,
+        nominal_temperature, objective, optocoupler, filter_cube,
+        fluorescence_flatfield_lamp=None, save_focus_stacks=None, **other_metadata):
     """ Create the experiment_metadata.json file for timecourse acquisitions.
 
     Parameters:
@@ -127,9 +122,16 @@ def create_metadata_file(data_dir, positions, z_max, reference_positions, save_f
         z_max: maximum z-value allowed during autofocus
         reference_positions: list of (x,y,z) positions to be used to generate
             brightfield and optionally fluorescence flat-field images.
+        nominal_temperature: intended temperature for experiment
+        objective, optocoupler: objective and optocoupler to be used.
+        filter_cube: name of the filter cube to use
+        fluorescence_flatfield_lamp: if fluorescent flatfield images are
+            desired, provide the name of an appropriate spectra x lamp that is
+            compatible with the specified filter cube.
         save_focus_stacks: if None, don't save any focus stacks. If a list of position
             names, save focus stacks for those positions. If a number, save
             focus stacks for that number of positions.
+        **other_metadata: key-values that will be saved directly in metadata json.
     """
     data_dir = pathlib.Path(data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -143,7 +145,10 @@ def create_metadata_file(data_dir, positions, z_max, reference_positions, save_f
         named_positions.update(zip(names, positions))
     bf_meter_position_name = _choose_bf_metering_pos(named_positions)
     metadata = dict(z_max=z_max, reference_positions=reference_positions,
-        positions=named_positions, bf_meter_position_name=bf_meter_position_name)
+        positions=named_positions, bf_meter_position_name=bf_meter_position_name,
+        objective=int(objective), optocoupler=float(optocoupler),
+        nominal_temperature=float(nominal_temperature), filter_cube=str(filter_cube),
+        fluorescence_flatfield_lamp=fluorescence_flatfield_lamp, **other_metadata)
     if save_focus_stacks:
         try:
             # check if it's iterable
