@@ -1,6 +1,5 @@
 # This code is licensed under the MIT License (see LICENSE file for details)
 
-import string
 import pathlib
 import datetime
 import json
@@ -13,14 +12,11 @@ from ris_widget.overlay import roi
 
 from ..gui import scope_viewer_widget
 
-handler_template = string.Template(
+handler_template = \
 '''import pathlib
 from scope.timecourse import timecourse_handler
 
 class Handler(timecourse_handler.BasicAcquisitionHandler):
-    FILTER_CUBE = $filter_cube
-    FLUORESCENCE_FLATFIELD_LAMP = $fl_flatfield_lamp
-    OBJECTIVE = 10
     REFOCUS_INTERVAL_MINS = 45 # re-run autofocus at least this often. Useful for not autofocusing every timepoint.
     DO_COARSE_FOCUS = False
     # 1 mm distance in 50 steps = 20 microns/step. So we should be somewhere within 20-40 microns of the right plane after coarse autofocus.
@@ -41,6 +37,8 @@ class Handler(timecourse_handler.BasicAcquisitionHandler):
     TL_APERTURE_DIAPHRAGM = None
     IL_FIELD_WHEEL = None # 'circle:3' is a good choice.
     VIGNETTE_PERCENT = 5 # 5 is a good number when using a 1x optocoupler. If 0.7x, use 35.
+    SEGMENTATION_MODEL = None # path to image-segmentation model to run in the background after the job ends.
+    TO_SEGMENT = ['bf'] # image name or names to segment
 
     def configure_additional_acquisition_steps(self):
         """Add more steps to the acquisition_sequencer's sequence as desired,
@@ -89,7 +87,7 @@ class Handler(timecourse_handler.BasicAcquisitionHandler):
             experiment_hours: number of hours between the start of the first
                 timepoint and the start of this timepoint.
         """
-        return $run_interval
+        return {run_interval!r}
 
 if __name__ == '__main__':
     # note: can add any desired keyword arguments to the Handler init method
@@ -97,27 +95,24 @@ if __name__ == '__main__':
     Handler.main(pathlib.Path(__file__).parent)
 ''')
 
-def create_acquire_file(data_dir, run_interval, filter_cube, fluorescence_flatfield_lamp=None):
+def create_acquire_file(data_dir, run_interval):
     """Create a skeleton acquisition file for timecourse acquisitions.
 
     Parameters:
         data_dir: directory to write python file into
         run_interval: desired number of hours between starts of timepoint
             acquisitions.
-        filter_cube: name of the filter cube to use
-        fluorescence_flatfield_lamp: if fluorescent flatfield images are
-            desired, provide the name of an appropriate spectra x lamp that is
-            compatible with the specified filter cube.
     """
     data_dir = pathlib.Path(data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
-    code = handler_template.substitute(filter_cube=repr(filter_cube),
-        fl_flatfield_lamp=repr(fluorescence_flatfield_lamp), run_interval=repr(run_interval))
+    code = handler_template.format(filter_cube=filter_cube,
+        fl_flatfield_lamp=fluorescence_flatfield_lamp, run_interval=run_interval)
     with (data_dir / 'acquire.py').open('w') as f:
         f.write(code)
 
-
-def create_metadata_file(data_dir, positions, z_max, reference_positions, save_focus_stacks=None):
+def create_metadata_file(data_dir, positions, z_max, reference_positions,
+        nominal_temperature, objective, optocoupler, filter_cube,
+        fluorescence_flatfield_lamp=None, save_focus_stacks=None, **other_metadata):
     """ Create the experiment_metadata.json file for timecourse acquisitions.
 
     Parameters:
@@ -127,9 +122,16 @@ def create_metadata_file(data_dir, positions, z_max, reference_positions, save_f
         z_max: maximum z-value allowed during autofocus
         reference_positions: list of (x,y,z) positions to be used to generate
             brightfield and optionally fluorescence flat-field images.
+        nominal_temperature: intended temperature for experiment
+        objective, optocoupler: objective and optocoupler to be used.
+        filter_cube: name of the filter cube to use
+        fluorescence_flatfield_lamp: if fluorescent flatfield images are
+            desired, provide the name of an appropriate spectra x lamp that is
+            compatible with the specified filter cube.
         save_focus_stacks: if None, don't save any focus stacks. If a list of position
             names, save focus stacks for those positions. If a number, save
             focus stacks for that number of positions.
+        **other_metadata: key-values that will be saved directly in metadata json.
     """
     data_dir = pathlib.Path(data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -143,7 +145,10 @@ def create_metadata_file(data_dir, positions, z_max, reference_positions, save_f
         named_positions.update(zip(names, positions))
     bf_meter_position_name = _choose_bf_metering_pos(named_positions)
     metadata = dict(z_max=z_max, reference_positions=reference_positions,
-        positions=named_positions, bf_meter_position_name=bf_meter_position_name)
+        positions=named_positions, bf_meter_position_name=bf_meter_position_name,
+        objective=int(objective), optocoupler=float(optocoupler),
+        nominal_temperature=float(nominal_temperature), filter_cube=str(filter_cube),
+        fluorescence_flatfield_lamp=fluorescence_flatfield_lamp, **other_metadata)
     if save_focus_stacks:
         try:
             # check if it's iterable
@@ -168,12 +173,9 @@ def _choose_bf_metering_pos(positions):
     distance_sums = distances[:,:8].sum(axis=1)
     return pos_names[distance_sums.argmin()]
 
-
 def simple_get_positions(scope):
     """Return a list of interactively-obtained scope stage positions."""
-    reinit = input('press enter when ready to reinit stage (or press n and enter to skip reinit) ')
-    if reinit.lower() != 'n':
-        scope.stage.reinit()
+    _maybe_reinit_stage(scope)
     positions = []
     print('Press enter after each position has been found; press control-c to end')
     while True:
@@ -190,6 +192,13 @@ def _name_positions(num_positions, name_prefix):
     names = [f'{name_prefix}{i:0{pad}}' for i in range(num_positions)]
     return names
 
+def _maybe_reinit_stage(scope):
+    reinit = input('press enter when ready to reinit stage (or press n and enter to skip reinit) ')
+    if reinit.lower() != 'n':
+        current_position = scope.stage.x, scope.stage.y
+        scope.stage.reinit_x()
+        scope.stage.reinit_y()
+        scope.stage.x, scope.stage.y = current_position
 
 def get_positions_with_roi(scope):
     """Interactively obtain scope stage positions and an elliptical ROI for each.
@@ -208,9 +217,7 @@ def get_positions_with_roi(scope):
         positions: list of (x, y, z) positions
         rois: list of Qt.QRectF objects describing the ROI for each position.
     """
-    reinit = input('press enter when ready to reinit stage (or press n and enter to skip reinit) ')
-    if reinit.lower() != 'n':
-        scope.stage.reinit()
+    _maybe_reinit_stage(scope)
     viewer = scope_viewer_widget.ScopeViewerWidget(scope)
     viewer.show()
     focus_roi = roi.EllipseROI(viewer, geometry=((400, 200), (2200, 2000)))
@@ -234,7 +241,6 @@ def get_positions_with_roi(scope):
     focus_roi.remove()
     viewer.close()
     return positions, rois
-
 
 def write_roi_mask_files(data_dir, rois):
     """ Create a "Focus Masks" directory of ROIs for timecourse acquisitions.
@@ -270,7 +276,6 @@ def write_roi_mask_files(data_dir, rois):
             painter.end()
             image.save(str(mask_dir / name)+'.png')
     del image # image must be deleted before painter to avoid warning. So delete now...
-
 
 def update_z_positions(data_dir, scope):
     """Interactively update the z positions for an existing experiment.

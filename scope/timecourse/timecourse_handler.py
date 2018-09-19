@@ -6,8 +6,10 @@ import time
 import datetime
 import pathlib
 
+from zplib import background_process
+from elegant import process_experiment
+
 from . import base_handler
-from . import process_experiment
 from ..client_util import autofocus
 from ..client_util import calibrate
 from ..config import scope_configuration
@@ -33,10 +35,9 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             MySubclass.main()
     where 'MySubclass' is replaced with whatever the name of the subclass is.
 
-    The subclass MUST set the FILTER_CUBE attribute. In addition, if
-    fluorescent flat-field images are desired the subclass MAY set
-    FLUORESCENCE_FLATFIELD_LAMP to the name of a spectra X lamp that is
-    compatible with the selected filter cube.
+    The experiment_metadata.json file MUST contain entries for 'objective',
+    'filter_cube', and 'fluorescence_flatfield_lamp'. If this last is non-null,
+    this will be the spectra X lamp that used to obtain fluorescent flatfields.
 
     The subclass MUST override the get_next_run_interval() method to return
     the desired time interval between the beginning of the current run and
@@ -57,13 +58,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     heartbeat() between calls to these functions.)
     """
 
-    # Attributes and functions subclasses MUST or MAY override are here:
-    # First: Really important attributes to override
-    FILTER_CUBE = 'Choose a filter cube!'
-    FLUORESCENCE_FLATFIELD_LAMP = None # MAKE SURE THIS IS COMPATIBLE WITH THE FILTER CUBE!!!
-
-    # Next: Potentially useful attributes to override
-    OBJECTIVE = 10
+    # Potentially useful attributes to override
     REFOCUS_INTERVAL_MINS = 45 # re-run autofocus at least this often. Useful for not autofocusing every timepoint.
     DO_COARSE_FOCUS = False
     # 1 mm distance in 50 steps = 20 microns/step. So we should be somewhere within 20-40 microns of the right plane after the coarse autofocus.
@@ -84,7 +79,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     TL_APERTURE_DIAPHRAGM = None
     IL_FIELD_WHEEL = None # 'circle:3' is a good choice.
     VIGNETTE_PERCENT = 5 # 5 is a good number when using a 1x optocoupler. If 0.7x, use 35.
-    SEGMENTATION_EXECUTABLE = None # path to image-segmentation executable to run in the background after the job ends.
+    SEGMENTATION_MODEL = None # path to image-segmentation model to run in the background after the job ends.
     TO_SEGMENT = ['bf'] # image name or names to segment
 
     def configure_additional_acquisition_steps(self):
@@ -144,23 +139,26 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         # on objective switch. That gives a sane-ish default. Then allow specific customization of
         # these values later.
         self.scope.stand.active_microscopy_method = 'TL BF'
+        objective = self.experiment_metadata['objective']
         try:
-            self.scope.nosepiece.magnification = self.OBJECTIVE
+            self.scope.nosepiece.magnification = objective
         except AttributeError:
             # non-motorized nosepiece
             pass
+        assert self.scope.nosepiece.magnification == objective
+
         self.scope.il.shutter_open = True
         self.scope.il.spectra.lamps(**{lamp+'_enabled':False for lamp in self.scope.il.spectra.lamp_specs})
         self.scope.tl.shutter_open = True
         self.scope.tl.lamp.enabled = False
-        self.scope.tl.condenser_retracted = self.OBJECTIVE == 5 # only retract condenser for 5x objective
+        self.scope.tl.condenser_retracted = objective == 5 # only retract condenser for 5x objective
         if self.TL_FIELD_DIAPHRAGM is not None:
             self.scope.tl.field_diaphragm = self.TL_FIELD_DIAPHRAGM
         if self.TL_APERTURE_DIAPHRAGM is not None:
             self.scope.tl.aperture_diaphragm = self.TL_APERTURE_DIAPHRAGM
         if self.IL_FIELD_WHEEL is not None:
             self.scope.il.field_wheel = self.IL_FIELD_WHEEL
-        self.scope.il.filter_cube = self.FILTER_CUBE
+        self.scope.il.filter_cube = self.experiment_metadata['filter_cube']
         self.scope.camera.sensor_gain = '16-bit (low noise & high well capacity)'
         self.scope.camera.readout_rate = self.PIXEL_READOUT_RATE
         self.scope.camera.shutter_mode = 'Rolling'
@@ -252,9 +250,10 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.heartbeat()
 
         # calculate a fluorescent flatfield if requested
-        if self.FLUORESCENCE_FLATFIELD_LAMP:
+        flatfield_lamp = self.experiment_metadata['fluorescence_flatfield_lamp']
+        if flatfield_lamp is not None:
             self.scope.stage.position = ref_positions[0]
-            lamp = getattr(self.scope.il.spectra, self.FLUORESCENCE_FLATFIELD_LAMP)
+            lamp = getattr(self.scope.il.spectra, flatfield_lamp)
             with lamp.in_state(enabled=True):
                 fl_exposure, fl_intensity = calibrate.meter_exposure_and_intensity(self.scope, lamp,
                     max_exposure=400, min_intensity_fraction=0.1)[:2]
@@ -396,20 +395,21 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         # use separate locks to let compression and segmentation run in parallel
         # but prevent multiple compression or segmentation jobs from piling up
         if self.RECOMPRESS_IMAGE_LEVEL is not None:
+            logfile = self.data_dir / 'compress.log'
             lock = scope_configuration.CONFIG_DIR / 'compress_job'
-            process_experiment.run_in_background(process_experiment.compress_pngs,
+            background_process.run_in_background(process_experiment.compress_pngs,
                 experiment_root=self.data_dir, timepoints=[self.timepoint_prefix],
-                level=self.RECOMPRESS_IMAGE_LEVEL, nice=20, delete_logfile=False,
-                logfile=self.data_dir / 'compress.log', lock=lock)
+                level=self.RECOMPRESS_IMAGE_LEVEL,
+                nice=20, delete_logfile=False, logfile=logfile, lock=lock)
 
-        if self.SEGMENTATION_EXECUTABLE is not None:
+        if self.SEGMENTATION_MODEL is not None:
             # ask to segment all un-segmented images for all timepoints, just to
             # make sure everything gets segmented. Thus, even if a background
             # segmentation job dies midway, the files will get picked up the
             # next time...
+            logfile = self.data_dir / 'segment.log'
             lock = scope_configuration.CONFIG_DIR / 'segment_job'
-            process_experiment.run_in_background(process_experiment.segment_images,
-                experiment_root=self.data_dir, segmenter_path=self.SEGMENTATION_EXECUTABLE,
-                image_types=self.TO_SEGMENT, overwrite_existing=False, nice=20,
-                delete_logfile=False, logfile=self.data_dir / 'segment.log', lock=lock)
-
+            background_process.run_in_background(process_experiment.segment_experiment,
+                experiment_root=self.data_dir, model=self.SEGMENTATION_MODEL,
+                channels=self.TO_SEGMENT, overwrite_existing=False,
+                nice=20, delete_logfile=False, logfile=logfile, lock=lock)
