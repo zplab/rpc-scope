@@ -76,7 +76,7 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
                     if t - self.last_image_time < self.interval_min:
                         return True
                 try:
-                    image_data, timestamp, frame_no = self.live_streamer.get_image(timeout=4)
+                    image_data, timestamp, frame_number = self.live_streamer.get_image(timeout=4)
                 except scope_client.LiveStreamer.Timeout:
                     return True
                 self.last_image_time = time.time()

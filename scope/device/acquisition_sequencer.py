@@ -229,8 +229,9 @@ class AcquisitionSequencer:
             self._iotool.start_program()
             names, self._latest_timestamps = [], []
             for exposure in self._exposures:
-                names.append(self._camera.next_image(read_timeout_ms=exposure+1000))
-                self._latest_timestamps.append(self._camera.get_latest_timestamp())
+                name, timestamp, frame = self._camera.next_image_and_metadata(read_timeout_ms=exposure+1000)
+                names.append(name)
+                self._latest_timestamps.append(timestamp)
             self._output = self._iotool.wait_until_done()
         return names
 

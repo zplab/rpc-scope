@@ -49,8 +49,9 @@ def autofocus(scope, z_start, z_max, range_mm, steps, speed=0.3, return_images=F
     offset = range_mm / 2
     start = z_start - offset
     end = min(z_start + offset, z_max)
-    # set a 45-minute timeout to allow for FFT calculation if necessary
-    with scope._rpc_client.timeout_sec(60*45):
-        best_z, positions_and_scores, images = scope.camera.autofocus.autofocus_continuous_move(start, end,
-            steps=steps, max_speed=speed, focus_filter_mask=mask, return_images=return_images, **camera_params)
-        return best_z, positions_and_scores, images
+    # run ensure_fft_ready (which has a long timeout) to make sure that the FFT filters
+    # have been computed before we actually do an autofocus.
+    scope.camera.autofocus.ensure_fft_ready()
+    best_z, positions_and_scores, images = scope.camera.autofocus.autofocus_continuous_move(start, end,
+        steps=steps, max_speed=speed, focus_filter_mask=mask, return_images=return_images, **camera_params)
+    return best_z, positions_and_scores, images

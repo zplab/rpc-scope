@@ -44,7 +44,7 @@ class AutofocusMetric:
         return best_i, focus_scores
 
 class BrennerAutofocus(AutofocusMetric):
-    def __init__(self, shape, period_range=None, mask=None):
+    def __init__(self, shape, period_range=(None, None), mask=None):
         super().__init__()
         self.filter = self._get_filter(tuple(shape), tuple(period_range))
         self.mask = mask
@@ -79,6 +79,17 @@ class Autofocus:
     def __init__(self, camera: andor.Camera, stage: stage.Stage):
         self._camera = camera
         self._stage = stage
+
+    def ensure_fft_ready(self):
+        """Make sure the autofocus FFT filter is ready for the current camera
+        frame size. (No need to worry about the focus_filter_period_range: the
+        FFT doesn't need to know that to compute the basic filter.)
+
+        The first time that this is done after installing / updating fftw,
+        this might take a while. So this function is available separetely so
+        that it can be run with a very long timeout.
+        """
+        BrennerAutofocus._get_filter(tuple(self._camera.get_aoi_shape()))
 
     def _start_autofocus(self, focus_filter_period_range, focus_filter_mask, **camera_state):
         camera_state.update(self._CAMERA_MODE)
@@ -244,13 +255,13 @@ class MetricRunner(threading.Thread):
         try:
             self.exception = None
             while self.frames_left > 0:
-                name = self.camera.next_image(self.read_timeout_ms)
-                self.camera_timestamps.append(self.camera.get_latest_timestamp())
+                name, timestamp, frame = self._camera.next_image_and_metadata(self.read_timeout_ms)
+                self.camera_timestamps.append(timestamp)
                 if self.retain_images:
                     self.image_names.append(name)
-                    array = transfer_ism_buffer._borrow_array(name)
+                    array = transfer_ism_buffer.borrow_array(name)
                 else:
-                    array = transfer_ism_buffer._release_array(name)
+                    array = transfer_ism_buffer.release_array(name)
                 self.futures.append(self.threadpool.submit(self.metric.evaluate_image, array))
                 self.frames_left -= 1
         except Exception as e:

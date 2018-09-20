@@ -228,8 +228,6 @@ class Camera(property_device.PropertyDevice):
         self._update_property('live_mode', self._live_mode)
         self._maybe_update_frame_rate_and_range('ExposureTime') # pretend exposure time was updated, to force the frame rate range to get updated
         self._latest_data = None
-        self._latest_timestamp = None
-        self._latest_image_lock = threading.Lock()
 
     def _timer_update_temp(self):
         getter, updater = self._callback_properties['SensorTemperature']
@@ -524,31 +522,25 @@ class Camera(property_device.PropertyDevice):
 
     def latest_image(self):
         """Get the latest image that the camera retrieved, its timestamp, and
-        its frame number. These latter two values are accessible as camera
-        attributes, but that form of access is subject to race conditions --
-        so in the rare circumstances where it matters, these returned values are
-        guaranteed to be correct."""
+        its frame number."""
         # Return the name of the shared memory buffer that the latest live image
         # was stored in. The scope_client code will transparently retrieve the
         # image bytes based on this name, either via the ISM_Buffer mechanism if
         # the client is on the same machine, or over the network.
-        with self._latest_image_lock:
-            if self._latest_data is None:
-                raise RuntimeError('No image has been acquired.')
-            # note: only set _latest_timestamp when we're pulling an image for
-            # transfer to a client. _frame_number can be set every time a new
-            # frame comes in (in _update_image_data),  but we need to guarantee
-            # that get_latest_timestamp() will always return the timestamp
-            # associated with the most recent latest_image() call...
-            name, array, self._latest_timestamp = self._latest_data
-            transfer_ism_buffer.server_register_array_for_transfer(name, array)
-            return name, self._latest_timestamp, self._frame_number
+        if self._latest_data is None:
+            raise RuntimeError('No image has been acquired.')
+        # note: this function (and ONLY this function in this file) can get called
+        # simultaneously from two threads. Below operations need to be atomic,
+        # intrinsically thread-safe, or serialized.
+        name, array, frame_number, timestamp = self._latest_data
+        transfer_ism_buffer.register_array_for_transfer(name, array)
+        return name, timestamp, frame_number
 
     def _update_image_data(self, name, array, timestamp):
         """Update information about the latest image, and broadcast to the world
         that another image has been retrieved."""
-        self._latest_data = name, array, timestamp
         self._frame_number += 1
+        self._latest_data = name, array, self._frame_number, timestamp
         self._update_property('frame_number', self._frame_number)
 
     def _enable_live(self):
@@ -674,23 +666,32 @@ class Camera(property_device.PropertyDevice):
                 self._buffer_maker.queue_buffer()
         lowlevel.Command('AcquisitionStart')
 
-    def next_image(self, read_timeout_ms=None):
+    def next_image_and_metadata(self, read_timeout_ms=None):
         """Retrieve the next image from the image acquisition sequence. Will block
         if the image has not yet been triggered or retrieved from the camera.
         If a timeout is provided, either an image will be returned within that time
         or an AndorError of TIMEDOUT will be raised. If the timeout is None,
-        then the call will block until an image becomes available."""
+        then the call will block until an image becomes available.
+
+        Returns the image, timestamp, and frame number.
+        """
         if read_timeout_ms is None:
             read_timeout_ms = lowlevel.ANDOR_INFINITE
         self._buffer_maker.queue_if_needed()
         lowlevel.WaitBuffer(int(round(read_timeout_ms)))
         self._update_image_data(*self._buffer_maker.convert_buffer())
-        return self.latest_image()[0] # return just the ism_buffer name
+        return self.latest_image()
 
-    def get_latest_timestamp(self):
-        """Return the timestamp of the most recent image acquired."""
-        if self._latest_timestamp is not None:
-            return int(self._latest_timestamp)
+    def next_image(self, read_timeout_ms=None):
+        """Retrieve the next image from the image acquisition sequence. Will block
+        if the image has not yet been triggered or retrieved from the camera.
+        If a timeout is provided, either an image will be returned within that time
+        or an AndorError of TIMEDOUT will be raised. If the timeout is None,
+        then the call will block until an image becomes available.
+
+        Returns only the image, discarding the timestamp and frame number.
+        """
+        return self.next_image_and_metadata(read_timeout_ms)[0] # return just the ism_buffer name
 
     def end_image_sequence_acquisition(self):
         """Stop an image-acquisition sequence and perform necessary cleanup."""
@@ -791,8 +792,9 @@ class Camera(property_device.PropertyDevice):
                 trigger_mode='Internal', overlap_enabled=overlap, **camera_params):
             read_time = 1/min(self.get_max_interface_fps(), frame_rate)
             for _ in range(frame_count):
-                image_names.append(self.next_image(3 * read_time * 1000))
-                timestamps.append(self._latest_timestamp)
+                name, timestamp, frame = self.next_image_and_metadata(3 * read_time * 1000)
+                image_names.append(name)
+                timestamps.append(timestamp)
         return image_names, timestamps, frame_rate
 
 
@@ -840,7 +842,7 @@ class BufferFactory:
 
     def convert_buffer(self):
         name = next(self.names)
-        output_array = transfer_ism_buffer.server_create_array(name, shape=self.buffer_shape,
+        output_array = transfer_ism_buffer.create_array(name, shape=self.buffer_shape,
             dtype=numpy.uint16, order='Fortran')
         buffer = self.queued_buffers.popleft()
         timestamp = parse_buffer_metadata(buffer, 1) # timestamp is metadata CID 1

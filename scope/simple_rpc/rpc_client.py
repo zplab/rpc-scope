@@ -53,22 +53,14 @@ class RPCClient:
         func.__name__ = func.__qualname__ = command
         return func
 
-    def proxy_namespace(self, client_wrappers=None):
+    def proxy_namespace(self):
         """Use the RPC server's __DESCRIBE__ functionality to reconstitute a
         faxscimile namespace on the client side with well-described functions
         that can be seamlessly called.
 
         A set of the fully-qualified function names available in the namespace
         is included as the _functions_proxied attribute of this namespace.
-
-        If client_wrappers is provided, it must be a dict mapping qualified
-        function names to functions that will be used to wrap that RPC call. For
-        example, if certain data returned from the RPC server needs additional
-        processing before returning to the client, this can be used for that
-        purpose.
         """
-        if client_wrappers is None:
-            client_wrappers = {}
         # group functions by their namespace
         server_namespaces = collections.defaultdict(list)
         functions_proxied = set()
@@ -94,8 +86,7 @@ class RPCClient:
             # create functions and gather property accessors
             accessors = collections.defaultdict(RPCClient._accessor_pair)
             for name, qualname, doc, argspec in function_descriptions:
-                client_wrap_function = client_wrappers.pop(qualname, None)
-                client_func = _rich_proxy_function(doc, argspec, name, self, qualname, client_wrap_function)
+                client_func = _rich_proxy_function(doc, argspec, name, self, qualname)
                 if name.startswith('get_'):
                     accessors[name[4:]].getter = client_func
                     name = '_'+name
@@ -163,7 +154,7 @@ class ZMQClient(RPCClient):
         self.rpc_addr = rpc_addr
         self.interrupt_addr = interrupt_addr
         self.heartbeat_sec = heartbeat_sec
-        self._timeout_ms = timeout_sec * 1000
+        self._timeout_sec = timeout_sec
         self._connect()
 
     def _connect(self):
@@ -197,19 +188,20 @@ class ZMQClient(RPCClient):
     @contextlib.contextmanager
     def timeout_sec(self, timeout_sec):
         """Context manager to alter the timeout time."""
-        old_timeout_ms = self._timeout_ms
-        self._timeout_ms = timeout_sec * 1000
+        old_timeout = self._timeout_sec
+        if timeout_sec is not None:
+            self._timeout_sec = timeout_sec
         try:
             yield
         finally:
-            self._timeout_ms = old_timeout_ms
+            self._timeout_sec = old_timeout
 
     def _send(self, command, args, kwargs):
         json = datafile.json_encode_compact_to_bytes((command, args, kwargs))
         self.socket.send(json)
 
     def _receive_reply(self):
-        if not self.socket.poll(self._timeout_ms):
+        if not self.socket.poll(self._timeout_sec * 1000):
             raise RPCError('Timed out waiting for reply from server (is it running?)')
         reply_type = self.socket.recv_string()
         assert(self.socket.RCVMORE)
@@ -224,7 +216,19 @@ class ZMQClient(RPCClient):
         if self.interrupt_addr is not None:
             self.interrupt_socket.send(b'interrupt')
 
-def _rich_proxy_function(doc, argspec, name, rpc_client, rpc_function, client_wrap_function=None):
+class _ProxyMethodClass:
+    def __init__(self, rpc_client, rpc_function):
+        self._rpc_client = rpc_client
+        self._rpc_function = rpc_function
+        self._timeout_sec = None
+        self._output_handler = lambda x: x # no-op handler
+
+    def _call_function(self, *args, **kws):
+        with self._rpc_client.timeout_sec(self._timeout_sec):
+            result = self._rpc_client(self._rpc_function, *args, **kws)
+        return self._output_handler(result)
+
+def _rich_proxy_function(doc, argspec, name, rpc_client, rpc_function):
     """Using the docstring and argspec from the RPC __DESCRIBE__ command,
     generate a proxy function that looks just like the remote function, except
     wraps the function 'to_proxy' that is passed in."""
@@ -242,41 +246,37 @@ def _rich_proxy_function(doc, argspec, name, rpc_client, rpc_function, client_wr
     # and exec-ing it.
     for arg in args:
         if arg in defaults:
-            arg_parts.append('{}={!r}'.format(arg, defaults[arg]))
+            arg_parts.append(f'{arg}={defaults[arg]!r}')
         else:
             arg_parts.append(arg)
         call_parts.append(arg)
     if varargs:
-        call_parts.append('*{}'.format(varargs))
-        arg_parts.append('*{}'.format(varargs))
+        fstr = f'*{varargs}'
+        call_parts.append(fstr)
+        arg_parts.append(fstr)
     if varkw:
-        call_parts.append('**{}'.format(varkw))
-        arg_parts.append('**{}'.format(varkw))
+        fstr = f'**{varkw}'
+        call_parts.append(fstr)
+        arg_parts.append(fstr)
     if kwonly:
         if not varargs:
             arg_parts.append('*')
         for arg in kwonly:
-            call_parts.append('{}={}'.format(arg, arg))
+            call_parts.append(f'{arg}={arg}')
             if arg in kwdefaults:
-                arg_parts.append('{}={!r}'.format(arg, kwdefaults[arg]))
+                arg_parts.append(f'{arg}={kwdefaults[arg]!r}'))
             else:
                 arg_parts.append(arg)
-    # we actually create a factory-function via exec, which when called
-    # creates the real function. This is necessary to generate the real proxy
-    # function with the function to proxy stored inside a closure, as exec()
-    # can't generate closures correctly.
-    rpc_call = 'rpc_client(rpc_function, {})'.format(', '.join(call_parts))
-    if client_wrap_function is not None:
-        rpc_call = 'client_wrap_function({})'.format(rpc_call)
-    func_str = """
-        def make_func(rpc_client, rpc_function, client_wrap_function):
-            def {}({}):
-                '''{}'''
-                return {}
-            return {}
-    """.format(name, ', '.join(arg_parts), doc, rpc_call, name)
-    fake_locals = {} # dict in which exec operates: locals() doesn't work here.
-    exec(func_str.strip(), globals(), fake_locals)
-    func = fake_locals['make_func'](rpc_client, rpc_function, client_wrap_function) # call the factory function
-    func.__qualname__ = func.__name__ = name # rename the proxy function
-    return func
+    arg_parts = ', '.join(arg_parts)
+    call_parts = ', '.join(call_parts)
+    class_def = f"""
+        class {name}(_ProxyMethodClass):
+            def __call__(self, {arg_parts}):
+                '''{doc}'''
+                return self._call_function({call_parts})"""
+    namespace = {} # dict in which exec operates
+    exec(func_str.strip(), globals(), namespace)
+    ProxyClass = namespace[name]
+    # now pretend that the given class was defined in a module named like the rpc function's namespace
+    ProxyClass.__module__ = rpc_function.rsplit('.', maxsplit=1)[0]
+    return ProxyClass(rpc_client, rpc_function)
