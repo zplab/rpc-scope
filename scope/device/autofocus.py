@@ -44,16 +44,17 @@ class AutofocusMetric:
         return best_i, focus_scores
 
 class BrennerAutofocus(AutofocusMetric):
-    def __init__(self, shape, period_range=(None, None), mask=None):
+    def __init__(self, shape, period_range=None, mask=None):
         super().__init__()
-        self.filter = self._get_filter(tuple(shape), tuple(period_range))
+        if period_range is None:
+            self.filter = None
+        else:
+            self.filter = self._get_filter(tuple(shape), tuple(period_range))
         self.mask = mask
 
     @staticmethod
     @functools.lru_cache(maxsize=16)
     def _get_filter(shape, period_range):
-        if period_range is None:
-            return lambda x: x
         timer = threading.Timer(1, logger.warning, ['Slow construction of FFTW filter for image shape {} (likely no cached plan could be found). May take >30 minutes!', shape])
         timer.start()
         fft_filter = fast_fft.SpatialFilter(shape, period_range, precision=32, threads=6, better_plan=True)
@@ -66,6 +67,8 @@ class BrennerAutofocus(AutofocusMetric):
 
     def metric(self, image):
         image = image.astype(numpy.float32) # otherwise can get overflow in the squaring and summation
+        if self.filter is not None:
+            image = self.filter.filter(image)
         x_diffs = (image[2:, :] - image[:-2, :])**2
         y_diffs = (image[:, 2:] - image[:, :-2])**2
         if self.mask is None:
@@ -89,7 +92,8 @@ class Autofocus:
         this might take a while. So this function is available separetely so
         that it can be run with a very long timeout.
         """
-        BrennerAutofocus._get_filter(tuple(self._camera.get_aoi_shape()))
+        # use a dummy period range below
+        BrennerAutofocus._get_filter(shape=tuple(self._camera.get_aoi_shape()), period_range=(None, 2))
 
     def _start_autofocus(self, focus_filter_period_range, focus_filter_mask, **camera_state):
         camera_state.update(self._CAMERA_MODE)
