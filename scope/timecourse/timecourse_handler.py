@@ -7,13 +7,14 @@ import datetime
 import pathlib
 
 from zplib import background_process
+from zplib.image.threaded_io import COMPRESSION
+
 from elegant import process_experiment
 
 from . import base_handler
 from ..client_util import autofocus
 from ..client_util import calibrate
 from ..config import scope_configuration
-from ..util.threaded_image_io import COMPRESSION
 
 class BasicAcquisitionHandler(base_handler.TimepointHandler):
     """Base class for most timecourse acquisition needs.

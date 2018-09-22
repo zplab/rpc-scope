@@ -12,10 +12,10 @@ import contextlib
 import pickle
 
 from zplib import datafile
+from zplib.image import threaded_io
 from elegant import load_data
 from elegant import process_data
 
-from ..util import threaded_image_io
 from ..util import log_util
 from ..util import timer
 
@@ -26,7 +26,7 @@ class DummyIO:
         self.logger.warning('Trying to write files, but file writing was disabled!')
 
 class TimepointHandler:
-    IMAGE_COMPRESSION = threaded_image_io.COMPRESSION.DEFAULT
+    IMAGE_COMPRESSION = threaded_io.COMPRESSION.DEFAULT
     LOG_LEVEL = logging.INFO
     IO_THREADS = 4
 
@@ -80,7 +80,7 @@ class TimepointHandler:
             log_level = getattr(logging, log_level)
         self.logger.setLevel(log_level)
         if self.write_files:
-            self.image_io = threaded_image_io.ThreadedIO(self.IO_THREADS)
+            self.image_io = threaded_io.ThreadedIO(self.IO_THREADS)
             handler = logging.FileHandler(str(self.data_dir/'acquisitions.log'))
         else:
             self.image_io = DummyIO(self.logger)
@@ -222,7 +222,7 @@ class TimepointHandler:
         new_metadata['timepoint'] = self.timepoint_prefix
         position_metadata.append(new_metadata)
         if self.write_files:
-            futures_out = self.image_io.write(images, image_paths, self.IMAGE_COMPRESSION, wait=False)
+            futures_out = self.image_io.write(images, image_paths, self.IMAGE_COMPRESSION)
             self._job_futures.extend(futures_out)
             self._write_atomic_json(metadata_path, position_metadata)
         t3 = time.time()
