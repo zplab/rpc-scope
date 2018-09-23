@@ -27,7 +27,8 @@ def coarse_fine_autofocus(scope, z_start, z_max, coarse_range_mm, coarse_steps, 
         speed=0.3, binning='1x1', return_images=return_images)
     return coarse_result, fine_result
 
-def autofocus(scope, z_start, z_max, range_mm, steps, speed=0.3, return_images=False, mask=None, **camera_params):
+def autofocus(scope, z_start, z_max, range_mm, steps, speed=0.3, return_images=False,
+    mask=None, focus_filter_period_range=None, **camera_params):
     """Run a single-pass autofocus.
 
     Parameters:
@@ -40,6 +41,10 @@ def autofocus(scope, z_start, z_max, range_mm, steps, speed=0.3, return_images=F
         speed: stage movement speed during autofocus in mm/s
         return_images: if True, return the coarse and fine images acquired
         mask: filename of image mask defining region for autofocus to examine
+        focus_filter_period_range: if None, the image will not be filtered.
+            Otherwise, this must be a tuple of (min_size, max_size),
+            representing the minimum and maximum spatial size of objects in
+            the image that will remain after filtering.
 
     Returns: best_z, positions_and_scores, images
         where best_z is the position of the best focus, positions_and_scores is
@@ -49,9 +54,12 @@ def autofocus(scope, z_start, z_max, range_mm, steps, speed=0.3, return_images=F
     offset = range_mm / 2
     start = z_start - offset
     end = min(z_start + offset, z_max)
-    # run ensure_fft_ready (which has a long timeout) to make sure that the FFT filters
-    # have been computed before we actually do an autofocus.
-    scope.camera.autofocus.ensure_fft_ready()
+    if focus_filter_period_range is not None:
+        # run ensure_fft_ready (which has a long timeout) to make sure that the FFT filters
+        # have been computed before we actually do an autofocus.
+        scope.camera.autofocus.ensure_fft_ready()
     best_z, positions_and_scores, images = scope.camera.autofocus.autofocus_continuous_move(start, end,
-        steps=steps, max_speed=speed, focus_filter_mask=mask, return_images=return_images, **camera_params)
+        steps=steps, max_speed=speed, focus_filter_mask=mask,
+        focus_filter_period_range=focus_filter_period_range,
+        return_images=return_images, **camera_params)
     return best_z, positions_and_scores, images

@@ -68,7 +68,7 @@ class BrennerAutofocus(AutofocusMetric):
     def metric(self, image):
         image = image.astype(numpy.float32) # otherwise can get overflow in the squaring and summation
         if self.filter is not None:
-            image = self.filter.filter(image)
+            image = self.filter(image)
         x_diffs = (image[2:, :] - image[:-2, :])**2
         y_diffs = (image[:, 2:] - image[:, :-2])**2
         if self.mask is None:
@@ -111,7 +111,7 @@ class Autofocus:
         self._stage.wait() # no op if in sync mode, necessary in async mode
         return best_z, zip(z_positions, z_scores)
 
-    def autofocus(self, start, end, steps, focus_filter_period_range=(None, 10),
+    def autofocus(self, start, end, steps, focus_filter_period_range=None,
             focus_filter_mask=None, return_images=False, **camera_state):
         """Automatically focus the camera with stepwise stage movements.
 

@@ -82,6 +82,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     VIGNETTE_PERCENT = 5 # 5 is a good number when using a 1x optocoupler. If 0.7x, use 35.
     SEGMENTATION_MODEL = None # name of or path to image-segmentation model to run in the background after the job ends.
     TO_SEGMENT = ['bf'] # image name or names to segment
+    FOCUS_FILTER_PERIOD_RANGE = None # if not None, (min_size, max_size) tuple for bandpass filtering images before autofocus
 
     def configure_additional_acquisition_steps(self):
         """Add more steps to the acquisition_sequencer's sequence as desired,
@@ -312,7 +313,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         z_max = self.experiment_metadata['z_max']
         with self.heartbeat_timer(), self.scope.tl.lamp.in_state(enabled=True):
             if self.DO_COARSE_FOCUS:
-                coarse_result = autofocus(self.scope, z_start, z_max,
+                coarse_result = autofocus.autofocus(self.scope, z_start, z_max,
                     self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
                     speed=0.8, binning='4x4', exposure_time=scope.camera.exposure_time/16)
                 z_start = current_timepoint_metadata['coarse_z'] = coarse_result[0]
@@ -322,7 +323,8 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
                 self.logger.info('Using autofocus mask: {}', mask)
             fine_result = autofocus.autofocus(self.scope, z_start, z_max,
                 self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS,
-                speed=0.3, mask=mask, return_images=return_images)
+                speed=0.3, mask=mask, return_images=return_images,
+                focus_filter_period_range=self.FOCUS_FILTER_PERIOD_RANGE)
         current_timepoint_metadata['fine_z'] = fine_result[0]
         return fine_result
 
