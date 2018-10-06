@@ -94,7 +94,7 @@ if __name__ == '__main__':
     # note: can add any desired keyword arguments to the Handler init method
     # to the below call to main(), which is defined by scope.timecourse.base_handler.TimepointHandler
     Handler.main(pathlib.Path(__file__).parent)
-''')
+'''
 
 def create_acquire_file(data_dir, run_interval):
     """Create a skeleton acquisition file for timecourse acquisitions.
@@ -106,8 +106,7 @@ def create_acquire_file(data_dir, run_interval):
     """
     data_dir = pathlib.Path(data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
-    code = handler_template.format(filter_cube=filter_cube,
-        fl_flatfield_lamp=fluorescence_flatfield_lamp, run_interval=run_interval)
+    code = handler_template.format(run_interval=run_interval)
     with (data_dir / 'acquire.py').open('w') as f:
         f.write(code)
 

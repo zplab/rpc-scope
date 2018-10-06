@@ -3,10 +3,9 @@
 import threading
 import collections
 
+from ..util import smart_serial
 from ..util import logging
 logger = logging.get_logger(__name__)
-
-from ..util import smart_serial
 
 class MessageManager(threading.Thread):
     """Base class for managing messages and responses sent to/from a

@@ -19,4 +19,4 @@ NAMES = [
     'method15'
 ]
 
-NAMES_TO_INDICES = {name : idx for idx, name in enumerate(NAMES)}
+NAMES_TO_INDICES = {name: idx for idx, name in enumerate(NAMES)}

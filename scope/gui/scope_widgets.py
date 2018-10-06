@@ -148,6 +148,7 @@ class FlowLayout(Qt.QLayout):
         if 0 <= index < len(self.itemList):
             v = self.itemList[index]
             del self.itemList[index]
+            return v
 
     def expandingDirections(self):
         return 0

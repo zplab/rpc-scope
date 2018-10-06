@@ -70,7 +70,6 @@ class AndorCameraWidget(device_widget.DeviceWidget):
             self.make_widgets_for_property(row, property, type, readonly)
 
     def make_widgets_for_property(self, row, property, type, readonly):
-        label = Qt.QLabel(property + ':')
         widget = self.make_widget(property, type, readonly)
         if property in self.UNITS:
             unit_label = Qt.QLabel(self.UNITS[property])
@@ -150,7 +149,7 @@ class AndorCameraWidget(device_widget.DeviceWidget):
     def make_enum_widget(self, property):
         widget = Qt.QComboBox()
         values = sorted(getattr(self.scope.camera, property+'_values').keys())
-        indices = {v:i for i, v in enumerate(values)}
+        indices = {v: i for i, v in enumerate(values)}
         widget.addItems(values)
         update = self.subscribe(self.PROPERTY_ROOT + property, callback=lambda value: widget.setCurrentIndex(indices[value]))
         if update is None:

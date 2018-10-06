@@ -4,7 +4,6 @@ import numpy
 import logging
 import time
 import datetime
-import pathlib
 
 from zplib import background_process
 from zplib.image.threaded_io import COMPRESSION
@@ -150,7 +149,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         assert self.scope.nosepiece.magnification == objective
 
         self.scope.il.shutter_open = True
-        self.scope.il.spectra.lamps(**{lamp+'_enabled':False for lamp in self.scope.il.spectra.lamp_specs})
+        self.scope.il.spectra.lamps(**{lamp+'_enabled': False for lamp in self.scope.il.spectra.lamp_specs})
         self.scope.tl.shutter_open = True
         self.scope.tl.lamp.enabled = False
         self.scope.tl.condenser_retracted = objective == 5 # only retract condenser for 5x objective
@@ -315,7 +314,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             if self.DO_COARSE_FOCUS:
                 coarse_result = autofocus.autofocus(self.scope, z_start, z_max,
                     self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
-                    speed=0.8, binning='4x4', exposure_time=scope.camera.exposure_time/16)
+                    speed=0.8, binning='4x4', exposure_time=self.scope.camera.exposure_time/16)
                 z_start = current_timepoint_metadata['coarse_z'] = coarse_result[0]
             mask_file = self.data_dir / 'Focus Masks' / (position_name + '.png')
             mask = str(mask_file) if mask_file.exists() else None
@@ -379,7 +378,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             self.logger.warning('None value found in timestamp! Timestamps = {}', timestamps)
             timestamps = [t if t is not None else numpy.nan for t in timestamps]
         timestamps = (numpy.array(timestamps) - timestamps[0]) / self.scope.camera.timestamp_hz
-        metadata['image_timestamps']=dict(zip(self.image_names, timestamps))
+        metadata['image_timestamps'] = dict(zip(self.image_names, timestamps))
 
         if save_focus_stack and self.write_files:
             save_image_dir = position_dir / f'{self.timepoint_prefix} focus'

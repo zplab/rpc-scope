@@ -58,7 +58,6 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
         self.last_image_time = 0
         self.live_streamer = scope_client.LiveStreamer(scope, self.post_new_image_event)
 
-
     def closeEvent(self, e):
         if self.closing:
             # sometimes closeEvent gets fired off twice (2018-01, PyQt 5.9). Why? TODO: verify if problem goes away in later Qt

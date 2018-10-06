@@ -2,7 +2,6 @@
 
 from ris_widget import shared_resources
 
-from ..simple_rpc import rpc_client
 from .. import scope_client
 from . import scope_widgets
 from . import andor_camera_widget

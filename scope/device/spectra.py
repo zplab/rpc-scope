@@ -12,7 +12,7 @@ from . import iotool
 def _make_dac_bytes(IIC_Addr, bit):
     dac_bytes = bytearray(b'\x53\x00\x03\x00\x00\x00\x50')
     dac_bytes[1] = IIC_Addr
-    dac_bytes[3] = 1<<bit
+    dac_bytes[3] = 1 << bit
     return dac_bytes
 
 LAMP_DAC_COMMANDS = {
@@ -87,8 +87,8 @@ class SpectraX(property_device.PropertyDevice):
 
         self._lamp_intensities = {}
         self._lamp_enableds = {}
-        self.lamps(**{lamp+'_enabled':False for lamp in self._available_lamps})
-        self.lamps(**{lamp+'_intensity':255 for lamp in self._available_lamps})
+        self.lamps(**{lamp+'_enabled': False for lamp in self._available_lamps})
+        self.lamps(**{lamp+'_intensity': 255 for lamp in self._available_lamps})
 
     def _timer_update_temp(self):
         while self._timer_running:
@@ -109,7 +109,7 @@ class SpectraX(property_device.PropertyDevice):
         self._update_property(lamp+'.intensity', value)
 
     def _lamp_enable(self, lamp, enabled):
-        self._iotool.execute(*self._iotool_lamp_commands(**{lamp:enabled}))
+        self._iotool.execute(*self._iotool_lamp_commands(**{lamp: enabled}))
         self._lamp_enableds[lamp] = enabled
         self._update_property(lamp+'.enabled', enabled)
 
@@ -135,7 +135,7 @@ class SpectraX(property_device.PropertyDevice):
         """Return a dict mapping lamp names to tuples of (peak_wavelength, bandwidth), in nm,
         where bandwidth is the minimum width required to contain 75% of the spectral intensity
         of the lamp output."""
-        return {lamp:LAMP_SPECS[lamp] for lamp in self._available_lamps}
+        return {lamp: LAMP_SPECS[lamp] for lamp in self._available_lamps}
 
     def get_temperature(self):
         self._serial_port.write(b'\x53\x91\x02\x50')

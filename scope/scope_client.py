@@ -9,7 +9,6 @@ import contextlib
 
 from .simple_rpc import rpc_client, property_client
 from .util import transfer_ism_buffer
-from .util import state_stack
 from .config import scope_configuration
 
 class ScopeClient:
@@ -154,7 +153,7 @@ def _patch_camera(camera, get_data, image_transfer_client):
     latest_image.__doc__ = camera.latest_image.__doc__
     camera.latest_image = latest_image
 
-    #monkeypatch image sequence acquisition context manager to work on client side
+    # monkeypatch image sequence acquisition context manager to work on client side
     @contextlib.contextmanager
     def image_sequence_acquisition(frame_count=1, trigger_mode='Internal', **camera_params):
         """Context manager to begin and automatically end an image sequence acquisition."""

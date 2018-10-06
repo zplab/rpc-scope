@@ -56,8 +56,6 @@ to switch to an exposure time < read. This is probably an andor bug.
 TODO: check if the bug is still there in a future SDK release (date 2015-10)
 """
 
-
-
 import threading
 import time
 import ctypes
@@ -396,7 +394,7 @@ class Camera(property_device.PropertyDevice):
 
     def set_overlap_enabled(self, enabled):
         """Enable or disable overlap mode."""
-        if self.get_shutter_mode() == 'Rolling' and self.get_trigger_mode() == 'Software' and enabled==False:
+        if self.get_shutter_mode() == 'Rolling' and self.get_trigger_mode() == 'Software' and enabled is False:
             # Setting overlap mode in software trigger / rolling shutter is an error,
             # but trying to unset it in this mode should not be...
             return
@@ -435,10 +433,10 @@ class Camera(property_device.PropertyDevice):
         properties. When setting this property, None elements and omitted entries
         cause the corresponding aoi_* property to be left unmodified."""
         return {
-            'aoi_left' : self.get_aoi_left(),
-            'aoi_top' : self.get_aoi_top(),
-            'aoi_width' : self.get_aoi_width(),
-            'aoi_height' : self.get_aoi_height()
+            'aoi_left': self.get_aoi_left(),
+            'aoi_top': self.get_aoi_top(),
+            'aoi_width': self.get_aoi_width(),
+            'aoi_height': self.get_aoi_height()
         }
 
     def get_aoi_shape(self):
@@ -970,7 +968,7 @@ class LiveReader(LiveModeThread):
             if e.args[0].startswith('TIMEDOUT'):
                 self.timeout_count += 1
                 if self.timeout_count > 10:
-                    raise AndorError('Live image retrieval timing out.')
+                    raise lowlevel.AndorError('Live image retrieval timing out.')
                 return
             else:
                 raise

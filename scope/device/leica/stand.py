@@ -1,7 +1,5 @@
 # This code is licensed under the MIT License (see LICENSE file for details)
 
-import contextlib
-
 from ...messaging import message_device
 from ...messaging import message_manager
 from ...util import property_device
@@ -80,10 +78,10 @@ class LeicaComponent(message_device.LeicaAsyncDevice, property_device.PropertyDe
 
     # set async first when pushing, revert async last when popping
     def _get_push_weights(self, state):
-        return {'async':-1}
+        return {'async': -1}
 
     def _get_pop_weights(self, state):
-        return {'async':1}
+        return {'async': 1}
 
     def push_state(self, **state):
         """Set a number of device parameters at once using keyword arguments, while

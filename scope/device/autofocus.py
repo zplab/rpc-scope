@@ -149,7 +149,7 @@ class Autofocus:
                 self._stage.wait()
                 self._camera.send_software_trigger()
                 if z != end:
-                    time.sleep(sleep_time)
+                    time.sleep(1/frame_rate)
             image_names, camera_timestamps = runner.join()
         best_z, positions_and_scores = self._stop_autofocus(z_positions)
         if not return_images:

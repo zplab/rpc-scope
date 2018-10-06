@@ -4,7 +4,6 @@ import zmq
 import time
 import threading
 import json
-import pathlib
 
 from .util import logging
 from .util import base_daemon

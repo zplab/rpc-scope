@@ -74,7 +74,6 @@ Could add syntax for default value handling.
 
 """
 
-import ctypes
 import pyparsing
 
 # Crappy BNF grammar for annotated C prototypes
@@ -194,7 +193,7 @@ def parse_prototype(prototype, additional_definitions={}):
     function_decl = results[0]
     args = results[1]
 
-    #deal with the return type and error check function if present
+    # deal with the return type and error check function if present
     return_type, function_name = function_decl[0], function_decl[-1]
     py_return_type = resolve_type(return_type, additional_definitions)
     errcheck = None

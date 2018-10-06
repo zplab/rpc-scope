@@ -3,7 +3,6 @@
 import zmq
 import collections
 import contextlib
-import time
 
 from zplib import datafile
 
@@ -64,7 +63,7 @@ class RPCClient:
         # group functions by their namespace
         server_namespaces = collections.defaultdict(list)
         functions_proxied = set()
-        for qualname, doc, argspec in  self('__DESCRIBE__'):
+        for qualname, doc, argspec in self('__DESCRIBE__'):
             functions_proxied.add(qualname)
             *parents, name = qualname.split('.')
             parents = tuple(parents)
@@ -264,7 +263,7 @@ def _rich_proxy_function(doc, argspec, name, rpc_client, rpc_function):
         for arg in kwonly:
             call_parts.append(f'{arg}={arg}')
             if arg in kwdefaults:
-                arg_parts.append(f'{arg}={kwdefaults[arg]!r}'))
+                arg_parts.append(f'{arg}={kwdefaults[arg]!r}')
             else:
                 arg_parts.append(arg)
     arg_parts = ', '.join(arg_parts)
@@ -275,7 +274,7 @@ def _rich_proxy_function(doc, argspec, name, rpc_client, rpc_function):
                 '''{doc}'''
                 return self._call_function({call_parts})"""
     namespace = {} # dict in which exec operates
-    exec(func_str.strip(), globals(), namespace)
+    exec(class_def.strip(), globals(), namespace)
     ProxyClass = namespace[name]
     # now pretend that the given class was defined in a module named like the rpc function's namespace
     ProxyClass.__module__ = rpc_function.rsplit('.', maxsplit=1)[0]

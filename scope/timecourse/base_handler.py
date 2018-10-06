@@ -7,9 +7,7 @@ import json
 import logging
 import inspect
 import concurrent.futures as futures
-import os
 import contextlib
-import pickle
 
 from zplib import datafile
 from zplib.image import threaded_io
@@ -22,7 +20,7 @@ from ..util import timer
 class DummyIO:
     def __init__(self, logger):
         self.logger = logger
-    def write(*args, **kws):
+    def write(self, *args, **kws):
         self.logger.warning('Trying to write files, but file writing was disabled!')
 
 class TimepointHandler:

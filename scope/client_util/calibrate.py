@@ -35,7 +35,7 @@ class DarkCurrentCorrector:
             stack.enter_context(scope.tl.in_state(shutter_open=False))
             stack.enter_context(scope.tl.lamp.in_state(enabled=False))
             if hasattr(scope.il, 'spectra'):
-                stack.enter_context(scope.il.spectra.in_state(**{lamp+'_enabled':False for lamp in scope.il.spectra.lamp_specs.keys()}))
+                stack.enter_context(scope.il.spectra.in_state(**{lamp+'_enabled': False for lamp in scope.il.spectra.lamp_specs.keys()}))
             stack.enter_context(scope.camera.image_sequence_acquisition(len(requested_exposure_times)*frames_to_average, trigger_mode='Software'))
 
             for exp in requested_exposure_times:
@@ -144,7 +144,7 @@ def meter_exposure_and_intensity(scope, lamp, max_exposure=200, max_intensity=25
     if good_intensity is None:
         if image_max == max_value:
             saturated = (image == max_value).sum()
-            raise RuntimeError(f'Too many saturated pixels: at lowest brightness {saturated} pixels were at {max_val}, but only 10 are allowed.')
+            raise RuntimeError(f'Too many saturated pixels: at lowest brightness {saturated} pixels were at {max_value}, but only 10 are allowed.')
         else:
             raise RuntimeError(f'Could not find a non-overexposed lamp intensity: at lowest brightness, image near-max of {image_near_max} is >= cutoff of {max_good_value}.')
     # Now given the intensity setting, find the shortest-possible exposure time

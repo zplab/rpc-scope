@@ -1,8 +1,9 @@
 # This code is licensed under the MIT License (see LICENSE file for details)
 
 from . import stand
-from ...messaging import message_device
 from ...util import enumerated_properties
+from ...util import logging
+logger = logging.get_logger(__name__)
 
 # TL and IL lamp and shutters
 SET_LAMP = 77020
@@ -33,7 +34,7 @@ GET_MIN_POS_IL_TURRET = 78031
 GET_MAX_POS_IL_TURRET = 78032
 SET_IL_TURRET_EVENT_SUBSCRIPTIONS = 78003
 
-#swing-out condenser head
+# swing-out condenser head
 POS_ABS_KOND = 81022
 GET_POS_KOND = 81023
 SET_KOND_EVENT_SUBSCRIPTIONS = 81003
@@ -58,9 +59,6 @@ GET_MAX_POS_LFWHEEL = 94027
 GET_MIN_POS_LFWHEEL = 94028
 GET_LFWHEEL_PROPERTIES = 94032
 SET_LFWHEEL_EVENT_SUBSCRIPTIONS = 94003
-
-from ...util import logging
-logger = logging.get_logger(__name__)
 
 class FilterCube(enumerated_properties.DictProperty):
     def __init__(self, il):

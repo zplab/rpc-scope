@@ -247,7 +247,7 @@ class AsyncDeviceNamespace:
         super().__setattr__(name, value)
 
     def __delattr__(self, name):
-        if self._is_async_capable(value):
+        if self._is_async_capable(getattr(self, name)):
             self._children.remove(name)
         super().__delattr__(name)
 
@@ -261,9 +261,9 @@ class AsyncDeviceNamespace:
 
     def get_async(self):
         asyncs = [getattr(self, child).get_async() for child in self._children]
-        if all(async == True for async in asyncs):
+        if all(async is True for async in asyncs):
             return True
-        elif all(async == False for async in asyncs):
+        elif all(async is False for async in asyncs):
             return False
         else:
             return "child devices have mixed async status"

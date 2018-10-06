@@ -6,7 +6,6 @@ import struct
 import zlib
 import platform
 import collections
-import time
 import threading
 
 import ism_buffer
@@ -83,7 +82,7 @@ def _server_pack_data(name, compressor='blosc', downsample=None, **compressor_ar
       - 'zlib': use older, more widely supported zlib compression
     compressor_args are passed to zlib.compress() or blosc.compress() directly."""
 
-    array = _release_array(name) # get the array and release it from the list of to-be-transfered arrays
+    array = release_array(name) # get the array and release it from the list of to-be-transfered arrays
     if downsample:
         array = array[::downsample, ::downsample]
     dtype_str = numpy.lib.format.dtype_to_descr(array.dtype)

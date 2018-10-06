@@ -481,7 +481,7 @@ class Stage(stand.LeicaComponent):
         self.send_message(INIT_RANGE_Z, async=False, intent="init stage z axis")
         # now back off from the z position that the stage is left in, which is
         # the closest to the objective (dangerous!)
-        self.z -= 5
+        self.set_z(self.get_z()- 5)
 
     def set_xy_fine_control(self, fine):
         self.send_message(SET_XY_STEP_MODE, int(not fine), async=False)
@@ -594,7 +594,6 @@ class Stage(stand.LeicaComponent):
         else: # ramp and distance must be such that we can never go fast enough
             return max_speed
 
-
     def calculate_z_movement_position(self, distance, t):
         """Calculate where the stage will be (relative to the starting position)
         for a z-move of a given distance (in mm) after t seconds have elapsed.
@@ -609,13 +608,13 @@ class Stage(stand.LeicaComponent):
                 return 0.5 * speed_ramp * t**2 + half_fudge * t/ramp_time # assign first half of fudge linearly
             non_ramp_time = distance / final_speed - ramp_time
             if t <= ramp_time + non_ramp_time:
-                return ( 0.5 * speed_ramp * ramp_time**2
+                return (0.5 * speed_ramp * ramp_time**2
                        + final_speed * (t-ramp_time)
                        + half_fudge)
             total_time = 2*ramp_time + non_ramp_time
             if t > total_time:
                 t = total_time
-            return ( 0.5 * speed_ramp * ramp_time**2
+            return (0.5 * speed_ramp * ramp_time**2
                    + final_speed * non_ramp_time
                    + 0.5 * speed_ramp * (t - ramp_time - non_ramp_time)**2
                    + half_fudge + half_fudge * (t - ramp_time - non_ramp_time) / ramp_time) # assign the second half of the fudge linearly
