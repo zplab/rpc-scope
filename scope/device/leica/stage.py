@@ -98,11 +98,11 @@ class Stage(stand.LeicaComponent):
             1, # Upper software endswitch (X2) changed,
             async=False
         )
-        self.register_event_callback(GET_STATUS_X, self._on_status_x_event)
-        self.register_event_callback(GET_POS_X, self._on_pos_x_event)
-        self.register_event_callback(GET_XY_STEP_MODE, self._on_xy_step_mode_event)
-        self.register_event_callback(GET_X1_LIMIT, self._on_x_low_soft_limit_event)
-        self.register_event_callback(GET_X2_LIMIT, self._on_x_high_soft_limit_event)
+        self._register_event_callback(GET_STATUS_X, self._on_status_x_event)
+        self._register_event_callback(GET_POS_X, self._on_pos_x_event)
+        self._register_event_callback(GET_XY_STEP_MODE, self._on_xy_step_mode_event)
+        self._register_event_callback(GET_X1_LIMIT, self._on_x_low_soft_limit_event)
+        self._register_event_callback(GET_X2_LIMIT, self._on_x_high_soft_limit_event)
         self._update_property('xy_fine_control', self.get_xy_fine_control())
         self._update_property('x_low_soft_limit', self.get_x_low_soft_limit())
         self._update_property('x_high_soft_limit', self.get_x_high_soft_limit())
@@ -119,10 +119,10 @@ class Stage(stand.LeicaComponent):
             1, # Upper software endswitch (Y2) changed
             async=False
         )
-        self.register_event_callback(GET_STATUS_Y, self._on_status_y_event)
-        self.register_event_callback(GET_POS_Y, self._on_pos_y_event)
-        self.register_event_callback(GET_Y1_LIMIT, self._on_y_low_soft_limit_event)
-        self.register_event_callback(GET_Y2_LIMIT, self._on_y_high_soft_limit_event)
+        self._register_event_callback(GET_STATUS_Y, self._on_status_y_event)
+        self._register_event_callback(GET_POS_Y, self._on_pos_y_event)
+        self._register_event_callback(GET_Y1_LIMIT, self._on_y_low_soft_limit_event)
+        self._register_event_callback(GET_Y2_LIMIT, self._on_y_high_soft_limit_event)
         self._update_property('y_low_soft_limit', self.get_y_low_soft_limit())
         self._update_property('y_high_soft_limit', self.get_y_high_soft_limit())
         self._on_status_y_event(self.send_message(GET_STATUS_Y, async=False))
@@ -139,10 +139,10 @@ class Stage(stand.LeicaComponent):
             1, # New Z_STEP_MODE (coarse/fine) set
             async=False
         )
-        self.register_event_callback(GET_STATUS_Z, self._on_status_z_event)
-        self.register_event_callback(GET_POS_Z, self._on_pos_z_event)
-        self.register_event_callback(GET_Z_STEP_MODE, self._on_z_step_mode_event)
-        self.register_event_callback(GET_LOW_LIMIT, self._on_z_low_soft_limit_event)
+        self._register_event_callback(GET_STATUS_Z, self._on_status_z_event)
+        self._register_event_callback(GET_POS_Z, self._on_pos_z_event)
+        self._register_event_callback(GET_Z_STEP_MODE, self._on_z_step_mode_event)
+        self._register_event_callback(GET_LOW_LIMIT, self._on_z_low_soft_limit_event)
         self._update_property('z_fine_control', self.get_z_fine_control())
         self._update_property('z_low_soft_limit', self.get_z_low_soft_limit())
         self._update_property('z_high_soft_limit', self.get_z_high_soft_limit())

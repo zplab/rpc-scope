@@ -200,7 +200,7 @@ class LeicaAsyncDevice(AsyncDevice):
         # return the message's function unit ID and command ID
         return message[:2] + message[3:5]
 
-    def register_event_callback(self, event_id, callback):
+    def _register_event_callback(self, event_id, callback):
         """If specific event information is enabled (via a separate message), then
         events with the given ID will cause a LeicaResponseTuple to be passed
         to the callback."""
@@ -210,7 +210,7 @@ class LeicaAsyncDevice(AsyncDevice):
         response_key = '$' + str(event_id)
         self._message_manager.register_persistent_callback(response_key, adapter_callback)
 
-    def unregister_event_callback(self, event_id, callback):
+    def _unregister_event_callback(self, event_id, callback):
         """Stop calling the given callback when events with the given ID occur."""
         adapter_callback = self._adapter_callbacks[callback]
         response_key = '$' + str(event_id)

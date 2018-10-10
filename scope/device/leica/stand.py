@@ -31,7 +31,7 @@ class Stand(message_device.LeicaAsyncDevice, property_device.PropertyDevice):
         self._message_manager.pending_standalone_responses['\0999'].append(lambda response: self._message_manager.pending_standalone_responses.pop('9999'))
         self._message_manager._send_message('\r')
         self.send_message(SET_STAND_EVENT_SUBSCRIPTIONS, 1, 0, 0, 0, 0, 0, 0, 0, async=False, intent="subscribe to stand method change events")
-        self.register_event_callback(GET_ACT_METHOD, self._on_method_event)
+        self._register_event_callback(GET_ACT_METHOD, self._on_method_event)
         r = self.send_message(GET_MODUL_TYPE, async=False, intent="get master model name and list of available function unit IDs").response.split(' ')
         self._model_name = r[0]
         self._available_function_unit_IDs = set(int(rv) for rv in r[1:])

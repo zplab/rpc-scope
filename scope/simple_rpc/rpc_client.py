@@ -237,9 +237,7 @@ def _rich_proxy_function(doc, argspec, name, rpc_client, rpc_function):
     varkw = argspec['varkw']
     kwonly = argspec['kwonlyargs']
     kwdefaults = argspec['kwonlydefaults']
-    # note that the function we make has a "self" parameter as it is destined
-    # to be added to a class and used as a method.
-    arg_parts = ['self']
+    arg_parts = []
     call_parts = []
     # create the function by building up a python definition for that function
     # and exec-ing it.

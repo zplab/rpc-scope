@@ -41,7 +41,7 @@ class ManualNosepiece(stand.LeicaComponent):
         self._set_objectives_intensities(255)
 
         self.send_message(SET_OBJECTIVE_TURRET_EVENT_SUBSCRIPTIONS, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, async=False, intent="subscribe to objective turret position change events")
-        self.register_event_callback(GET_OBJPAR, self._on_turret_moved_event)
+        self._register_event_callback(GET_OBJPAR, self._on_turret_moved_event)
         self._update_property('position', self.get_position())
 
     def get_position(self):

@@ -134,7 +134,7 @@ class IL(stand.LeicaComponent):
         self.get_filter_cube_values = self._filter_cube.get_recognized_values
         self._update_property('filter_cube', self.get_filter_cube())
         self.send_message(SET_IL_TURRET_EVENT_SUBSCRIPTIONS, 1, async=False, intent="subscribe to filter cube turret position change events")
-        self.register_event_callback(GET_POS_IL_TURRET, self._on_turret_pos_event)
+        self._register_event_callback(GET_POS_IL_TURRET, self._on_turret_pos_event)
 
     def set_filter_cube(self, cube):
         self._filter_cube.set_value(cube)
@@ -154,7 +154,7 @@ class FieldWheel_IL(_ShutterDeviceMixin, IL):
         self.get_field_wheel_positions = self._field_wheel.get_recognized_values
         self.set_field_wheel = self._field_wheel.set_value
         self.send_message(SET_LFWHEEL_EVENT_SUBSCRIPTIONS, 0, 1, async=False, intent="subscribe to field diaphragm disk position change events")
-        self.register_event_callback(GET_POS_LFWHEEL, self._on_lfwheel_position_change_event)
+        self._register_event_callback(GET_POS_LFWHEEL, self._on_lfwheel_position_change_event)
         self._update_property('field_wheel', self.get_field_wheel())
 
     def _on_lfwheel_position_change_event(self, response):
@@ -166,13 +166,13 @@ class TL(_ShutterDeviceMixin, stand.LeicaComponent):
     def _setup_device(self):
         super()._setup_device()
         self.send_message(SET_KOND_EVENT_SUBSCRIPTIONS, 1, async=False, intent="subscribe to flapping condenser flap events")
-        self.register_event_callback(GET_POS_KOND, self._on_condenser_flap_event)
+        self._register_event_callback(GET_POS_KOND, self._on_condenser_flap_event)
         self._update_property('condenser_retracted', self.get_condenser_retracted())
         self.send_message(SET_LFBL_TL_EVENT_SUBSCRIPTIONS, 0, 1, async=False, intent="subscribe to TL field diaphragm position change events")
-        self.register_event_callback(GET_POS_LFBL_TL, self._on_field_diaphragm_position_change_event)
+        self._register_event_callback(GET_POS_LFBL_TL, self._on_field_diaphragm_position_change_event)
         self._update_property('field_diaphragm', self.get_field_diaphragm())
         self.send_message(SET_APBL_TL_EVENT_SUBSCRIPTIONS, 0, 1, async=False, intent="subscribe to TL aperture diaphragm position change events")
-        self.register_event_callback(GET_POS_APBL_TL, self._on_aperture_diaphragm_position_change_event)
+        self._register_event_callback(GET_POS_APBL_TL, self._on_aperture_diaphragm_position_change_event)
         self._update_property('aperture_diaphragm', self.get_aperture_diaphragm())
 
     def get_condenser_retracted(self):
@@ -232,7 +232,7 @@ class ShutterWatcher(stand.LeicaComponent):
             async=False,
             intent="subscribe to TL and IL shutter opened/closed events"
         )
-        self.register_event_callback(GET_SHUTTER_LAMP, self._on_shutter_event)
+        self._register_event_callback(GET_SHUTTER_LAMP, self._on_shutter_event)
 
     def _on_shutter_event(self, response):
         tl_open, il_open = (bool(int(c)) for c in response.response.split())
