@@ -35,7 +35,7 @@ class ScopeClient:
             self._connect()
 
     def _can_connect(self):
-        with self._rpc_client.timeout_sec(1):
+        with self._rpc_client.timeout_sec(4):
             try:
                 self._sleep(0) # TODO: change to _ping when all scope servers are updated
                 return True
