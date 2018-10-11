@@ -83,7 +83,7 @@ class RPCClient:
             NewNamespace.__name__ = parents[-1] if parents else 'root'
             NewNamespace.__qualname__ = '.'.join(parents) if parents else 'root'
             # create functions and gather property accessors
-            accessors = collections.defaultdict(RPCClient._accessor_pair)
+            accessors = collections.defaultdict(_AccessorProperty)
             for name, qualname, doc, argspec in function_descriptions:
                 client_func = _rich_proxy_function(doc, argspec, name, self, qualname)
                 if name.startswith('get_'):
@@ -93,8 +93,9 @@ class RPCClient:
                     accessors[name[4:]].setter = client_func
                     name = '_'+name
                 setattr(NewNamespace, name, client_func)
-            for name, accessor_pair in accessors.items():
-                setattr(NewNamespace, name, accessor_pair.get_property())
+            for name, accessor_property in accessors.items():
+                accessor_property._set_doc()
+                setattr(NewNamespace, name, accessor_property)
             client_namespaces[parents] = NewNamespace()
 
         # now assemble these namespaces into the correct hierarchy, fetching intermediate
@@ -115,22 +116,38 @@ class RPCClient:
         root._functions_proxied = functions_proxied
         return root
 
-    class _accessor_pair:
-        def __init__(self):
-            self.getter = None
-            self.setter = None
 
-        def get_property(self):
-            # assume one of self.getter or self.setter is set
-            return property(self.getter, self.setter, doc=self.getter.__doc__ if self.getter else self.setter.__doc__)
+class _AccessorProperty:
+    def __init__(self):
+        self.getter = None
+        self.setter = None
+
+    def _set_doc(self):
+        assert self.getter or self.setter # at least one must not be None!
+        self.__doc__ = self.getter.__doc__ if self.getter else self.setter.__doc__
+
+    def __get__(self, obj, objtype=None):
+        if obj is None:
+            return self
+        if self.getter is None:
+            raise AttributeError("unreadable attribute")
+        return self.getter()
+
+    def __set__(self, obj, value):
+        if self.setter is None:
+            raise AttributeError("can't set attribute")
+        self.setter(value)
+
 
 class ClientNamespace:
     __attrs_locked = False
+
     def _lock_attrs(self):
         self.__attrs_locked = True
         for v in self.__dict__.values():
             if hasattr(v, '_lock_attrs'):
                 v._lock_attrs()
+
     def __setattr__(self, name, value):
         if self.__attrs_locked:
             if not hasattr(self, name):
@@ -140,6 +157,7 @@ class ClientNamespace:
                 if not hasattr(cls, name) or not isinstance(getattr(cls, name), property):
                     raise RPCError('Attribute "{}" is not a property value that can be communicated to the server.'.format(name))
         super().__setattr__(name, value)
+
 
 class ZMQClient(RPCClient):
     def __init__(self, rpc_addr, interrupt_addr=None, heartbeat_sec=None, timeout_sec=10, context=None):
@@ -215,6 +233,7 @@ class ZMQClient(RPCClient):
         if self.interrupt_addr is not None:
             self.interrupt_socket.send(b'interrupt')
 
+
 class _ProxyMethodClass:
     def __init__(self, rpc_client, rpc_function):
         self._rpc_client = rpc_client
@@ -226,6 +245,7 @@ class _ProxyMethodClass:
         with self._rpc_client.timeout_sec(self._timeout_sec):
             result = self._rpc_client(self._rpc_function, *args, **kws)
         return self._output_handler(result)
+
 
 def _rich_proxy_function(doc, argspec, name, rpc_client, rpc_function):
     """Using the docstring and argspec from the RPC __DESCRIBE__ command,
