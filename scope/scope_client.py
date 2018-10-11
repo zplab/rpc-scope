@@ -164,7 +164,6 @@ def _patch_camera(camera, get_data, image_transfer_client):
             camera.end_image_sequence_acquisition()
     camera.image_sequence_acquisition = image_sequence_acquisition
 
-
 def _patch_in_state_context_managers(scope):
     # monkeypatch in_state context managers to work on client side
     for qualname in scope._functions_proxied:
@@ -175,18 +174,22 @@ def _patch_in_state_context_managers(scope):
             obj = eval(parents, scope.__dict__)
         else:
             continue
+        _generate_in_state(obj)
 
-        @contextlib.contextmanager
-        def in_state(self, **state):
-            """Context manager to set a number of device parameters at once using
-            keyword arguments. The old values of those parameters will be restored
-            upon exiting the with-block."""
-            obj.push_state(**state)
-            try:
-                yield
-            finally:
-                obj.pop_state()
-        obj.in_state = in_state
+def _generate_in_state(obj):
+    # must do below in separate function for each obj so that the closure
+    # works right (standard python bugaboo with generating closures in loops...)
+    @contextlib.contextmanager
+    def in_state(**state):
+        """Context manager to set a number of device parameters at once using
+        keyword arguments. The old values of those parameters will be restored
+        upon exiting the with-block."""
+        obj.push_state(**state)
+        try:
+            yield
+        finally:
+            obj.pop_state()
+    obj.in_state = in_state
 
 
 class LiveStreamer:
