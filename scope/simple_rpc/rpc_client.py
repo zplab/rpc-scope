@@ -78,7 +78,7 @@ class RPCClient:
         client_namespaces = {}
         for parents, function_descriptions in server_namespaces.items():
             # make a custom class to have the right names and more importantly to receive the namespace-specific properties
-            class NewNamespace(ClientNamespace):
+            class NewNamespace(_ClientNamespace):
                 pass
             NewNamespace.__name__ = parents[-1] if parents else 'root'
             NewNamespace.__qualname__ = '.'.join(parents) if parents else 'root'
@@ -130,7 +130,7 @@ class _AccessorProperty:
         if obj is None:
             return self
         if self.getter is None:
-            raise AttributeError("unreadable attribute")
+            raise AttributeError('unreadable attribute')
         return self.getter()
 
     def __set__(self, obj, value):
@@ -139,7 +139,7 @@ class _AccessorProperty:
         self.setter(value)
 
 
-class ClientNamespace:
+class _ClientNamespace:
     __attrs_locked = False
 
     def _lock_attrs(self):
@@ -154,7 +154,7 @@ class ClientNamespace:
                 raise RPCError('Attribute "{}" is not known, so its state cannot be communicated to the server.'.format(name))
             else:
                 cls = type(self)
-                if not hasattr(cls, name) or not isinstance(getattr(cls, name), property):
+                if not hasattr(cls, name) or not isinstance(getattr(cls, name), _AccessorProperty):
                     raise RPCError('Attribute "{}" is not a property value that can be communicated to the server.'.format(name))
         super().__setattr__(name, value)
 
