@@ -193,8 +193,8 @@ def _name_positions(num_positions, name_prefix):
     return names
 
 def _maybe_reinit_stage(scope):
-    reinit = input('press enter when ready to reinit stage (or press n and enter to skip reinit) ')
-    if reinit.lower() != 'n':
+    reinit = input('press y and enter to reinitialize the stage; press enter to skip reinit. ')
+    if reinit.lower() == 'y':
         current_position = scope.stage.x, scope.stage.y
         scope.stage.reinit_x()
         scope.stage.reinit_y()
