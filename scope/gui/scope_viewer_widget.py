@@ -13,8 +13,6 @@ from . import status_widget
 from .. import scope_client
 from .. import util
 
-# TODO: Should live_target be a flipbook entry instead of just self.image?
-
 class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
     NEW_IMAGE_EVENT = Qt.QEvent.registerEventType()
     OVEREXPOSURE_GETCOLOR_EXPRESSION = 's.r < 1.0f ? vec4(s.rrr, 1.0f) : vec4(1.0f, 0.0f, 0.0f, 1.0f)'

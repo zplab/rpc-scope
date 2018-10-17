@@ -675,8 +675,10 @@ class Camera(property_device.PropertyDevice):
         """
         if read_timeout_ms is None:
             read_timeout_ms = lowlevel.ANDOR_INFINITE
+        else:
+            read_timeout_ms = int(round(read_timeout_ms))
         self._buffer_maker.queue_if_needed()
-        lowlevel.WaitBuffer(int(round(read_timeout_ms)))
+        lowlevel.WaitBuffer(read_timeout_ms)
         self._update_image_data(*self._buffer_maker.convert_buffer())
         return self.latest_image()
 
