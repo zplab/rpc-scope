@@ -35,12 +35,11 @@ class ScopeClient:
             self._connect()
 
     def _can_connect(self):
-        with self._rpc_client.timeout_sec(3):
-            try:
-                self._sleep(0) # TODO: change to _ping when all scope servers are updated
-                return True
-            except rpc_client.RPCError:
-                return False
+        try:
+            assert self._ping() == 'pong'
+            return True
+        except rpc_client.RPCError:
+            return False
 
     def _is_connected(self):
         return self._scope is not None
@@ -48,11 +47,11 @@ class ScopeClient:
     def _connect(self):
         if not self._can_connect():
             raise RuntimeError(f'Cannot communicate with microscope server at {self.host}.')
-        with self._rpc_client.timeout_sec(10):
-            # the full API description can take a few secs to gether and pull over a slow network
-            scope = self._rpc_client.proxy_namespace()
         # now set a 60-second default timeout to allow long blocking rpc calls
         self._rpc_client._timeout_sec = 60
+
+        # do this after setting the longer timeout, since this can take ~10 sec
+        scope = self._rpc_client.proxy_namespace()
 
         is_local, get_data = transfer_ism_buffer.client_get_data_getter(self._image_transfer_client)
 

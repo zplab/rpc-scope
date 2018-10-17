@@ -66,8 +66,6 @@ class HideableWidgetContainer(Qt.QWidget):
     def __init__(self, contained_widget, name, docked, pad):
         super().__init__()
         if name == 'viewer':
-            # TODO: is below workaround still needed?
-            self.resize(self.size()) # QMainWindow on Qt 5.8 doesn't remember user-set size between show/hide unless a resize is explicitly called.
         self.contained_widget = contained_widget
         self.name = name
         layout = Qt.QVBoxLayout()
