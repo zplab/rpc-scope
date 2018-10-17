@@ -3,6 +3,7 @@
 import zmq
 import collections
 import contextlib
+import time
 
 from zplib import datafile
 
@@ -220,7 +221,12 @@ class ZMQClient(RPCClient):
     def _receive_reply(self):
         if not self.socket.poll(self._timeout_sec * 1000):
             raise RPCError('Timed out waiting for reply from server (is it running?)')
-        reply_type = self.socket.recv_string()
+        while True:
+            try:
+                reply_type = self.socket.recv_string()
+                break
+            except zmq.Again:
+                time.sleep(0.001)
         assert(self.socket.RCVMORE)
         if reply_type == 'bindata':
             reply = self.socket.recv(copy=False, track=False).buffer
