@@ -259,7 +259,7 @@ class MetricRunner(threading.Thread):
         try:
             self.exception = None
             while self.frames_left > 0:
-                name, timestamp, frame = self._camera.next_image_and_metadata(self.read_timeout_ms)
+                name, timestamp, frame = self.camera.next_image_and_metadata(self.read_timeout_ms)
                 self.camera_timestamps.append(timestamp)
                 if self.retain_images:
                     self.image_names.append(name)
