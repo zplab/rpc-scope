@@ -1,13 +1,14 @@
 # This code is licensed under the MIT License (see LICENSE file for details)
 
-import sys
-import time
-import pathlib
-import json
-import logging
-import inspect
 import concurrent.futures as futures
 import contextlib
+import inspect
+import json
+import logging
+import pathlib
+import platform
+import sys
+import time
 
 from zplib import datafile
 from zplib.image import threaded_io
@@ -48,6 +49,9 @@ class TimepointHandler:
         self.experiment_metadata_path = self.data_dir / 'experiment_metadata.json'
         with self.experiment_metadata_path.open('r') as f:
             self.experiment_metadata = json.load(f)
+
+        self.experiment_metadata['node'] = platform.node()
+
         self.positions = self.experiment_metadata['positions'] # dict mapping names to (x,y,z) stage positions
 
         self.skip_positions = set()
