@@ -68,7 +68,7 @@ class StatusWidget(device_widget.DeviceWidget):
         if sec_since_update > 60:
             with self.scope._rpc_client.timeout_sec(0.5):
                 try:
-                    assert self._ping() == 'pong'
+                    assert self.scope._ping() == 'pong'
                     self.server_running = True
                     self.latest_update = time.time()
                 except rpc_client.RPCError:

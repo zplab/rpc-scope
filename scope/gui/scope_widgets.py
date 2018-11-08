@@ -65,7 +65,6 @@ class WidgetWindow(Qt.QMainWindow):
 class HideableWidgetContainer(Qt.QWidget):
     def __init__(self, contained_widget, name, docked, pad):
         super().__init__()
-        if name == 'viewer':
         self.contained_widget = contained_widget
         self.name = name
         layout = Qt.QVBoxLayout()
