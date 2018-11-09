@@ -74,6 +74,9 @@ class ScopeClient:
             scope.stage.reinit_z._timeout_sec = 2*60
 
         _patch_in_state_context_managers(scope)
+
+        scope._get_configuration._output_handler = scope_configuration.ConfigDict
+
         scope._lock_attrs() # prevent unwary users from setting new attributes that won't get communicated to the server
         self._get_data = get_data
         self._is_local = is_local
