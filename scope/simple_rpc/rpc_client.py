@@ -91,12 +91,13 @@ class RPCClient:
             accessors = collections.defaultdict(_AccessorProperty)
             for name, qualname, doc, argspec in function_descriptions:
                 client_func = _rich_proxy_function(doc, argspec, name, self, qualname)
-                if name.startswith('get_'):
-                    accessors[name[4:]].getter = client_func
-                    name = '_'+name
-                elif name.startswith('set_'):
-                    accessors[name[4:]].setter = client_func
-                    name = '_'+name
+                if qualname not in no_property:
+                    if name.startswith('get_'):
+                        accessors[name[4:]].getter = client_func
+                        name = '_'+name
+                    elif name.startswith('set_'):
+                        accessors[name[4:]].setter = client_func
+                        name = '_'+name
                 setattr(NewNamespace, name, client_func)
             for name, accessor_property in accessors.items():
                 accessor_property._set_doc()
