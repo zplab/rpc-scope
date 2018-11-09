@@ -53,13 +53,17 @@ class RPCClient:
         func.__name__ = func.__qualname__ = command
         return func
 
-    def proxy_namespace(self):
+    def proxy_namespace(self, no_property={}):
         """Use the RPC server's __DESCRIBE__ functionality to reconstitute a
         faxscimile namespace on the client side with well-described functions
         that can be seamlessly called.
 
         A set of the fully-qualified function names available in the namespace
         is included as the _functions_proxied attribute of this namespace.
+
+        Parameter:
+            no_property: set of qualified names that should not be made properties,
+                despite starting with 'set_' or 'get_'.
         """
         # group functions by their namespace
         server_namespaces = collections.defaultdict(list)

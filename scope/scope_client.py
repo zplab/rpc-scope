@@ -51,7 +51,8 @@ class ScopeClient:
         self._rpc_client._timeout_sec = 60
 
         # do this after setting the longer timeout, since this can take ~10 sec
-        scope = self._rpc_client.proxy_namespace()
+        no_property = {'iotool.commands.set_' + val for val in ('high', 'low', 'tristate')}
+        scope = self._rpc_client.proxy_namespace(no_property)
 
         is_local, get_data = transfer_ism_buffer.client_get_data_getter(self._image_transfer_client)
 
