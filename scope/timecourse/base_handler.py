@@ -224,12 +224,16 @@ class TimepointHandler:
         new_metadata['timepoint'] = self.timepoint_prefix
         position_metadata.append(new_metadata)
         if self.write_files:
-            futures_out = self.image_io.write(images, image_paths, self.IMAGE_COMPRESSION)
-            self._job_futures.extend(futures_out)
+            self.threaded_write_images(images, image_paths)
             self._write_atomic_json(metadata_path, position_metadata)
         t3 = time.time()
         self.logger.debug('Images saved ({:.1f} seconds)', t3-t2)
         self.logger.debug('Position done (total: {:.1f} seconds)', t3-t0)
+
+    def threaded_write_images(self, images, image_paths, compression=None):
+        compression = self.IMAGE_COMPRESSION if compression is None
+        futures_out = self.image_io.write(images, image_paths, compression)
+        self._job_futures.extend(futures_out)
 
     def _write_atomic_json(self, out_path, data):
         datafile.json_encode_atomic_legible_to_file(data, out_path)
