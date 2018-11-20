@@ -2,16 +2,9 @@ import collections
 import pathlib
 from scope.timecourse import timecourse_handler
 
-'''
-TODO:
-    Handle autofluorescence the right way (need it to be post_acquisition_sequence, not additional sequencer step)
-
-'''
-
-
 class MultiPassHandler(timecourse_handler.BasicAcquisitionHandler):
     '''
-        This Handler performs two passes of the same image (and post-) acquisition sequence.
+        This Handler performs multiple passes of the same image (and post-) acquisition sequence.
     '''
     ACQUISITON_INTERVAL_HOURS = 3
     REFOCUS_INTERVAL_MINS = self.ACQUISITON_INTERVAL_HOURS*60 # chain autofocusing to acquisition
@@ -31,189 +24,58 @@ class MultiPassHandler(timecourse_handler.BasicAcquisitionHandler):
     NUM_TOTAL_VISITS = 7
 
     def configure_additional_acquisition_steps(self):
-        """Add more steps to the acquisition_sequencer's sequence as desired,
-        making sure to also add corresponding names to the image_name attribute.
-        For example, to add a 200 ms GFP acquisition, a subclass may override
-        this as follows:
-            def configure_additional_acquisition_steps(self):
-                self.scope.camera.acquisition_sequencer.add_step(exposure_ms=200,
-                    lamp='cyan')
-                self.image_names.append('gfp.png')
-        """
-        # if
-        pass
+        if self.start_time - self.experiment_metadata['timestamps'][0] > self.DEVELOPMENT_TIME_HOURS*3600:
+            self.scope.camera.acquisition_sequencer.add_step(exposure=50,lamp=self.FLUORESCENCE_FLATFIELD_LAMP_AF)
+            self.image_names.append('autofluorescence.png')
 
-    def post_acquisition_sequence(self, position_name, position_dir, position_metadata, current_timepoint_metadata, images, exposures, timestamps):
-        """Run any necessary image acquisitions, etc, after the main acquisition
-        sequence finishes. (E.g. for light stimulus and post-stimulus recording.)
+    def finalize_acquisition(self, position_name):
+        try:
+            self.acquire_z
+        except NameError:
+            self.acquire_z = {}
+        self.acquire_z[position_name] = self.scope.stage.z
 
-        Parameters:
-            position_name: name of the position in the experiment metadata file.
-            position_dir: pathlib.Path object representing the directory where
-                position-specific data files and outputs are written. Useful for
-                reading previous image data.
-            position_metadata: list of all the stored position metadata from the
-                previous timepoints, in chronological order.
-            current_timepoint_metadata: the metatdata for the current timepoint.
-                It may be used to append to keys like 'image_timestamps' etc.
-            images: list of acquired images. Newly-acquired images should be
-                appended to this list.
-            exposures: list of exposure times for acquired images. If additional
-                images are acquired, their exposure times should be appended.
-            timestamps: list of camera timestamps for acquired images. If
-                additional images are acquired, their timestamps should be appended.
-        """
-        # if self. - self.experiment_metadata['timestamps'][0] > self.DEVELOPMENT_TIME_HOURS*3600:
-        #     self.scope.camera.acquisition_sequencer.add_step(exposure=50,lamp=self.FLUORESCENCE_FLATFIELD_LAMP_AF)
-        #     self.image_names.append('autofluorescence.png')
-        pass
+    def run_all_positions(self):
+        for position_name, position_coords in sorted(self.positions.items()):
+            if position_name not in self.skip_positions:
+                self.run_position(position_name, position_coords)
+                self.heartbeat()
+        #super
 
-    def iterate_on_positions(self):
-        current_position_coords = {}
-        for self.visit_num in range(self.NUM_TOTAL_VISITS+1):
-            putative_adults = self.start_time - self.experiment_metadata['timestamps'][0] > self.DEVELOPMENT_TIME_HOURS*3600
-            if self.visit_num > 0 and not putative_adults: # Skip for putative developmental timepoints
-                break
-            for position_name in sorted(self.positions):
+        self.scope.camera.acquisition_sequencer.new_sequence() # internally sets all spectra x intensities to 255, unless specified here
+        self.scope.camera.acquisition_sequencer.add_step(exposure_ms=self.bf_exposure,
+            lamp='TL', tl_intensity=self.tl_intensity)
+        self.image_names = [f'bf_{visit_num}.png']
+
+        for visit_num in range(self.NUM_TOTAL_VISITS):
+            pass_start = time.time()
+            for position_name in self.positions()
                 if position_name not in self.skip_positions:
-                    if self.visit_num == 0:
-                        position_coords = self.positions[position_name]
-                        new_metadata = self.run_position(position_name, position_coords)
-                        current_position_coords[position_name] = position_coords[:-1] + [new_metadata['fine_z']]
-                    else:
-                        position_coords = current_position_coords[position_name]
-                        self.run_position(position_name, position_coords)
+                    position_coords = self.positions[position_name][:-1] + [self.acquire_z[position_name]]
+                    position_dir, metadata_path, position_metadata = self._position_metadata(position_name)
+                    self.logger.info(f'Acquiring Position: {position_name} - visit {visit_num+1}')
+                    self.scope.stage.position = position_coords
+                    images = self.scope.camera.acquisition_sequencer.run()
+                    exposures = self.scope.camera.acquisition_sequencer.exposure_times
+                    timestamps = list(self.scope.camera.acquisition_sequencer.latest_timestamps) # Don't zero-justify timestamps for posterity.
+                    images = [self.dark_corrector.correct(image, exposure) for image, exposure in zip(images, exposures)]
+
+                    position_metadata['image_timestamps'].update(zip(self.image_names, timestamps))
+                    image_paths = [position_dir / (self.timepoint_prefix + ' ' + name) for name in self.image_names]
+
+                    futures_out = self.image_io.write(images, image_paths, self.IMAGE_COMPRESSION, wait=False)
+                    self._job_futures.extend(futures_out)
+                    self._write_atomic_json(metadata_path, position_metadata)
+
                     self.heartbeat()
-
-    def run_position(self, position_name, position_coords):
-        """Do everything required for taking a timepoint at a single position
-        EXCEPT focusing / image acquisition. This includes moving the stage to
-        the right x,y position, loading and saving metadata, and saving image
-        data, as generated by acquire_images()"""
-
-        self.logger.info(f'Acquiring Position: {position_name} - visit {self.visit_num}')
-        t0 = time.time()
-        timestamp = time.time()
-        position_dir, metadata_path, position_metadata = self._position_metadata(position_name)
-        position_dir.mkdir(exist_ok=True)
-        if self.scope is not None:
-            self.scope.stage.position = position_coords
-        t1 = time.time()
-        self.logger.debug('Stage Positioned ({:.1f} seconds)', t1-t0)
-        images, image_names, new_metadata = self.acquire_images(position_name, position_dir,
-            position_metadata)
-        t2 = time.time()
-        self.logger.debug('{} Images Acquired ({:.1f} seconds)', len(images), t2-t1)
-
-        image_paths = [position_dir / (self.timepoint_prefix + ' ' + name) for name in image_names]
-        if new_metadata is None:
-            new_metadata = {}
-
-        if self.visit_num == 0:
-            new_metadata['timepoint'] = self.timepoint_prefix
-            new_metadata['timestamp'] = timestamp
-            position_metadata.append(new_metadata)
-        else:
-            # Just update the images for now.
-            position_metadata[-1]['image_timestamps'].update(new_metadata['image_timestamps'])
-
-        if self.write_files:
-            futures_out = self.image_io.write(images, image_paths, self.IMAGE_COMPRESSION, wait=False)
-            self._job_futures.extend(futures_out)
-            self._write_atomic_json(metadata_path, position_metadata)
-
-        t3 = time.time()
-        self.logger.debug('Images saved ({:.1f} seconds)', t3-t2)
-        self.logger.debug('Position done (total: {:.1f} seconds)', t3-t0)
-
-        return new_metadata
-
-    def acquire_images(self, position_name, position_dir, position_metadata):
-        t0 = time.time()
-        self.scope.camera.exposure_time = self.bf_exposure
-        self.scope.tl.lamp.intensity = self.tl_intensity
-        metadata = {}
-        last_autofocus_time = 0
-        if self.USE_LAST_FOCUS_POSITION:
-            last_z = self.positions[position_name][2]
-            for m in position_metadata[::-1]:
-                if 'fine_z' in m:
-                    last_autofocus_time = m['timestamp']
-                    last_z = m['fine_z']
-                    break
-            self.scope.stage.z = last_z
-
-        override_autofocus = False
-        z_updates = self.experiment_metadata.get('z_updates', {})
-        if len(z_updates) > 0:
-            latest_update_isotime = sorted(z_updates.keys())[-1]
-            last_autofocus_isotime = datetime.datetime.fromtimestamp(last_autofocus_time).isoformat()
-            if latest_update_isotime > last_autofocus_isotime:
-                latest_z_update = z_updates[latest_update_isotime]
-                if position_name in latest_z_update:
-                    z = latest_z_update[position_name]
-                    self.logger.info('Using updated z: {}', z)
-                    self.scope.stage.z = z
-                    metadata['fine_z'] = z
-                    override_autofocus = True
-
-        save_focus_stack = False
-        due_for_autofocus = t0 - last_autofocus_time > self.REFOCUS_INTERVAL_MINS * 60
-        if (not override_autofocus and due_for_autofocus):
-            if position_name in self.experiment_metadata.get('save_focus_stacks', []):
-                save_focus_stack = True
-            best_z, focus_scores, focus_images = self.run_autofocus(position_name, metadata, save_focus_stack)
-            t1 = time.time()
-            self.logger.debug('Autofocused ({:.1f} seconds)', t1-t0)
-            self.logger.info('Autofocus z: {}', metadata['fine_z'])
-        else:
-            t1 = time.time()
-
-        images = self.scope.camera.acquisition_sequencer.run()
-        t2 = time.time()
-        self.logger.debug('Acquisition sequence run ({:.1f} seconds)', t2-t1)
-        exposures = self.scope.camera.acquisition_sequencer.exposure_times
-        timestamps = list(self.scope.camera.acquisition_sequencer.latest_timestamps)
-        self.post_acquisition_sequence(position_name, position_dir, position_metadata, metadata, images, exposures, timestamps)
-        images = [self.dark_corrector.correct(image, exposure) for image, exposure in zip(images, exposures)]
-        if None in timestamps:
-            self.logger.warning('None value found in timestamp! Timestamps = {}', timestamps)
-            timestamps = [t if t is not None else numpy.nan for t in timestamps]
-        timestamps = (numpy.array(timestamps) - timestamps[0]) / self.scope.camera.timestamp_hz
-
-        if self.visit_num > 0: # First image for autofocusing is non-numbered
-            image_names = [image_name + f'_{self.visit_num}' for image_name in self.image_names]
-        image_timestamps = metadata.get('image_timestamps', {})
-        image_timestamps.update(zip(self.image_names, timestamps))
-        metadata['image_timestamps'] = image_timestamps
-
-        if self.visit_num == 0 and save_focus_stack and self.write_files:
-            save_image_dir = position_dir / f'{self.timepoint_prefix} focus'
-            save_image_dir.mkdir(exist_ok=True)
-            pad = int(numpy.ceil(numpy.log10(self.FINE_FOCUS_STEPS - 1)))
-            image_paths = [save_image_dir / f'{i:0{pad}}.png' for i in range(self.FINE_FOCUS_STEPS)]
-            z, scores = zip(*focus_scores)
-            focus_data = dict(z=z, scores=scores, best_index=numpy.argmax(scores))
-            self._write_atomic_json(save_image_dir / 'focus_data.json', focus_data)
-            with self.heartbeat_timer():
-                self.image_io.write(focus_images, image_paths, self.IMAGE_COMPRESSION)
-
-        return images, image_names, metadata
-
+            self.logger.debug(f'Pass {visit_num+1} completed in {time.time()-pass_time} s')
+            try:
+                time.sleep(self.REVISIT_INTERVAL_MINS-(time.time()-pass_start)*60)
+            except ValueError: # Negative values
+                pass
 
 
     def get_next_run_interval(self, experiment_hours):
-        """Return the delay interval, in hours, before the experiment should be
-        run again.
-
-        The interval will be interpreted according to the INTERVAL_MODE attribute,
-        as described in the class documentation. Returning None indicates that
-        timepoints should not be acquired again.
-
-        Parameters:
-            experiment_hours: number of hours between the start of the first
-                timepoint and the start of this timepoint.
-        """
         return self.ACQUISITON_INTERVAL_HOURS
 
 if __name__ == '__main__':
