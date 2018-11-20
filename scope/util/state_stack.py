@@ -16,7 +16,7 @@ class StateStackDevice:
         if len(state) == 0 or weights is None:
             return state.items()
         # sort by weight, with implicit value of zero for non-listed items
-        properties, values = zip(*sorted(state.items(), key=lambda p_v:weights.get(p_v[0], 0)))
+        properties, values = zip(*sorted(state.items(), key=lambda p_v: weights.get(p_v[0], 0)))
         return zip(properties, values)
 
     def  _update_push_states(self, state, old_state):
@@ -36,7 +36,7 @@ class StateStackDevice:
         saving the old values of those parameters. pop_state() will restore those
         previous values. push_state/pop_state pairs can be nested arbitrarily.
         """
-        old_state = {p:getattr(self, 'get_'+p)() for p, v in state.items()}
+        old_state = {p: getattr(self, 'get_'+p)() for p, v in state.items()}
         self._update_push_states(state, old_state)
         if old_state:
             properties_and_values = self._order(state, self._get_push_weights(state))

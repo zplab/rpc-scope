@@ -4,16 +4,16 @@ import numpy
 import logging
 import time
 import datetime
-import pathlib
 
 from zplib import background_process
+from zplib.image.threaded_io import COMPRESSION
+
 from elegant import process_experiment
 
 from . import base_handler
 from ..client_util import autofocus
 from ..client_util import calibrate
 from ..config import scope_configuration
-from ..util.threaded_image_io import COMPRESSION
 
 class BasicAcquisitionHandler(base_handler.TimepointHandler):
     """Base class for most timecourse acquisition needs.
@@ -79,8 +79,9 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     TL_APERTURE_DIAPHRAGM = None
     IL_FIELD_WHEEL = None # 'circle:3' is a good choice.
     VIGNETTE_PERCENT = 5 # 5 is a good number when using a 1x optocoupler. If 0.7x, use 35.
-    SEGMENTATION_MODEL = None # path to image-segmentation model to run in the background after the job ends.
+    SEGMENTATION_MODEL = None # name of or path to image-segmentation model to run in the background after the job ends.
     TO_SEGMENT = ['bf'] # image name or names to segment
+    FOCUS_FILTER_PERIOD_RANGE = None # if not None, (min_size, max_size) tuple for bandpass filtering images before autofocus
 
     def configure_additional_acquisition_steps(self):
         """Add more steps to the acquisition_sequencer's sequence as desired,
@@ -148,7 +149,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         assert self.scope.nosepiece.magnification == objective
 
         self.scope.il.shutter_open = True
-        self.scope.il.spectra.lamps(**{lamp+'_enabled':False for lamp in self.scope.il.spectra.lamp_specs})
+        self.scope.il.spectra.lamps(**{lamp+'_enabled': False for lamp in self.scope.il.spectra.lamp_specs})
         self.scope.tl.shutter_open = True
         self.scope.tl.lamp.enabled = False
         self.scope.tl.condenser_retracted = objective == 5 # only retract condenser for 5x objective
@@ -311,9 +312,9 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         z_max = self.experiment_metadata['z_max']
         with self.heartbeat_timer(), self.scope.tl.lamp.in_state(enabled=True):
             if self.DO_COARSE_FOCUS:
-                coarse_result = autofocus(self.scope, z_start, z_max,
+                coarse_result = autofocus.autofocus(self.scope, z_start, z_max,
                     self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
-                    speed=0.8, binning='4x4', exposure_time=scope.camera.exposure_time/16)
+                    speed=0.8, binning='4x4', exposure_time=self.scope.camera.exposure_time/16)
                 z_start = current_timepoint_metadata['coarse_z'] = coarse_result[0]
             mask_file = self.data_dir / 'Focus Masks' / (position_name + '.png')
             mask = str(mask_file) if mask_file.exists() else None
@@ -321,7 +322,8 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
                 self.logger.info('Using autofocus mask: {}', mask)
             fine_result = autofocus.autofocus(self.scope, z_start, z_max,
                 self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS,
-                speed=0.3, mask=mask, return_images=return_images)
+                speed=0.3, mask=mask, return_images=return_images,
+                focus_filter_period_range=self.FOCUS_FILTER_PERIOD_RANGE)
         current_timepoint_metadata['fine_z'] = fine_result[0]
         return fine_result
 
@@ -376,7 +378,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             self.logger.warning('None value found in timestamp! Timestamps = {}', timestamps)
             timestamps = [t if t is not None else numpy.nan for t in timestamps]
         timestamps = (numpy.array(timestamps) - timestamps[0]) / self.scope.camera.timestamp_hz
-        metadata['image_timestamps']=dict(zip(self.image_names, timestamps))
+        metadata['image_timestamps'] = dict(zip(self.image_names, timestamps))
 
         if save_focus_stack and self.write_files:
             save_image_dir = position_dir / f'{self.timepoint_prefix} focus'

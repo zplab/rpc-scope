@@ -13,8 +13,6 @@ from . import status_widget
 from .. import scope_client
 from .. import util
 
-# TODO: Should live_target be a flipbook entry instead of just self.image?
-
 class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
     NEW_IMAGE_EVENT = Qt.QEvent.registerEventType()
     OVEREXPOSURE_GETCOLOR_EXPRESSION = 's.r < 1.0f ? vec4(s.rrr, 1.0f) : vec4(1.0f, 0.0f, 0.0f, 1.0f)'
@@ -58,7 +56,6 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
         self.last_image_time = 0
         self.live_streamer = scope_client.LiveStreamer(scope, self.post_new_image_event)
 
-
     def closeEvent(self, e):
         if self.closing:
             # sometimes closeEvent gets fired off twice (2018-01, PyQt 5.9). Why? TODO: verify if problem goes away in later Qt
@@ -76,7 +73,7 @@ class ScopeViewerWidget(ris_widget.RisWidgetQtObject):
                     if t - self.last_image_time < self.interval_min:
                         return True
                 try:
-                    image_data, timestamp, frame_no = self.live_streamer.get_image(timeout=4)
+                    image_data, timestamp, frame_number = self.live_streamer.get_image(timeout=4)
                 except scope_client.LiveStreamer.Timeout:
                     return True
                 self.last_image_time = time.time()

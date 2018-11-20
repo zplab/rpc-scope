@@ -9,7 +9,6 @@ import contextlib
 
 from .simple_rpc import rpc_client, property_client
 from .util import transfer_ism_buffer
-from .util import state_stack
 from .config import scope_configuration
 
 class ScopeClient:
@@ -36,12 +35,11 @@ class ScopeClient:
             self._connect()
 
     def _can_connect(self):
-        with self._rpc_client.timeout_sec(1):
-            try:
-                self._sleep(0) # TODO: change to _ping when all scope servers are updated
-                return True
-            except rpc_client.RPCError:
-                return False
+        try:
+            assert self._ping() == 'pong'
+            return True
+        except rpc_client.RPCError:
+            return False
 
     def _is_connected(self):
         return self._scope is not None
@@ -49,60 +47,38 @@ class ScopeClient:
     def _connect(self):
         if not self._can_connect():
             raise RuntimeError(f'Cannot communicate with microscope server at {self.host}.')
+        # now set a 60-second default timeout to allow long blocking rpc calls
+        self._rpc_client._timeout_sec = 60
+
+        # do this after setting the longer timeout, since this can take ~10 sec
+        no_property = {'iotool.commands.set_' + val for val in ('high', 'low', 'tristate')}
+        scope = self._rpc_client.proxy_namespace(no_property)
 
         is_local, get_data = transfer_ism_buffer.client_get_data_getter(self._image_transfer_client)
 
-        # define additional client wrapper functions
-        def get_many_data(image_names):
-            return [get_data(name) for name in image_names]
-        def get_stream_data(return_values):
-            images_names, timestamps, attempted_frame_rate = return_values
-            return get_many_data(images_names), timestamps, attempted_frame_rate
-        def get_autofocus_data(return_values):
-            best_z, positions_and_scores, image_names = return_values
-            return best_z, positions_and_scores, get_many_data(image_names)
-
-        client_wrappers = {
-            'camera.acquire_image': get_data,
-            'camera.next_image': get_data,
-            'camera.stream_acquire': get_stream_data,
-            'camera.acquisition_sequencer.run': get_many_data,
-            'camera.autofocus.autofocus': get_autofocus_data,
-            'camera.autofocus.autofocus_continuous_move': get_autofocus_data
-        }
-
-        with self._rpc_client.timeout_sec(10):
-            # the full API description can take a few secs to gether and pull over a slow network
-            scope = self._rpc_client.proxy_namespace(client_wrappers)
         if hasattr(scope, 'camera'):
-            # use a special RPC channel (the "image transfer" connection) devoted to just
-            # getting image names and images from the server. This allows us to grab the
-            # latest image from the camera, even when the main connection to the scope
-            # is tied up with a blocking call (like autofocus).
-            def latest_image():
-                name, timestamp, frame_number = self._image_transfer_client('latest_image')
-                return get_data(name), timestamp, frame_number
-            latest_image.__doc__ = scope.camera.latest_image.__doc__
-            scope.camera.latest_image = latest_image
-
-            #monkeypatch in a image sequence acquisition context manager
-            @contextlib.contextmanager
-            def image_sequence_acquisition(frame_count=1, trigger_mode='Internal', **camera_params):
-                """Context manager to begin and automatically end an image sequence acquisition."""
-                scope.camera.start_image_sequence_acquisition(frame_count, trigger_mode, **camera_params)
-                try:
-                    yield
-                finally:
-                    scope.camera.end_image_sequence_acquisition()
-            scope.camera.image_sequence_acquisition = image_sequence_acquisition
+            _patch_camera(scope.camera, get_data, self._image_transfer_client)
             if not is_local:
                 scope.camera.set_network_compression = get_data.set_network_compression
+            if hasattr(scope.camera, 'autofocus'):
+                # set a 45-minute timeout to allow for FFT calculation if necessary
+                scope.camera.autofocus.ensure_fft_ready._timeout_sec = 45*60
+                # autofocus might be a bit slow too
+                scope.camera.autofocus.autofocus._timeout_sec = 2*60
+                scope.camera.autofocus.autofocus_continuous_move._timeout_sec = 2*60
 
-        _replace_in_state(scope) # monkeypatch in in_state context managers
+        if hasattr(scope, 'stage'):
+            # stage init can take more than our usual 60-second timeout
+            scope.stage.reinit._timeout_sec = 2*60
+            scope.stage.reinit_x._timeout_sec = 2*60
+            scope.stage.reinit_y._timeout_sec = 2*60
+            scope.stage.reinit_z._timeout_sec = 2*60
+
+        _patch_in_state_context_managers(scope)
+
+        scope._get_configuration._output_handler = scope_configuration.ConfigDict
+
         scope._lock_attrs() # prevent unwary users from setting new attributes that won't get communicated to the server
-        # now set a 60-second timeout to allow really long blocking operations
-        self._rpc_client._timeout_ms = 60 * 1000
-
         self._get_data = get_data
         self._is_local = is_local
         self._functions_proxied = scope._functions_proxied
@@ -143,7 +119,56 @@ class ScopeClient:
         return listing
 
 
-def _replace_in_state(scope):
+def _patch_camera(camera, get_data, image_transfer_client):
+    # ensure that the camera uses the proper data-transfer channels, and
+    # monkeypatch the sequence acquisition context manager
+
+    # define image transfer wrapper functions
+    def get_many_data(image_names):
+        return [get_data(name) for name in image_names]
+    def get_data_and_metadata(return_values):
+        image_name, timestamp, frame_number = return_values
+        return get_data(image_name), timestamp, frame_number
+    def get_stream_data(return_values):
+        images_names, timestamps, attempted_frame_rate = return_values
+        return get_many_data(images_names), timestamps, attempted_frame_rate
+    def get_autofocus_data(return_values):
+        best_z, positions_and_scores, image_names = return_values
+        return best_z, positions_and_scores, get_many_data(image_names)
+
+    camera.acquire_image._output_handler = get_data
+    camera.next_image._output_handler = get_data
+    camera.next_image_and_metadata._output_handler = get_data_and_metadata
+    camera.stream_acquire._output_handler = get_stream_data
+    if hasattr(camera, 'acquisition_sequencer'):
+        camera.acquisition_sequencer.run._output_handler = get_many_data
+    if hasattr(camera, 'autofocus'):
+        camera.autofocus.autofocus._output_handler = get_autofocus_data
+        camera.autofocus.autofocus_continuous_move._output_handler = get_autofocus_data
+
+    # use a special RPC channel (the "image transfer" connection) devoted to just
+    # getting image names and images from the server. This allows us to grab the
+    # latest image from the camera, even when the main connection to the scope
+    # is tied up with a blocking call (like autofocus).
+    def latest_image():
+        name, timestamp, frame_number = image_transfer_client('latest_image')
+        return get_data(name), timestamp, frame_number
+    latest_image.__doc__ = camera.latest_image.__doc__
+    camera.latest_image = latest_image
+
+    # monkeypatch image sequence acquisition context manager to work on client side
+    @contextlib.contextmanager
+    def image_sequence_acquisition(frame_count=1, trigger_mode='Internal', **camera_params):
+        """Context manager to begin and automatically end an image sequence acquisition."""
+        camera.start_image_sequence_acquisition(frame_count, trigger_mode, **camera_params)
+        try:
+            yield
+        finally:
+            camera.end_image_sequence_acquisition()
+    camera.image_sequence_acquisition = image_sequence_acquisition
+
+def _patch_in_state_context_managers(scope):
+    # monkeypatch in_state context managers to work on client side
     for qualname in scope._functions_proxied:
         if qualname == 'in_state':
             obj = scope
@@ -152,10 +177,22 @@ def _replace_in_state(scope):
             obj = eval(parents, scope.__dict__)
         else:
             continue
-        # deep magic to make state_stack.StateStackDevice.in_state act like a
-        # bound method of obj, such that obj acts as the implicit "self" parameter:
-        # https://docs.python.org/3/howto/descriptor.html#functions-and-methods
-        obj.in_state = state_stack.StateStackDevice.in_state.__get__(obj)
+        _generate_in_state(obj)
+
+def _generate_in_state(obj):
+    # must do below in separate function for each obj so that the closure
+    # works right (standard python bugaboo with generating closures in loops...)
+    @contextlib.contextmanager
+    def in_state(**state):
+        """Context manager to set a number of device parameters at once using
+        keyword arguments. The old values of those parameters will be restored
+        upon exiting the with-block."""
+        obj.push_state(**state)
+        try:
+            yield
+        finally:
+            obj.pop_state()
+    obj.in_state = in_state
 
 
 class LiveStreamer:

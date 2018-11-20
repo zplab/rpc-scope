@@ -40,6 +40,7 @@ class IOTool:
             time.sleep(0.1)
             if time.time() - wait_start > 5:
                 raise smart_serial.SerialException('IOTool device did not properly reset!')
+        e = None
         for timeout in [0.1, 0.5, 1]:
             # try opening the serial port a few times, in case the os doesn't make it properly available right away
             try:

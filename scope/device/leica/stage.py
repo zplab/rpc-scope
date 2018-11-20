@@ -98,11 +98,11 @@ class Stage(stand.LeicaComponent):
             1, # Upper software endswitch (X2) changed,
             async=False
         )
-        self.register_event_callback(GET_STATUS_X, self._on_status_x_event)
-        self.register_event_callback(GET_POS_X, self._on_pos_x_event)
-        self.register_event_callback(GET_XY_STEP_MODE, self._on_xy_step_mode_event)
-        self.register_event_callback(GET_X1_LIMIT, self._on_x_low_soft_limit_event)
-        self.register_event_callback(GET_X2_LIMIT, self._on_x_high_soft_limit_event)
+        self._register_event_callback(GET_STATUS_X, self._on_status_x_event)
+        self._register_event_callback(GET_POS_X, self._on_pos_x_event)
+        self._register_event_callback(GET_XY_STEP_MODE, self._on_xy_step_mode_event)
+        self._register_event_callback(GET_X1_LIMIT, self._on_x_low_soft_limit_event)
+        self._register_event_callback(GET_X2_LIMIT, self._on_x_high_soft_limit_event)
         self._update_property('xy_fine_control', self.get_xy_fine_control())
         self._update_property('x_low_soft_limit', self.get_x_low_soft_limit())
         self._update_property('x_high_soft_limit', self.get_x_high_soft_limit())
@@ -119,10 +119,10 @@ class Stage(stand.LeicaComponent):
             1, # Upper software endswitch (Y2) changed
             async=False
         )
-        self.register_event_callback(GET_STATUS_Y, self._on_status_y_event)
-        self.register_event_callback(GET_POS_Y, self._on_pos_y_event)
-        self.register_event_callback(GET_Y1_LIMIT, self._on_y_low_soft_limit_event)
-        self.register_event_callback(GET_Y2_LIMIT, self._on_y_high_soft_limit_event)
+        self._register_event_callback(GET_STATUS_Y, self._on_status_y_event)
+        self._register_event_callback(GET_POS_Y, self._on_pos_y_event)
+        self._register_event_callback(GET_Y1_LIMIT, self._on_y_low_soft_limit_event)
+        self._register_event_callback(GET_Y2_LIMIT, self._on_y_high_soft_limit_event)
         self._update_property('y_low_soft_limit', self.get_y_low_soft_limit())
         self._update_property('y_high_soft_limit', self.get_y_high_soft_limit())
         self._on_status_y_event(self.send_message(GET_STATUS_Y, async=False))
@@ -139,10 +139,10 @@ class Stage(stand.LeicaComponent):
             1, # New Z_STEP_MODE (coarse/fine) set
             async=False
         )
-        self.register_event_callback(GET_STATUS_Z, self._on_status_z_event)
-        self.register_event_callback(GET_POS_Z, self._on_pos_z_event)
-        self.register_event_callback(GET_Z_STEP_MODE, self._on_z_step_mode_event)
-        self.register_event_callback(GET_LOW_LIMIT, self._on_z_low_soft_limit_event)
+        self._register_event_callback(GET_STATUS_Z, self._on_status_z_event)
+        self._register_event_callback(GET_POS_Z, self._on_pos_z_event)
+        self._register_event_callback(GET_Z_STEP_MODE, self._on_z_step_mode_event)
+        self._register_event_callback(GET_LOW_LIMIT, self._on_z_low_soft_limit_event)
         self._update_property('z_fine_control', self.get_z_fine_control())
         self._update_property('z_low_soft_limit', self.get_z_low_soft_limit())
         self._update_property('z_high_soft_limit', self.get_z_high_soft_limit())
@@ -481,7 +481,7 @@ class Stage(stand.LeicaComponent):
         self.send_message(INIT_RANGE_Z, async=False, intent="init stage z axis")
         # now back off from the z position that the stage is left in, which is
         # the closest to the objective (dangerous!)
-        self.z -= 5
+        self.set_z(self.get_z()- 5)
 
     def set_xy_fine_control(self, fine):
         self.send_message(SET_XY_STEP_MODE, int(not fine), async=False)
@@ -594,7 +594,6 @@ class Stage(stand.LeicaComponent):
         else: # ramp and distance must be such that we can never go fast enough
             return max_speed
 
-
     def calculate_z_movement_position(self, distance, t):
         """Calculate where the stage will be (relative to the starting position)
         for a z-move of a given distance (in mm) after t seconds have elapsed.
@@ -609,13 +608,13 @@ class Stage(stand.LeicaComponent):
                 return 0.5 * speed_ramp * t**2 + half_fudge * t/ramp_time # assign first half of fudge linearly
             non_ramp_time = distance / final_speed - ramp_time
             if t <= ramp_time + non_ramp_time:
-                return ( 0.5 * speed_ramp * ramp_time**2
+                return (0.5 * speed_ramp * ramp_time**2
                        + final_speed * (t-ramp_time)
                        + half_fudge)
             total_time = 2*ramp_time + non_ramp_time
             if t > total_time:
                 t = total_time
-            return ( 0.5 * speed_ramp * ramp_time**2
+            return (0.5 * speed_ramp * ramp_time**2
                    + final_speed * non_ramp_time
                    + 0.5 * speed_ramp * (t - ramp_time - non_ramp_time)**2
                    + half_fudge + half_fudge * (t - ramp_time - non_ramp_time) / ramp_time) # assign the second half of the fudge linearly

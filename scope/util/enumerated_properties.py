@@ -47,8 +47,6 @@ class SetProperty(ReadonlySetProperty):
         raise AttributeError("can't set attribute")
 
 
-
-
 class ReadonlyDictProperty:
     """Base class for any enumerated device property that is limited to a set of non-user-
     friendly values identified to the user by more meaningful names.
@@ -64,7 +62,7 @@ class ReadonlyDictProperty:
 
     def __init__(self):
         self._hw_to_usr = self._get_hw_to_usr()
-        self._usr_to_hw = {usr : hw for hw, usr in self._hw_to_usr.items()}
+        self._usr_to_hw = {usr: hw for hw, usr in self._hw_to_usr.items()}
 
     def get_recognized_values(self):
         """The list of recognized values for this property."""

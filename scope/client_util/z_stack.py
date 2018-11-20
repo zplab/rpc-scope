@@ -38,7 +38,7 @@ def z_stack(scope, mm_range, num_steps, tl_enabled=False, **spectra_state):
             with contextlib.ExitStack() as stack:
                 stack.enter_context(scope.tl.lamp.in_state(enabled=tl_enabled))
                 if spectra_state:
-                    stack.enter_context(scope.il.spectra.in_state(**spectra))
+                    stack.enter_context(scope.il.spectra.in_state(**spectra_state))
                 scope.camera.send_software_trigger()
                 time.sleep(exposure_sec)
         images.append(scope.camera.next_image(read_timeout_ms=1000))

@@ -1,32 +1,31 @@
 # This code is licensed under the MIT License (see LICENSE file for details)
 
-import sys
-import time
-import pathlib
+import concurrent.futures as futures
+import contextlib
+import inspect
 import json
 import logging
-import inspect
-import concurrent.futures as futures
-import os
-import contextlib
-import pickle
+import pathlib
+import platform
+import sys
+import time
 
 from zplib import datafile
+from zplib.image import threaded_io
 from elegant import load_data
 from elegant import process_data
 
-from ..util import threaded_image_io
 from ..util import log_util
 from ..util import timer
 
 class DummyIO:
     def __init__(self, logger):
         self.logger = logger
-    def write(*args, **kws):
+    def write(self, *args, **kws):
         self.logger.warning('Trying to write files, but file writing was disabled!')
 
 class TimepointHandler:
-    IMAGE_COMPRESSION = threaded_image_io.COMPRESSION.DEFAULT
+    IMAGE_COMPRESSION = threaded_io.COMPRESSION.DEFAULT
     LOG_LEVEL = logging.INFO
     IO_THREADS = 4
 
@@ -50,6 +49,9 @@ class TimepointHandler:
         self.experiment_metadata_path = self.data_dir / 'experiment_metadata.json'
         with self.experiment_metadata_path.open('r') as f:
             self.experiment_metadata = json.load(f)
+
+        self.experiment_metadata['node'] = platform.node()
+
         self.positions = self.experiment_metadata['positions'] # dict mapping names to (x,y,z) stage positions
 
         self.skip_positions = set()
@@ -80,7 +82,7 @@ class TimepointHandler:
             log_level = getattr(logging, log_level)
         self.logger.setLevel(log_level)
         if self.write_files:
-            self.image_io = threaded_image_io.ThreadedIO(self.IO_THREADS)
+            self.image_io = threaded_io.ThreadedIO(self.IO_THREADS)
             handler = logging.FileHandler(str(self.data_dir/'acquisitions.log'))
         else:
             self.image_io = DummyIO(self.logger)
@@ -140,12 +142,11 @@ class TimepointHandler:
                 # during the execution.
                 [f.result() for f in self._job_futures]
                 self.logger.debug('Background jobs complete ({:.1f} seconds)', time.time()-t0)
-            self.cleanup()
             # transfer timepoint information to annotations dicts
             process_data.annotate(self.data_dir,
                 annotators=[process_data.annotate_timestamps, process_data.annotate_z],
                 position_annotators=[process_data.annotate_stage_pos])
-
+            self.cleanup()
             self.logger.info('Timepoint {} ended ({:.0f} minutes after starting)', self.timepoint_prefix,
                              (time.time()-self.start_time)/60)
             if run_again:
@@ -226,12 +227,16 @@ class TimepointHandler:
         new_metadata['timepoint'] = self.timepoint_prefix
         position_metadata.append(new_metadata)
         if self.write_files:
-            futures_out = self.image_io.write(images, image_paths, self.IMAGE_COMPRESSION, wait=False)
-            self._job_futures.extend(futures_out)
+            self.threaded_write_images(images, image_paths)
             self._write_atomic_json(metadata_path, position_metadata)
         t3 = time.time()
         self.logger.debug('Images saved ({:.1f} seconds)', t3-t2)
         self.logger.debug('Position done (total: {:.1f} seconds)', t3-t0)
+
+    def threaded_write_images(self, images, image_paths, compression=None):
+        compression = self.IMAGE_COMPRESSION if compression is None
+        futures_out = self.image_io.write(images, image_paths, compression)
+        self._job_futures.extend(futures_out)
 
     def _write_atomic_json(self, out_path, data):
         datafile.json_encode_atomic_legible_to_file(data, out_path)

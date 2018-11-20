@@ -46,14 +46,15 @@ class AutofocusMetric:
 class BrennerAutofocus(AutofocusMetric):
     def __init__(self, shape, period_range=None, mask=None):
         super().__init__()
-        self.filter = self._get_filter(tuple(shape), tuple(period_range))
+        if period_range is None:
+            self.filter = None
+        else:
+            self.filter = self._get_filter(tuple(shape), tuple(period_range))
         self.mask = mask
 
     @staticmethod
     @functools.lru_cache(maxsize=16)
     def _get_filter(shape, period_range):
-        if period_range is None:
-            return lambda x: x
         timer = threading.Timer(1, logger.warning, ['Slow construction of FFTW filter for image shape {} (likely no cached plan could be found). May take >30 minutes!', shape])
         timer.start()
         fft_filter = fast_fft.SpatialFilter(shape, period_range, precision=32, threads=6, better_plan=True)
@@ -66,6 +67,8 @@ class BrennerAutofocus(AutofocusMetric):
 
     def metric(self, image):
         image = image.astype(numpy.float32) # otherwise can get overflow in the squaring and summation
+        if self.filter is not None:
+            image = self.filter(image)
         x_diffs = (image[2:, :] - image[:-2, :])**2
         y_diffs = (image[:, 2:] - image[:, :-2])**2
         if self.mask is None:
@@ -79,6 +82,18 @@ class Autofocus:
     def __init__(self, camera: andor.Camera, stage: stage.Stage):
         self._camera = camera
         self._stage = stage
+
+    def ensure_fft_ready(self):
+        """Make sure the autofocus FFT filter is ready for the current camera
+        frame size. (No need to worry about the focus_filter_period_range: the
+        FFT doesn't need to know that to compute the basic filter.)
+
+        The first time that this is done after installing / updating fftw,
+        this might take a while. So this function is available separetely so
+        that it can be run with a very long timeout.
+        """
+        # use a dummy period range below
+        BrennerAutofocus._get_filter(shape=tuple(self._camera.get_aoi_shape()), period_range=(None, 2))
 
     def _start_autofocus(self, focus_filter_period_range, focus_filter_mask, **camera_state):
         camera_state.update(self._CAMERA_MODE)
@@ -96,7 +111,7 @@ class Autofocus:
         self._stage.wait() # no op if in sync mode, necessary in async mode
         return best_z, zip(z_positions, z_scores)
 
-    def autofocus(self, start, end, steps, focus_filter_period_range=(None, 10),
+    def autofocus(self, start, end, steps, focus_filter_period_range=None,
             focus_filter_mask=None, return_images=False, **camera_state):
         """Automatically focus the camera with stepwise stage movements.
 
@@ -134,7 +149,7 @@ class Autofocus:
                 self._stage.wait()
                 self._camera.send_software_trigger()
                 if z != end:
-                    time.sleep(sleep_time)
+                    time.sleep(1/frame_rate)
             image_names, camera_timestamps = runner.join()
         best_z, positions_and_scores = self._stop_autofocus(z_positions)
         if not return_images:
@@ -244,13 +259,13 @@ class MetricRunner(threading.Thread):
         try:
             self.exception = None
             while self.frames_left > 0:
-                name = self.camera.next_image(self.read_timeout_ms)
-                self.camera_timestamps.append(self.camera.get_latest_timestamp())
+                name, timestamp, frame = self.camera.next_image_and_metadata(self.read_timeout_ms)
+                self.camera_timestamps.append(timestamp)
                 if self.retain_images:
                     self.image_names.append(name)
-                    array = transfer_ism_buffer._borrow_array(name)
+                    array = transfer_ism_buffer.borrow_array(name)
                 else:
-                    array = transfer_ism_buffer._release_array(name)
+                    array = transfer_ism_buffer.release_array(name)
                 self.futures.append(self.threadpool.submit(self.metric.evaluate_image, array))
                 self.frames_left -= 1
         except Exception as e:

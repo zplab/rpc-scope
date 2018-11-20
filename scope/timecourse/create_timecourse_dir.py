@@ -37,8 +37,9 @@ class Handler(timecourse_handler.BasicAcquisitionHandler):
     TL_APERTURE_DIAPHRAGM = None
     IL_FIELD_WHEEL = None # 'circle:3' is a good choice.
     VIGNETTE_PERCENT = 5 # 5 is a good number when using a 1x optocoupler. If 0.7x, use 35.
-    SEGMENTATION_MODEL = None # path to image-segmentation model to run in the background after the job ends.
+    SEGMENTATION_MODEL = None # name of or path to image-segmentation model to run in the background after the job ends.
     TO_SEGMENT = ['bf'] # image name or names to segment
+    FOCUS_FILTER_PERIOD_RANGE = None # if not None, (min_size, max_size) tuple for bandpass filtering images before autofocus
 
     def configure_additional_acquisition_steps(self):
         """Add more steps to the acquisition_sequencer's sequence as desired,
@@ -93,7 +94,7 @@ if __name__ == '__main__':
     # note: can add any desired keyword arguments to the Handler init method
     # to the below call to main(), which is defined by scope.timecourse.base_handler.TimepointHandler
     Handler.main(pathlib.Path(__file__).parent)
-''')
+'''
 
 def create_acquire_file(data_dir, run_interval):
     """Create a skeleton acquisition file for timecourse acquisitions.
@@ -105,8 +106,7 @@ def create_acquire_file(data_dir, run_interval):
     """
     data_dir = pathlib.Path(data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
-    code = handler_template.format(filter_cube=filter_cube,
-        fl_flatfield_lamp=fluorescence_flatfield_lamp, run_interval=run_interval)
+    code = handler_template.format(run_interval=run_interval)
     with (data_dir / 'acquire.py').open('w') as f:
         f.write(code)
 
@@ -193,8 +193,8 @@ def _name_positions(num_positions, name_prefix):
     return names
 
 def _maybe_reinit_stage(scope):
-    reinit = input('press enter when ready to reinit stage (or press n and enter to skip reinit) ')
-    if reinit.lower() != 'n':
+    reinit = input('press y and enter to reinitialize the stage; press enter to skip reinit. ')
+    if reinit.lower() == 'y':
         current_position = scope.stage.x, scope.stage.y
         scope.stage.reinit_x()
         scope.stage.reinit_y()

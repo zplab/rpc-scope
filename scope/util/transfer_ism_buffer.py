@@ -6,13 +6,14 @@ import struct
 import zlib
 import platform
 import collections
-import time
+import threading
 
 import ism_buffer
 
 _ism_buffer_registry = collections.defaultdict(list)
+_registry_lock = threading.Lock()
 
-def server_create_array(name, shape, dtype, order):
+def create_array(name, shape, dtype, order):
     """Create a numpy array view onto an ISM_Buffer shared memory region
     identified by the given name.
 
@@ -22,10 +23,9 @@ def server_create_array(name, shape, dtype, order):
     array goes away, then the ISM_Buffer will stay open (due to its own internal
     refcount).
     """
-    array = ism_buffer.new(name, shape, dtype, order).asarray()
-    return array
+    return ism_buffer.new(name, shape, dtype, order).asarray()
 
-def server_register_array_for_transfer(name, array):
+def register_array_for_transfer(name, array):
     """Register a named, ISM_Buffer-backed array with the server that is going
     to be transfered to another process. Once the other process obtains the
     ISM_Buffer, it must call the appropriate get_data() function (provided by
@@ -35,19 +35,32 @@ def server_register_array_for_transfer(name, array):
     # clients all want to grab the same live image). Appending it to a list
     # makes sure we can track the count of outgoing requests, so we don't free
     # things too soon.
-    _ism_buffer_registry[name].append(array)
+    # Note that this function may be called simultaneously by two threads
+    # via camera.latest_image running on the main thread and the image transfer
+    # thread; or this function and _release_array might get called simultaneously.
+    # Thus we protect mutating access to the registry.
+    with _registry_lock:
+        # the below is sufficiently atomic that simultaneous calls to this function
+        # won't cause a problem (the default will only get created once),
+        # but we don't want to be appending to an array that's simultaneously
+        # getting deleted by _release_array.
+        _ism_buffer_registry[name].append(array)
 
-def _release_array(name):
+def release_array(name):
     """Remove the named, ISM_Buffer-backed array from the transfer registry,
     allowing it to be deallocated if nobody else on the server process is
     retaining any references. Return the named array."""
     arrays = _ism_buffer_registry[name]
     array = arrays.pop()
-    if not arrays:
-        del _ism_buffer_registry[name]
+    with _registry_lock:
+        # don't want another thread to register the same name after we here
+        # decide that arrays is empty, but before we delete it, so synchronize
+        # this section only.
+        if not arrays:
+            del _ism_buffer_registry[name]
     return array
 
-def _borrow_array(name):
+def borrow_array(name):
     """Return the named array, while still keeping a reference in the registry
     for future transfer to a client."""
     return _ism_buffer_registry[name][-1]
@@ -57,7 +70,7 @@ def _server_release_array(name):
     allowing it to be deallocated if nobody else on the server process is
     retaining any references. Does not return the named array, so this function
     is safe to call over RPC (which does not know how to send numpy arrays)."""
-    _release_array(name)
+    release_array(name)
 
 def _server_pack_data(name, compressor='blosc', downsample=None, **compressor_args):
     """Pack the data in the named ISM_Buffer into bytes for transfer over
@@ -69,7 +82,7 @@ def _server_pack_data(name, compressor='blosc', downsample=None, **compressor_ar
       - 'zlib': use older, more widely supported zlib compression
     compressor_args are passed to zlib.compress() or blosc.compress() directly."""
 
-    array = _release_array(name) # get the array and release it from the list of to-be-transfered arrays
+    array = release_array(name) # get the array and release it from the list of to-be-transfered arrays
     if downsample:
         array = array[::downsample, ::downsample]
     dtype_str = numpy.lib.format.dtype_to_descr(array.dtype)

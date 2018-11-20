@@ -1,6 +1,5 @@
 # This code is licensed under the MIT License (see LICENSE file for details)
 
-from pathlib import Path
 from PyQt5 import Qt
 import pkg_resources
 
@@ -410,7 +409,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                     try:
                         update_high_limit(new_high_limit)
                     except rpc_client.RPCError as e:
-                        error = 'Could not set {} axis to {} ({}).'.format(name, new_high_limit, e.args[0])
+                        error = 'Could not set {} axis to {} ({}).'.format(axis_name, new_high_limit, e.args[0])
                         Qt.QMessageBox.warning(self, 'RPC Exception', error)
             high_limit_text_widget.returnPressed.connect(submit_high_limit_text)
 

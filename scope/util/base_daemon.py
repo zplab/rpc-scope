@@ -3,7 +3,6 @@
 import os
 import os.path
 import signal
-import errno
 import sys
 import shutil
 
@@ -50,10 +49,10 @@ class Runner:
         for sig, handler in DEFAULT_SIGNAL_MAP.items():
             if sig not in signal_map:
                 signal_map[sig] = handler
-        daemon.set_signal_handlers({getattr(signal, sig):handler for sig, handler in signal_map.items()})
+        daemon.set_signal_handlers({getattr(signal, sig): handler for sig, handler in signal_map.items()})
         daemon.close_all_open_files(exclude={sys.stdin.fileno(), sys.stdout.fileno(), sys.stderr.fileno()})
         daemon.change_working_directory(homedir)
-        #initialize logging
+        # initialize logging
         logging.set_verbose(verbose)
         logging.attach_file_handlers(log_dir)
         logger.info('Starting {}', self.name)
@@ -68,7 +67,7 @@ class Runner:
         detach_process_context()
         with self.pidfile:
             try:
-                #initialize scope server
+                # initialize scope server
                 logger.debug('Initializing {}', self.name)
                 self.initialize_daemon()
                 # detach stderr logger, and redirect python-generated output to /dev/null

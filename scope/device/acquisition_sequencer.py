@@ -141,14 +141,14 @@ class AcquisitionSequencer:
             if step.lamp == 'TL':
                 iotool_steps.extend(self._tl_lamp._iotool_lamp_commands(enabled=True, intensity=step.tl_intensity))
             else:
-                iotool_steps.extend(self._spectra._iotool_lamp_commands(**{lamp:True for lamp in step.lamp}))
+                iotool_steps.extend(self._spectra._iotool_lamp_commands(**{lamp: True for lamp in step.lamp}))
             # wait the required amount of time for the lamp to turn on and expose the image (as calculated in add_step)
             iotool_steps += self._add_delay(step.on_delay_ms)
             # Now turn off the lamp.
             if step.lamp == 'TL':
                 iotool_steps.extend(self._tl_lamp._iotool_lamp_commands(enabled=False))
             else:
-                iotool_steps.extend(self._spectra._iotool_lamp_commands(**{lamp:False for lamp in step.lamp}))
+                iotool_steps.extend(self._spectra._iotool_lamp_commands(**{lamp: False for lamp in step.lamp}))
             # Now wait for the lamp to go off, plus any extra requested delay.
             total_off_delay = step.off_delay_ms + step.delay_after_ms
             iotool_steps += self._add_delay(total_off_delay)
@@ -229,8 +229,9 @@ class AcquisitionSequencer:
             self._iotool.start_program()
             names, self._latest_timestamps = [], []
             for exposure in self._exposures:
-                names.append(self._camera.next_image(read_timeout_ms=exposure+1000))
-                self._latest_timestamps.append(self._camera.get_latest_timestamp())
+                name, timestamp, frame = self._camera.next_image_and_metadata(read_timeout_ms=exposure+1000)
+                names.append(name)
+                self._latest_timestamps.append(timestamp)
             self._output = self._iotool.wait_until_done()
         return names
 
