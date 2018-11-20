@@ -100,7 +100,7 @@ class TimepointHandler:
         yield
         heartbeat_timer.stop()
 
-    def iterate_on_positions():
+    def run_all_positions(self):
         for position_name, position_coords in sorted(self.positions.items()):
             if position_name not in self.skip_positions:
                 self.run_position(position_name, position_coords)
@@ -121,7 +121,7 @@ class TimepointHandler:
             self.experiment_metadata.setdefault('timestamps', []).append(self.start_time)
             self.configure_timepoint()
             self.heartbeat()
-            self.iterate_on_positions()
+            self.run_all_positions()
             self.finalize_timepoint()
             self.heartbeat()
             self.end_time = time.time()
@@ -182,6 +182,11 @@ class TimepointHandler:
         """
         pass
 
+    def finalize_acquisition(self, position_name):
+        """Override this method with finalization after acquiring images for a single postiion.
+        Useful for storing z-position actually used to acquire images."""
+        pass
+
     def cleanup(self):
         """Override this method with any global cleanup/finalization tasks
         that may be necessary."""
@@ -218,6 +223,7 @@ class TimepointHandler:
         self.logger.debug('Stage Positioned ({:.1f} seconds)', t1-t0)
         images, image_names, new_metadata = self.acquire_images(position_name, position_dir,
             position_metadata)
+        self.finalize_acquisition(position_name)
         t2 = time.time()
         self.logger.debug('{} Images Acquired ({:.1f} seconds)', len(images), t2-t1)
         image_paths = [position_dir / (self.timepoint_prefix + ' ' + name) for name in image_names]
