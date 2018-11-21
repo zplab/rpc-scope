@@ -307,25 +307,25 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             start = self.end_time
         return start + interval_seconds
 
-    def run_autofocus(self, position_name, current_timepoint_metadata, return_images=False):
+    def run_autofocus(self, position_name, return_images=False):
         z_start = self.scope.stage.z
         z_max = self.experiment_metadata['z_max']
         with self.heartbeat_timer(), self.scope.tl.lamp.in_state(enabled=True):
+            coarse_z = None
             if self.DO_COARSE_FOCUS:
-                coarse_result = autofocus.autofocus(self.scope, z_start, z_max,
-                    self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
+                coarse_z, focus_scores, focus_images = autofocus.autofocus(self.scope,
+                    z_start, z_max, self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
                     speed=0.8, binning='4x4', exposure_time=self.scope.camera.exposure_time/16)
-                z_start = current_timepoint_metadata['coarse_z'] = coarse_result[0]
+                z_start = coarse_z
             mask_file = self.data_dir / 'Focus Masks' / (position_name + '.png')
             mask = str(mask_file) if mask_file.exists() else None
             if mask:
                 self.logger.info('Using autofocus mask: {}', mask)
-            fine_result = autofocus.autofocus(self.scope, z_start, z_max,
-                self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS,
+            fine_z, focus_scores, focus_images = autofocus.autofocus(self.scope,
+                z_start, z_max, self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS,
                 speed=0.3, mask=mask, return_images=return_images,
                 focus_filter_period_range=self.FOCUS_FILTER_PERIOD_RANGE)
-        current_timepoint_metadata['fine_z'] = fine_result[0]
-        return fine_result
+        return coarse_z, fine_z, focus_scores, focus_images
 
     def acquire_images(self, position_name, position_dir, position_metadata):
         t0 = time.time()
@@ -360,13 +360,16 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         if not override_autofocus and t0 - last_autofocus_time > self.REFOCUS_INTERVAL_MINS * 60:
             if position_name in self.experiment_metadata.get('save_focus_stacks', []):
                 save_focus_stack = True
-            best_z, focus_scores, focus_images = self.run_autofocus(position_name, metadata, save_focus_stack)
+            coarse_z, fine_z, focus_scores, focus_images = self.run_autofocus(position_name, save_focus_stack)
+            if coarse_z is not None:
+                metadata['coarse_z'] = coarse_z
+            metadata['fine_z'] = fine_z
             t1 = time.time()
             self.logger.debug('Autofocused ({:.1f} seconds)', t1-t0)
-            self.logger.info('Autofocus z: {}', metadata['fine_z'])
+            self.logger.info('Autofocus z: {}', fine_z)
         else:
             t1 = time.time()
-
+        metadata['stage_z'] = self.scope.stage.z
         images = self.scope.camera.acquisition_sequencer.run()
         t2 = time.time()
         self.logger.debug('Acquisition sequence run ({:.1f} seconds)', t2-t1)

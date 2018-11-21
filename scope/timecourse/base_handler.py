@@ -169,34 +169,6 @@ class TimepointHandler:
             self._job_thread = futures.ThreadPoolExecutor(max_workers=1)
         self._job_futures.append(self._job_thread.submit(function, *args, **kws))
 
-    def configure_timepoint(self):
-        """Override this method with global configuration for the image acquisitions
-        (e.g. camera configuration). Member variables 'scope', 'experiment_metadata',
-        'timepoint_prefix', and 'positions' may be specifically useful."""
-        pass
-
-    def finalize_timepoint(self):
-        """Override this method with global finalization after the images have been
-        acquired for each position. Useful for altering the self.experiment_metadata
-        dictionary before it is saved out.
-        """
-        pass
-
-    def finalize_acquisition(self, position_name):
-        """Override this method with finalization after acquiring images for a single postiion.
-        Useful for storing z-position actually used to acquire images."""
-        pass
-
-    def cleanup(self):
-        """Override this method with any global cleanup/finalization tasks
-        that may be necessary."""
-        pass
-
-    def get_next_run_time(self):
-        """Override this method to return when the next timepoint run should be
-        scheduled. Returning None means no future runs will be scheduled."""
-        return None
-
     def _position_metadata(self, position_name):
         position_dir = self.data_dir / position_name
         metadata_path = position_dir / 'position_metadata.json'
@@ -223,15 +195,15 @@ class TimepointHandler:
         self.logger.debug('Stage Positioned ({:.1f} seconds)', t1-t0)
         images, image_names, new_metadata = self.acquire_images(position_name, position_dir,
             position_metadata)
-        self.finalize_acquisition(position_name)
+        new_metadata['timestamp'] = timestamp
+        new_metadata['timepoint'] = self.timepoint_prefix
+        position_metadata.append(new_metadata)
+        self.finalize_acquisition(position_name, position_dir, position_metadata)
         t2 = time.time()
         self.logger.debug('{} Images Acquired ({:.1f} seconds)', len(images), t2-t1)
         image_paths = [position_dir / (self.timepoint_prefix + ' ' + name) for name in image_names]
         if new_metadata is None:
             new_metadata = {}
-        new_metadata['timestamp'] = timestamp
-        new_metadata['timepoint'] = self.timepoint_prefix
-        position_metadata.append(new_metadata)
         if self.write_files:
             self.threaded_write_images(images, image_paths)
             self._write_atomic_json(metadata_path, position_metadata)
@@ -246,6 +218,43 @@ class TimepointHandler:
 
     def _write_atomic_json(self, out_path, data):
         datafile.json_encode_atomic_legible_to_file(data, out_path)
+
+    def configure_timepoint(self):
+        """Override this method with global configuration for the image acquisitions
+        (e.g. camera configuration). Member variables 'scope', 'experiment_metadata',
+        'timepoint_prefix', and 'positions' may be specifically useful."""
+        pass
+
+    def finalize_timepoint(self):
+        """Override this method with global finalization after the images have been
+        acquired for each position. Useful for altering the self.experiment_metadata
+        dictionary before it is saved out.
+        """
+        pass
+
+    def finalize_acquisition(self, position_name, position_dir, position_metadata):
+        """Called after acquiring images for a single postiion.
+
+        Parameters:
+            position_name: name of the position in the experiment metadata file.
+            position_dir: pathlib.Path object representing the directory where
+                position-specific data files and outputs are written. Useful for
+                reading previous image data.
+            position_metadata: list of all the stored position metadata from the
+                previous timepoints, in chronological order. This includes data
+                from the latest timepoint, accessible as: position_metadata[-1].
+        """
+        pass
+
+    def cleanup(self):
+        """Override this method with any global cleanup/finalization tasks
+        that may be necessary."""
+        pass
+
+    def get_next_run_time(self):
+        """Override this method to return when the next timepoint run should be
+        scheduled. Returning None means no future runs will be scheduled."""
+        return None
 
     def acquire_images(self, position_name, position_dir, position_metadata):
         """Override this method in a subclass to define the image-acquisition sequence.
