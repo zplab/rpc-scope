@@ -30,6 +30,7 @@ def main(argv=None):
 
     parser_stop = subparsers.add_parser('stop', help='stop the job runner, if running')
     parser_stop.add_argument('-f', '--force', action='store_true', help='do not allow in-progress jobs to complete before stopping the runner')
+    parser_stop.add_argument('-m', '--message', help='log message: why is the job runner being stopped?')
 
     parser_status = subparsers.add_parser('status', help='print the status of the queued jobs')
 
@@ -67,9 +68,9 @@ def main(argv=None):
             runner.start(args.verbose)
         elif args.command == 'stop':
             if args.force:
-                runner.terminate()
+                runner.terminate(args.message)
             else:
-                runner.stop()
+                runner.stop(args.message)
         else:
             arg_dict = dict(vars(args))
             del arg_dict['debug']

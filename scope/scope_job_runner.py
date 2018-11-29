@@ -190,7 +190,7 @@ class JobRunner(base_daemon.Runner):
     def start(self, verbose):
         super().start(self.log_dir, verbose, SIGINT=self.sigint_handler, SIGHUP=self.sighup_handler)
 
-    def stop(self):
+    def stop(self, message):
         """Gracefully terminate job daemon.
 
         Note: If a job is currently running, it will complete."""
@@ -202,6 +202,10 @@ class JobRunner(base_daemon.Runner):
         self.current_job.wait()
         if current_job is not None:
             print('Job complete. Job-runner is stopping.')
+
+    def terminate(self, message):
+
+        super().terminate()
 
     def duty_cycle(self, intervals=[6, 24, 24*7]):
         """Return job-running cycle over the previous number of hours specified."""
