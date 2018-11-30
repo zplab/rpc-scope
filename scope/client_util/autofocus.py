@@ -1,6 +1,5 @@
 # This code is licensed under the MIT License (see LICENSE file for details)
 
-#TODO: update docs for new params
 def coarse_fine_autofocus(scope, z_start, z_max, coarse_range_mm, coarse_steps,
     fine_range_mm, fine_steps, metric='brenner', metric_kws=None, metric_mask=None,
     metric_filter_period_range=None, return_images=False, **camera_params):
@@ -16,6 +15,26 @@ def coarse_fine_autofocus(scope, z_start, z_max, coarse_range_mm, coarse_steps,
         fine_range_mm: range to try to focus on, in mm around the optimal coarse
             focal point
         fine_steps: how many focus steps to take over the fine range
+        metric: autofocus metric to use. Autofocus metrics can be either:
+            1) A function to be called as metric(image, mask, **metric_kws)
+                which will return a focus score (high is good).
+            2) A subclass of AutofocusMetricBase, which will be instantiated
+                as metric(shape, mask, metric_filter_period_range, **metric_kws),
+                and will be used to evaluate images and find the best one.
+
+            To specify such a function or subclass, this parameter can be either:
+            1) The string name of a known metric function or subclass. Currently
+                'brenner' is supported.
+            2) A string of the form "/path/to/file.py:object" where object
+                is the name of either a function or subclass to be called
+                as above.
+        metric_kws: keyword arguments for metric function or class, as above.
+        metric_mask: file path to a mask image with nonzero values at
+            regions of the image where the focus should be evaluated.
+        metric_filter_period_range: if None, the image will not be filtered.
+            Otherwise, this must be a tuple of (min_size, max_size),
+            representing the minimum and maximum spatial size of objects in
+            the image that will remain after filtering.
         return_images: if True, return the coarse and fine images acquired
 
     Returns: coarse_result, fine_result
@@ -48,12 +67,27 @@ def autofocus(scope, z_start, z_max, range_mm, steps, speed=0.3,
         range_mm: range to try to focus on, in mm around z_start
         steps: how many focus steps to take over the range
         speed: stage movement speed during autofocus in mm/s
-        return_images: if True, return the coarse and fine images acquired
-        mask: filename of image mask defining region for autofocus to examine
-        focus_filter_period_range: if None, the image will not be filtered.
+        metric: autofocus metric to use. Autofocus metrics can be either:
+            1) A function to be called as metric(image, mask, **metric_kws)
+                which will return a focus score (high is good).
+            2) A subclass of AutofocusMetricBase, which will be instantiated
+                as metric(shape, mask, metric_filter_period_range, **metric_kws),
+                and will be used to evaluate images and find the best one.
+
+            To specify such a function or subclass, this parameter can be either:
+            1) The string name of a known metric function or subclass. Currently
+                'brenner' is supported.
+            2) A string of the form "/path/to/file.py:object" where object
+                is the name of either a function or subclass to be called
+                as above.
+        metric_kws: keyword arguments for metric function or class, as above.
+        metric_mask: file path to a mask image with nonzero values at
+            regions of the image where the focus should be evaluated.
+        metric_filter_period_range: if None, the image will not be filtered.
             Otherwise, this must be a tuple of (min_size, max_size),
             representing the minimum and maximum spatial size of objects in
             the image that will remain after filtering.
+        return_images: if True, return the coarse and fine images acquired
 
     Returns: best_z, positions_and_scores, images
         where best_z is the position of the best focus, positions_and_scores is

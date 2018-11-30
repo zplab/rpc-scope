@@ -5,7 +5,7 @@ import time
 from concurrent import futures
 import threading
 import functools
-import importlib
+import runpy
 
 import freeimage
 from zplib.image import fast_fft
@@ -41,7 +41,7 @@ def _get_filter(shape, period_range):
     return fft_filter.filter
 
 
-class AutofocusMetric:
+class AutofocusMetricBase:
     def __init__(self, shape, mask=None, fft_period_range=None):
         if mask is not None:
             assert mask.shape == shape
@@ -65,6 +65,15 @@ class AutofocusMetric:
         focus_scores = self.focus_scores
         return best_i, focus_scores
 
+class AutofocusMetric(AutofocusMetricBase):
+    def __init__(self, metric, shape, mask=None, fft_period_range=None, **metric_kws):
+        super().__init__(shape, mask, fft_period_range)
+        self._metric = metric
+        self.metric_kws = metric_kws
+
+    def metric(self, image, mask):
+        return self._metric(image, mask, **self.metric_kws)
+
 def brenner_metric(image, mask):
     image = image.astype(numpy.float32) # otherwise can get overflow in the squaring and summation
     x_diffs = (image[2:, :] - image[:-2, :])**2
@@ -77,22 +86,19 @@ def brenner_metric(image, mask):
 _METRICS = dict(brenner=brenner_metric)
 
 def get_metric(metric, shape, mask, fft_period_range, **kws):
-    if issubclass(metric, AutofocusMetric):
+    if isinstance(metric, str):
+        if metric in _METRICS:
+            metric = _METRICS[metric]
+        elif ':' in metric:
+            path, metric = metric.split(':')
+            metric = runpy.run_path(path)[metric]
+        else:
+            raise ValueError('"metric" must be the name of a known metric or formatted as "/path/to/file.py:function"')
+    assert callable(metric)
+    if issubclass(metric, AutofocusMetricBase):
         return metric(shape, mask, fft_period_range, **kws)
     else:
-        metric_instance = AutofocusMetric(shape, mask, fft_period_range)
-        if callable(metric):
-            metric_instance.metric = metric
-        elif isinstance(metric, str):
-            if metric_kws is None:
-                metric_kws = {}
-            if '.' in metric:
-                pass # TODO: add lookup from imported module
-            else:
-                metric_instance.metric = _METRICS[metric](**metric_kws)
-        else:
-            raise ValueError('"metric" must be a AutofocusMetric subclass, a callable function, or a string')
-        return metric_instance
+        return AutofocusMetric(metric, shape, mask, fft_period_range, **kws)
 
 class Autofocus:
     _CAMERA_DEFAULTS = dict(readout_rate='280 MHz', shutter_mode='Rolling')
@@ -135,8 +141,6 @@ class Autofocus:
         self._stage.wait() # no op if in sync mode, necessary in async mode
         return best_z, zip(z_positions, z_scores)
 
-    #TODO: update docs for new params
-
     def autofocus(self, start, end, steps, metric='brenner', metric_kws=None,
             metric_mask=None, metric_filter_period_range=None,
             return_images=False, **camera_state):
@@ -149,12 +153,26 @@ class Autofocus:
         Parameters:
             start, end: z-positions of focus bounds (inclusive)
             steps: number of focal planes to sample between start and end.
+            metric: autofocus metric to use. Can be either:
+                1) A function to be called as metric(image, mask, **metric_kws)
+                    which will return a focus score (high is good).
+                2) A subclass of AutofocusMetricBase, which will be instantiated
+                    as metric(shape, mask, metric_filter_period_range, **metric_kws),
+                    and will be used to evaluate images and find the best one.
+                3) The string name of a known metric function or subclass. Currently
+                    'brenner' is supported.
+                4) A string of the form "/path/to/file.py:object" where object
+                    is the name of either a function or subclass to be called
+                    as in 1 or 2.
+                Note: When using the scope server, only options 3 and 4 are
+                available.
+            metric_kws: keyword arguments for metric function or class, as above.
+            metric_mask: file path to a mask image with nonzero values at
+                regions of the image where the focus should be evaluated.
             metric_filter_period_range: if None, the image will not be filtered.
                 Otherwise, this must be a tuple of (min_size, max_size),
                 representing the minimum and maximum spatial size of objects in
                 the image that will remain after filtering.
-            metric_mask: file path to a mask image with nonzero values at
-                regions of the image where the focus should be evaluated.
             return_images: if True, the images obtained will be returned.
             **camera_state: additional state information for the camera during
                 autofocus.
@@ -199,12 +217,26 @@ class Autofocus:
             max_speed: z-speed at which to move the stage (mm/s). If more steps
                 are requested than the camera can obtain at this speed, the
                 stage speed will be slower.
+            metric: autofocus metric to use. Can be either:
+                1) A function to be called as metric(image, mask, **metric_kws)
+                    which will return a focus score (high is good).
+                2) A subclass of AutofocusMetricBase, which will be instantiated
+                    as metric(shape, mask, metric_filter_period_range, **metric_kws),
+                    and will be used to evaluate images and find the best one.
+                3) The string name of a known metric function or subclass. Currently
+                    'brenner' is supported.
+                4) A string of the form "/path/to/file.py:object" where object
+                    is the name of either a function or subclass to be called
+                    as in 1 or 2.
+                Note: When using the scope server, only options 3 and 4 are
+                available.
+            metric_kws: keyword arguments for metric function or class, as above.
+            metric_mask: file path to a mask image with nonzero values at
+                regions of the image where the focus should be evaluated.
             metric_filter_period_range: if None, the image will not be filtered.
                 Otherwise, this must be a tuple of (min_size, max_size),
                 representing the minimum and maximum spatial size of objects in
                 the image that will remain after filtering.
-            metric_mask: file path to a mask image with nonzero values at
-                regions of the image where the focus should be evaluated.
             return_images: if True, the images obtained will be returned.
             **camera_state: additional state information for the camera during
                 autofocus.
