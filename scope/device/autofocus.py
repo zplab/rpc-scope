@@ -5,6 +5,7 @@ import time
 from concurrent import futures
 import threading
 import functools
+import importlib
 
 import freeimage
 from zplib.image import fast_fft
@@ -27,15 +28,36 @@ if FFTW_WISDOM.exists():
 else:
     logger.warning('No FFTW wisdom found!')
 
+@functools.lru_cache(maxsize=16)
+def _get_filter(shape, period_range):
+    timer = threading.Timer(1, logger.warning, ['Slow construction of FFTW filter for image shape {} (likely no cached plan could be found). May take >30 minutes!', shape])
+    timer.start()
+    fft_filter = fast_fft.SpatialFilter(shape, period_range, precision=32, threads=6, better_plan=True)
+    if timer.is_alive():
+        timer.cancel()
+    else: # timer went off and warning was issued...
+        logger.info('FFT filter constructed. Caching plan wisdom for next time.')
+        fast_fft.store_plan_hints(str(FFTW_WISDOM))
+    return fft_filter.filter
+
 
 class AutofocusMetric:
-    def __init__(self):
+    def __init__(self, shape, mask=None, fft_period_range=None):
+        if mask is not None:
+            assert mask.shape == shape
+        self.mask = mask
+        if fft_period_range is None:
+            self.filter = None
+        else:
+            self.filter = _get_filter(tuple(shape), tuple(fft_period_range))
         self.focus_scores = []
 
     def evaluate_image(self, image):
-        self.focus_scores.append(self.metric(image))
+        if self.filter is not None:
+            image = self.filter(image)
+        self.focus_scores.append(self.metric(image, self.mask))
 
-    def metric(self, image):
+    def metric(self, image, mask):
         raise NotImplementedError()
 
     def find_best_focus_index(self):
@@ -43,41 +65,37 @@ class AutofocusMetric:
         focus_scores = self.focus_scores
         return best_i, focus_scores
 
-class BrennerAutofocus(AutofocusMetric):
-    def __init__(self, shape, period_range=None, mask=None):
-        super().__init__()
-        if period_range is None:
-            self.filter = None
-        else:
-            self.filter = self._get_filter(tuple(shape), tuple(period_range))
-        self.mask = mask
+def brenner_metric(image, mask):
+    image = image.astype(numpy.float32) # otherwise can get overflow in the squaring and summation
+    x_diffs = (image[2:, :] - image[:-2, :])**2
+    y_diffs = (image[:, 2:] - image[:, :-2])**2
+    if mask is None:
+        return x_diffs.sum() + y_diffs.sum()
+    else:
+        return x_diffs[mask[1:-1, :]].sum() + y_diffs[mask[:, 1:-1]].sum()
 
-    @staticmethod
-    @functools.lru_cache(maxsize=16)
-    def _get_filter(shape, period_range):
-        timer = threading.Timer(1, logger.warning, ['Slow construction of FFTW filter for image shape {} (likely no cached plan could be found). May take >30 minutes!', shape])
-        timer.start()
-        fft_filter = fast_fft.SpatialFilter(shape, period_range, precision=32, threads=6, better_plan=True)
-        if timer.is_alive():
-            timer.cancel()
-        else: # timer went off and warning was issued...
-            logger.info('FFT filter constructed. Caching plan wisdom for next time.')
-            fast_fft.store_plan_hints(str(FFTW_WISDOM))
-        return fft_filter.filter
+_METRICS = dict(brenner=brenner_metric)
 
-    def metric(self, image):
-        image = image.astype(numpy.float32) # otherwise can get overflow in the squaring and summation
-        if self.filter is not None:
-            image = self.filter(image)
-        x_diffs = (image[2:, :] - image[:-2, :])**2
-        y_diffs = (image[:, 2:] - image[:, :-2])**2
-        if self.mask is None:
-            return x_diffs.sum() + y_diffs.sum()
+def get_metric(metric, shape, mask, fft_period_range, **kws):
+    if issubclass(metric, AutofocusMetric):
+        return metric(shape, mask, fft_period_range, **kws)
+    else:
+        metric_instance = AutofocusMetric(shape, mask, fft_period_range)
+        if callable(metric):
+            metric_instance.metric = metric
+        elif isinstance(metric, str):
+            if metric_kws is None:
+                metric_kws = {}
+            if '.' in metric:
+                pass # TODO: add lookup from imported module
+            else:
+                metric_instance.metric = _METRICS[metric](**metric_kws)
         else:
-            return x_diffs[self.mask[1:-1, :]].sum() + y_diffs[self.mask[:, 1:-1]].sum()
+            raise ValueError('"metric" must be a AutofocusMetric subclass, a callable function, or a string')
+        return metric_instance
 
 class Autofocus:
-    _CAMERA_MODE = dict(readout_rate='280 MHz', shutter_mode='Rolling')
+    _CAMERA_DEFAULTS = dict(readout_rate='280 MHz', shutter_mode='Rolling')
 
     def __init__(self, camera: andor.Camera, stage: stage.Stage):
         self._camera = camera
@@ -85,7 +103,7 @@ class Autofocus:
 
     def ensure_fft_ready(self):
         """Make sure the autofocus FFT filter is ready for the current camera
-        frame size. (No need to worry about the focus_filter_period_range: the
+        frame size. (No need to worry about the metric_filter_period_range: the
         FFT doesn't need to know that to compute the basic filter.)
 
         The first time that this is done after installing / updating fftw,
@@ -93,14 +111,20 @@ class Autofocus:
         that it can be run with a very long timeout.
         """
         # use a dummy period range below
-        BrennerAutofocus._get_filter(shape=tuple(self._camera.get_aoi_shape()), period_range=(None, 2))
+        _get_filter(shape=tuple(self._camera.get_aoi_shape()), period_range=(None, 2))
 
-    def _start_autofocus(self, focus_filter_period_range, focus_filter_mask, **camera_state):
-        camera_state.update(self._CAMERA_MODE)
-        self._camera.push_state(**camera_state)
-        if focus_filter_mask is not None:
-            focus_filter_mask = freeimage.read(focus_filter_mask) > 0
-        self._metric = BrennerAutofocus(self._camera.get_aoi_shape(), focus_filter_period_range, focus_filter_mask)
+    def _enter_camera_state(self, **camera_state):
+        final_state = dict(self._CAMERA_DEFAULTS)
+        final_state.update(camera_state)
+        self._camera.push_state(**final_state)
+
+    def _start_autofocus(self, metric='brenner', metric_kws=None, metric_mask=None,
+            metric_filter_period_range=None, **camera_state):
+        self._enter_camera_state()
+        if isinstance(metric_mask, str):
+            metric_mask = freeimage.read(metric_mask) > 0
+        shape = self._camera.get_aoi_shape()
+        self._metric = get_metric(metric, shape, metric_mask, metric_filter_period_range, **metric_kws)
 
     def _stop_autofocus(self, z_positions):
         self._camera.pop_state()
@@ -111,8 +135,11 @@ class Autofocus:
         self._stage.wait() # no op if in sync mode, necessary in async mode
         return best_z, zip(z_positions, z_scores)
 
-    def autofocus(self, start, end, steps, focus_filter_period_range=None,
-            focus_filter_mask=None, return_images=False, **camera_state):
+    #TODO: update docs for new params
+
+    def autofocus(self, start, end, steps, metric='brenner', metric_kws=None,
+            metric_mask=None, metric_filter_period_range=None,
+            return_images=False, **camera_state):
         """Automatically focus the camera with stepwise stage movements.
 
         This moves the stage stepwise from start to end, taking an image at
@@ -122,11 +149,11 @@ class Autofocus:
         Parameters:
             start, end: z-positions of focus bounds (inclusive)
             steps: number of focal planes to sample between start and end.
-            focus_filter_period_range: if None, the image will not be filtered.
+            metric_filter_period_range: if None, the image will not be filtered.
                 Otherwise, this must be a tuple of (min_size, max_size),
                 representing the minimum and maximum spatial size of objects in
                 the image that will remain after filtering.
-            focus_filter_mask: file path to a mask image with nonzero values at
+            metric_mask: file path to a mask image with nonzero values at
                 regions of the image where the focus should be evaluated.
             return_images: if True, the images obtained will be returned.
             **camera_state: additional state information for the camera during
@@ -138,7 +165,7 @@ class Autofocus:
             images: if return_images is True, a list of images acquired, otherwise
                 an empty list.
         """
-        self._start_autofocus(focus_filter_period_range, focus_filter_mask, **camera_state)
+        self._start_autofocus(metric, metric_kws, metric_mask, metric_filter_period_range, **camera_state)
         frame_rate, overlap = self._camera.calculate_streaming_mode(steps, trigger_mode='Software', desired_frame_rate=1000) # try to get the max possible frame rate...
         z_positions = numpy.linspace(start, end, steps)
         runner = MetricRunner(self._camera, frame_rate, steps, self._metric, return_images)
@@ -157,7 +184,7 @@ class Autofocus:
         return best_z, positions_and_scores, image_names
 
     def autofocus_continuous_move(self, start, end, steps=None, max_speed=0.2,
-            focus_filter_period_range=(None, 10), focus_filter_mask=None,
+            metric='brenner', metric_kws=None, metric_mask=None, metric_filter_period_range=None,
             return_images=False, **camera_state):
         """Automatically focus the camera with continuous stage movements.
 
@@ -172,11 +199,11 @@ class Autofocus:
             max_speed: z-speed at which to move the stage (mm/s). If more steps
                 are requested than the camera can obtain at this speed, the
                 stage speed will be slower.
-            focus_filter_period_range: if None, the image will not be filtered.
+            metric_filter_period_range: if None, the image will not be filtered.
                 Otherwise, this must be a tuple of (min_size, max_size),
                 representing the minimum and maximum spatial size of objects in
                 the image that will remain after filtering.
-            focus_filter_mask: file path to a mask image with nonzero values at
+            metric_mask: file path to a mask image with nonzero values at
                 regions of the image where the focus should be evaluated.
             return_images: if True, the images obtained will be returned.
             **camera_state: additional state information for the camera during
@@ -188,7 +215,7 @@ class Autofocus:
             images: if return_images is True, a list of images acquired, otherwise
                 an empty list
         """
-        self._start_autofocus(focus_filter_period_range, focus_filter_mask, **camera_state)
+        self._start_autofocus(metric, metric_kws, metric_mask, metric_filter_period_range, **camera_state)
         distance = abs(end - start)
         with self._stage.in_state(z_speed=max_speed):
             min_movement_time = self._stage.calculate_z_movement_time(distance)

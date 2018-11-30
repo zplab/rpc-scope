@@ -67,6 +67,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     # We want to get within 2 microns, so sweep over 90 microns with 45 steps.
     FINE_FOCUS_RANGE = 0.09
     FINE_FOCUS_STEPS = 45
+    FINE_FOCUS_SPEED = 0.3
     PIXEL_READOUT_RATE = '100 MHz'
     USE_LAST_FOCUS_POSITION = True # if False, start autofocus from original z position rather than last autofocused position.
     INTERVAL_MODE = 'scheduled start'
@@ -81,7 +82,12 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     VIGNETTE_PERCENT = 5 # 5 is a good number when using a 1x optocoupler. If 0.7x, use 35.
     SEGMENTATION_MODEL = None # name of or path to image-segmentation model to run in the background after the job ends.
     TO_SEGMENT = ['bf'] # image name or names to segment
-    FOCUS_FILTER_PERIOD_RANGE = None # if not None, (min_size, max_size) tuple for bandpass filtering images before autofocus
+    AUTOFOCUS_PARAMS = dict(
+        metric='brenner',
+        metric_kws={}, # use if the metric requires specific keywords; 'brenner' does not
+        metric_filter_period_range=None, # if not None, (min_size, max_size) tuple for bandpass filtering images before autofocus
+        readout_rate='100 MHz'
+    )
 
     def configure_additional_acquisition_steps(self):
         """Add more steps to the acquisition_sequencer's sequence as desired,
@@ -315,7 +321,8 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             if self.DO_COARSE_FOCUS:
                 coarse_z, focus_scores, focus_images = autofocus.autofocus(self.scope,
                     z_start, z_max, self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
-                    speed=0.8, binning='4x4', exposure_time=self.scope.camera.exposure_time/16)
+                    speed=0.8, binning='4x4', exposure_time=self.scope.camera.exposure_time/16,
+                    **self.AUTOFOCUS_PARAMS)
                 z_start = coarse_z
             mask_file = self.data_dir / 'Focus Masks' / (position_name + '.png')
             mask = str(mask_file) if mask_file.exists() else None
@@ -323,8 +330,8 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
                 self.logger.info('Using autofocus mask: {}', mask)
             fine_z, focus_scores, focus_images = autofocus.autofocus(self.scope,
                 z_start, z_max, self.FINE_FOCUS_RANGE, self.FINE_FOCUS_STEPS,
-                speed=0.3, mask=mask, return_images=return_images,
-                focus_filter_period_range=self.FOCUS_FILTER_PERIOD_RANGE)
+                speed=self.FINE_FOCUS_SPEED, return_images=return_images,
+                metric_mask=mask, **self.AUTOFOCUS_PARAMS)
         return coarse_z, fine_z, focus_scores, focus_images
 
     def acquire_images(self, position_name, position_dir, position_metadata):
