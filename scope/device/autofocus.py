@@ -40,7 +40,6 @@ def _get_filter(shape, period_range):
         fast_fft.store_plan_hints(str(FFTW_WISDOM))
     return fft_filter.filter
 
-
 class AutofocusMetricBase:
     def __init__(self, shape, mask=None, fft_period_range=None):
         if mask is not None:
@@ -83,25 +82,8 @@ def brenner_metric(image, mask):
     else:
         return x_diffs[mask[1:-1, :]].sum() + y_diffs[mask[:, 1:-1]].sum()
 
-_METRICS = dict(brenner=brenner_metric)
-
-def get_metric(metric, shape, mask, fft_period_range, **kws):
-    if isinstance(metric, str):
-        if metric in _METRICS:
-            metric = _METRICS[metric]
-        elif ':' in metric:
-            path, metric = metric.split(':')
-            metric = runpy.run_path(path)[metric]
-        else:
-            raise ValueError('"metric" must be the name of a known metric or formatted as "/path/to/file.py:function"')
-    assert callable(metric)
-    if issubclass(metric, AutofocusMetricBase):
-        return metric(shape, mask, fft_period_range, **kws)
-    else:
-        return AutofocusMetric(metric, shape, mask, fft_period_range, **kws)
-
 class Autofocus:
-    _CAMERA_DEFAULTS = dict(readout_rate='280 MHz', shutter_mode='Rolling')
+    _METRICS = dict(brenner=brenner_metric)
 
     def __init__(self, camera: andor.Camera, stage: stage.Stage):
         self._camera = camera
@@ -119,24 +101,28 @@ class Autofocus:
         # use a dummy period range below
         _get_filter(shape=tuple(self._camera.get_aoi_shape()), period_range=(None, 2))
 
-    def _enter_camera_state(self, **camera_state):
-        final_state = dict(self._CAMERA_DEFAULTS)
-        final_state.update(camera_state)
-        self._camera.push_state(**final_state)
-
     def _start_autofocus(self, metric='brenner', metric_kws=None, metric_mask=None,
-            metric_filter_period_range=None, **camera_state):
-        self._enter_camera_state(**camera_state)
+            metric_filter_period_range=None):
         if isinstance(metric_mask, str):
             metric_mask = freeimage.read(metric_mask) > 0
         shape = self._camera.get_aoi_shape()
-        self._metric = get_metric(metric, shape, metric_mask, metric_filter_period_range, **metric_kws)
+        if isinstance(metric, str):
+            if metric in self._METRICS:
+                metric = self._METRICS[metric]
+            elif ':' in metric:
+                path, metric = metric.split(':')
+                metric = runpy.run_path(path)[metric]
+            else:
+                raise ValueError('"metric" must be the name of a known metric or formatted as "/path/to/file.py:function"')
+        assert callable(metric)
+        if issubclass(metric, AutofocusMetricBase):
+            return metric(shape, metric_mask, metric_filter_period_range, **metric_kws)
+        else:
+            return AutofocusMetric(metric, shape, metric_mask, metric_filter_period_range, **metric_kws)
 
-    def _stop_autofocus(self, z_positions):
-        self._camera.pop_state()
-        best_i, z_scores = self._metric.find_best_focus_index()
+    def _finish_autofocus(self, metric, z_positions):
+        best_i, z_scores = metric.find_best_focus_index()
         best_z = z_positions[best_i]
-        del self._metric
         self._stage.set_z(best_z) # go to focal plane with highest score
         self._stage.wait() # no op if in sync mode, necessary in async mode
         return best_z, zip(z_positions, z_scores)
@@ -174,8 +160,6 @@ class Autofocus:
                 representing the minimum and maximum spatial size of objects in
                 the image that will remain after filtering.
             return_images: if True, the images obtained will be returned.
-            **camera_state: additional state information for the camera during
-                autofocus.
 
         Returns: best_z, positions_and_scores, images
             best_z: z position of best focus
@@ -183,27 +167,28 @@ class Autofocus:
             images: if return_images is True, a list of images acquired, otherwise
                 an empty list.
         """
-        self._start_autofocus(metric, metric_kws, metric_mask, metric_filter_period_range, **camera_state)
-        frame_rate, overlap = self._camera.calculate_streaming_mode(steps, trigger_mode='Software', desired_frame_rate=1000) # try to get the max possible frame rate...
-        z_positions = numpy.linspace(start, end, steps)
-        runner = MetricRunner(self._camera, frame_rate, steps, self._metric, return_images)
-        with self._camera.image_sequence_acquisition(steps, trigger_mode='Software'):
-            runner.start()
-            for z in z_positions:
-                self._stage.set_z(z)
-                self._stage.wait()
-                self._camera.send_software_trigger()
-                if z != end:
-                    time.sleep(1/frame_rate)
-            image_names, camera_timestamps = runner.join()
-        best_z, positions_and_scores = self._stop_autofocus(z_positions)
+        metric = self._start_autofocus(metric, metric_kws, metric_mask, metric_filter_period_range)
+        with self._camera.in_state(live_mode=False, trigger_mode='Software'):
+            frame_rate, overlap = self._camera.calculate_streaming_mode(steps, desired_frame_rate=1000) # try to get the max possible frame rate...
+            z_positions = numpy.linspace(start, end, steps)
+            runner = MetricRunner(self._camera, frame_rate, steps, metric, return_images)
+            with self._camera.image_sequence_acquisition(steps):
+                runner.start()
+                for z in z_positions:
+                    self._stage.set_z(z)
+                    self._stage.wait()
+                    self._camera.send_software_trigger()
+                    if z != end:
+                        time.sleep(1/frame_rate)
+                image_names, camera_timestamps = runner.join()
+        best_z, positions_and_scores = self._finish_autofocus(metric, z_positions)
         if not return_images:
             image_names = []
         return best_z, positions_and_scores, image_names
 
     def autofocus_continuous_move(self, start, end, steps=None, max_speed=0.2,
-            metric='brenner', metric_kws=None, metric_mask=None, metric_filter_period_range=None,
-            return_images=False, **camera_state):
+            metric='brenner', metric_kws=None, metric_mask=None,
+            metric_filter_period_range=None, return_images=False):
         """Automatically focus the camera with continuous stage movements.
 
         This moves the stage continuously from start to end, taking images
@@ -238,8 +223,6 @@ class Autofocus:
                 representing the minimum and maximum spatial size of objects in
                 the image that will remain after filtering.
             return_images: if True, the images obtained will be returned.
-            **camera_state: additional state information for the camera during
-                autofocus.
 
         Returns: best_z, positions_and_scores, images
             best_z: z position of best focus
@@ -247,13 +230,41 @@ class Autofocus:
             images: if return_images is True, a list of images acquired, otherwise
                 an empty list
         """
-        self._start_autofocus(metric, metric_kws, metric_mask, metric_filter_period_range, **camera_state)
+        metric = self._start_autofocus(metric, metric_kws, metric_mask, metric_filter_period_range)
+        with self._camera.in_state(live_mode=False, trigger_mode='Internal'):
+            steps, overlap, frame_rate, speed = self.calculate_autofocus_continuous_move_state(end, start, steps, max_speed)
+            runner = MetricRunner(self._camera, frame_rate, steps, metric, return_images)
+            zrecorder = ZRecorder(self._camera, self._stage)
+            self._stage.set_z(start) # move to start position at original speed
+            self._stage.wait()
+            with self._camera.image_sequence_acquisition(steps, frame_rate=frame_rate, overlap_enabled=overlap):
+                zrecorder.start()
+                runner.start()
+                with self._stage.in_state(async=False, z_speed=speed):
+                    self._stage.set_z(end)
+                zrecorder.stop()
+                image_names, camera_timestamps = runner.join()
+        if len(camera_timestamps) != steps:
+            raise RuntimeError('Autofocus image acquisition failed: Expected {} images, got {}.'.format(steps, len(camera_timestamps)))
+        z_positions = zrecorder.interpolate_zs(camera_timestamps)
+        best_z, positions_and_scores = self._finish_autofocus(metric, z_positions)
+        if not return_images:
+            image_names = []
+        return best_z, positions_and_scores, image_names
+
+    def _calculate_autofocus_continuous_move_state(self, end, start, steps, max_speed):
+        states = 'binning', 'bit_depth', 'exposure_time', 'readout_rate', 'shutter_mode', 'aoi_height', 'aoi_left', 'aoi_top', 'aoi_width'
+        state_key = (getattr(self._camera, 'get_'+state)() for state in states)
+        return self._calculate_autofocus_continuous_move_state_caching(end, start, steps, max_speed, state_key)
+
+    @functools.lru_cache()
+    def _calculate_autofocus_continuous_move_state_caching(self, end, start, steps, max_speed, state_key):
         distance = abs(end - start)
         with self._stage.in_state(z_speed=max_speed):
             min_movement_time = self._stage.calculate_z_movement_time(distance)
         if steps is None:
             speed = max_speed
-            with self._camera.in_state(live_mode=False, overlap_enabled=True, trigger_mode='Internal'):
+            with self._camera.in_state(overlap_enabled=True):
                 min_overlap_frame_rate, max_overlap_frame_rate = self._camera.get_frame_rate_range()
             steps = int(numpy.ceil(min_movement_time * max_overlap_frame_rate)) # overlap is fastest mode...
             if steps <= self._camera.get_safe_image_count_to_queue():
@@ -266,28 +277,13 @@ class Autofocus:
                 overlap = frame_rate >= min_overlap_frame_rate
         else:
             desired_frame_rate = steps / min_movement_time
-            frame_rate, overlap = self._camera.calculate_streaming_mode(steps, desired_frame_rate, trigger_mode='Internal')
+            frame_rate, overlap = self._camera.calculate_streaming_mode(steps, desired_frame_rate)
             time_required = steps / frame_rate
             speed = self._stage.calculate_required_z_speed(distance, time_required)
-        runner = MetricRunner(self._camera, frame_rate, steps, self._metric, return_images)
-        zrecorder = ZRecorder(self._camera, self._stage)
-        self._stage.set_z(start) # move to start position at original speed
-        self._stage.wait()
-        with self._camera.image_sequence_acquisition(steps, trigger_mode='Internal', frame_rate=frame_rate, overlap_enabled=overlap):
-            zrecorder.start()
-            runner.start()
-            with self._stage.in_state(async=False, z_speed=speed):
-                self._stage.set_z(end)
-            zrecorder.stop()
-            image_names, camera_timestamps = runner.join()
-        if len(camera_timestamps) != steps:
-            self._camera.pop_state()
-            raise RuntimeError('Autofocus image acquisition failed: Expected {} images, got {}.'.format(steps, len(camera_timestamps)))
-        z_positions = zrecorder.interpolate_zs(camera_timestamps)
-        best_z, positions_and_scores = self._stop_autofocus(z_positions)
-        if not return_images:
-            image_names = []
-        return best_z, positions_and_scores, image_names
+        return steps, overlap, frame_rate, speed
+
+    def reset_state(self):
+        self._calculate_autofocus_continuous_move_state_caching.cache_clear()
 
 class MetricRunner(threading.Thread):
     def __init__(self, camera, frame_rate, frame_count, metric, retain_images):

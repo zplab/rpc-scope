@@ -2,7 +2,7 @@
 
 def coarse_fine_autofocus(scope, z_start, z_max, coarse_range_mm, coarse_steps,
     fine_range_mm, fine_steps, metric='brenner', metric_kws=None, metric_mask=None,
-    metric_filter_period_range=None, return_images=False, **camera_params):
+    metric_filter_period_range=None, return_images=False):
     """Run a two-stage (coarse/fine) autofocus.
 
     Parameters:
@@ -43,20 +43,19 @@ def coarse_fine_autofocus(scope, z_start, z_max, coarse_range_mm, coarse_steps,
         a list of (z_position, focus_score) pairs, and images is a list
         of images for each focal plane (return_images=True) or an empty list.
     """
-    coarse_result = autofocus(scope, z_start, z_max, coarse_range_mm, coarse_steps,
-        speed=0.8, metric=metric, metric_kws=metric_kws, metric_mask=metric_mask,
-        metric_filter_period_range=metric_filter_period_range, return_images=return_images,
-        binning='4x4', exposure_time=scope.camera.exposure_time/16, **camera_params)
+    with scope.camera.in_state(binning='4x4', exposure_time=scope.camera.exposure_time/16):
+        coarse_result = autofocus(scope, z_start, z_max, coarse_range_mm, coarse_steps,
+            speed=0.8, metric=metric, metric_kws=metric_kws, metric_mask=metric_mask,
+            metric_filter_period_range=metric_filter_period_range, return_images=return_images)
 
     fine_result = autofocus(scope, coarse_result[0], z_max, fine_range_mm, fine_steps,
         speed=0.3, metric=metric, metric_kws=metric_kws, metric_mask=metric_mask,
-        metric_filter_period_range=metric_filter_period_range, return_images=return_images,
-        binning='1x1', exposure_time=scope.camera.exposure_time/16, **camera_params)
+        metric_filter_period_range=metric_filter_period_range, return_images=return_images)
     return coarse_result, fine_result
 
 def autofocus(scope, z_start, z_max, range_mm, steps, speed=0.3,
-    metric='brenner', metric_kws=None, metric_mask=None, metric_filter_period_range=None,
-    return_images=False, **camera_params):
+    metric='brenner', metric_kws=None, metric_mask=None,
+    metric_filter_period_range=None, return_images=False):
     """Run a single-pass autofocus.
 
     Parameters:
@@ -102,6 +101,5 @@ def autofocus(scope, z_start, z_max, range_mm, steps, speed=0.3,
         # have been computed before we actually do an autofocus.
         scope.camera.autofocus.ensure_fft_ready()
     best_z, positions_and_scores, images = scope.camera.autofocus.autofocus_continuous_move(start, end,
-        steps, speed, metric, metric_kws, metric_mask, metric_filter_period_range,
-        return_images, **camera_params)
+        steps, speed, metric, metric_kws, metric_mask, metric_filter_period_range, return_images)
     return best_z, positions_and_scores, images

@@ -85,8 +85,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     AUTOFOCUS_PARAMS = dict(
         metric='brenner',
         metric_kws={}, # use if the metric requires specific keywords; 'brenner' does not
-        metric_filter_period_range=None, # if not None, (min_size, max_size) tuple for bandpass filtering images before autofocus
-        readout_rate='100 MHz'
+        metric_filter_period_range=None # if not None, (min_size, max_size) tuple for bandpass filtering images before autofocus
     )
 
     def configure_additional_acquisition_steps(self):
@@ -169,6 +168,8 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.scope.camera.sensor_gain = '16-bit (low noise & high well capacity)'
         self.scope.camera.readout_rate = self.PIXEL_READOUT_RATE
         self.scope.camera.shutter_mode = 'Rolling'
+
+        self.scope.autofocus.reset_state() # make sure the autofocus mode cache is clear
 
         self.configure_calibrations() # sets self.bf_exposure and self.tl_intensity
 
@@ -319,10 +320,10 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         with self.heartbeat_timer(), self.scope.tl.lamp.in_state(enabled=True):
             coarse_z = None
             if self.DO_COARSE_FOCUS:
-                coarse_z, focus_scores, focus_images = autofocus.autofocus(self.scope,
-                    z_start, z_max, self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
-                    speed=0.8, binning='4x4', exposure_time=self.scope.camera.exposure_time/16,
-                    **self.AUTOFOCUS_PARAMS)
+                with self.scope.camera.in_state(binning='4x4', exposure_time=self.scope.camera.exposure_time/16):
+                    coarse_z, focus_scores, focus_images = autofocus.autofocus(self.scope,
+                        z_start, z_max, self.COARSE_FOCUS_RANGE, self.COARSE_FOCUS_STEPS,
+                        speed=0.8, **self.AUTOFOCUS_PARAMS)
                 z_start = coarse_z
             mask_file = self.data_dir / 'Focus Masks' / (position_name + '.png')
             mask = str(mask_file) if mask_file.exists() else None
