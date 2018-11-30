@@ -126,7 +126,7 @@ class Autofocus:
 
     def _start_autofocus(self, metric='brenner', metric_kws=None, metric_mask=None,
             metric_filter_period_range=None, **camera_state):
-        self._enter_camera_state()
+        self._enter_camera_state(**camera_state)
         if isinstance(metric_mask, str):
             metric_mask = freeimage.read(metric_mask) > 0
         shape = self._camera.get_aoi_shape()
