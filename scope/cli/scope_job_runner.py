@@ -30,14 +30,14 @@ def main(argv=None):
 
     parser_stop = subparsers.add_parser('stop', help='stop the job runner, if running')
     parser_stop.add_argument('-f', '--force', action='store_true', help='do not allow in-progress jobs to complete before stopping the runner')
-    parser_stop.add_argument('-m', '--message', help='log message: why is the job runner being stopped?')
+    parser_stop.add_argument('-m', '--message', help='log message: why is the job runner being stopped?', default='')
 
     parser_status = subparsers.add_parser('status', help='print the status of the queued jobs')
 
     parser_add = subparsers.add_parser('add', help='add a new job to the queue')
     parser_add.set_defaults(func='add_job')
-    parser_add.add_argument(metavar='py_file', dest='exec_file', help='python script to run')
-    parser_add.add_argument(metavar='email', nargs='*', dest='alert_emails', help='email addresses to notify in case of error')
+    parser_add.add_argument('exec_file', metavar='py_file', help='python script to run')
+    parser_add.add_argument('alert_emails', metavar='email', nargs='*', help='email addresses to notify in case of error')
     parser_add.add_argument('-d', '--delay', metavar='DELAY', type=parse_delay, dest='next_run_time',
         help='time to delay before running the job (h, h:m, or h:m:s). Default: run immediately.',
         default='0')
@@ -45,11 +45,11 @@ def main(argv=None):
     parser_remove = subparsers.add_parser('remove',
         help='remove a job from the queue (will not terminate the current job if running)')
     parser_remove.set_defaults(func='remove_job')
-    parser_remove.add_argument(metavar='py_file', dest='exec_file', help='python script to remove')
+    parser_remove.add_argument('exec_file', metavar='py_file', help='python script to remove')
 
     parser_resume = subparsers.add_parser('resume', help='resume a job previously suspended because of an error')
     parser_resume.set_defaults(func='resume_job')
-    parser_resume.add_argument(metavar='py_file', dest='exec_file', help='python script to resume')
+    parser_resume.add_argument('exec_file', metavar='py_file', help='python script to resume')
     parser_resume.add_argument('-d', '--delay', metavar='DELAY', type=parse_delay, dest='next_run_time',
         help='time to delay before next running the job (h, h:m, or h:m:s). If not specified, use the currently scheduled next-run time')
 
@@ -67,10 +67,13 @@ def main(argv=None):
         if args.command == 'start':
             runner.start(args.verbose)
         elif args.command == 'stop':
+            message = args.message.strip()
+            while not message:
+                message = input('Reason for stopping (for log): ').strip()
             if args.force:
-                runner.terminate(args.message)
+                runner.terminate(message)
             else:
-                runner.stop(args.message)
+                runner.stop(message)
         else:
             arg_dict = dict(vars(args))
             del arg_dict['debug']

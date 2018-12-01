@@ -2,6 +2,7 @@
 
 import sys
 import time
+import datetime
 import subprocess
 import pathlib
 import os
@@ -56,7 +57,13 @@ class JobRunner(base_daemon.Runner):
         self.jobs = _JobList(self.base_dir / 'jobs.json')
         self.current_job = _JobFile(self.base_dir / 'job_current')
         self.log_dir = self.base_dir / 'job_logs'
+        self.audit_log = self.log_dir / 'audit_log'
         super().__init__(name='Scope Job Manager', pidfile_path=self.base_dir / 'scope_job_runner.pid')
+
+    def _log_audit_message(self, message):
+        isotime = datetime.datetime.now().isoformat('t', 'seconds')
+        with self.audit_log.open('a') as log:
+            log.write(f'{isotime}> {message}\n')
 
     # THE FOLLOWING FUNCTIONS ARE FOR COMMUNICATING WITH / STARTING A RUNNING DAEMON
     def add_job(self, exec_file, alert_emails, next_run_time='now'):
@@ -73,6 +80,7 @@ class JobRunner(base_daemon.Runner):
                 If not None, then these email addresses will be alerted if the job fails.
             next_run_time: either a time.time() style timestamp, or 'now'.
             """
+        self._log_audit_message(f'Adding job "{exec_file}"')
         self.jobs.add(exec_file, alert_emails, next_run_time, STATUS_QUEUED)
         if self.is_running():
             self._awaken_daemon()
@@ -83,6 +91,7 @@ class JobRunner(base_daemon.Runner):
         """Remove the job specified by the given exec_file.
 
         Note: this will NOT terminate a currenlty-running job."""
+        self._log_audit_message(f'Removing job "{exec_file}"')
         self.jobs.remove(exec_file)
         print('Job {} has been removed from the queue for future execution.'.format(exec_file))
         if self.current_job.get() == exec_file:
@@ -111,6 +120,7 @@ class JobRunner(base_daemon.Runner):
         for job in jobs:
             if job.status == STATUS_QUEUED and job.next_run_time is None:
                 print('Removing job {}.'.format(job.exec_file))
+                self._log_audit_message(f'Purging job "{job.exec_file}"')
                 self.jobs.remove(job.exec_file)
 
     def resume_all(self):
@@ -196,6 +206,7 @@ class JobRunner(base_daemon.Runner):
         Note: If a job is currently running, it will complete."""
         self.assert_daemon()
         self.signal(signal.SIGINT)
+        self._log_audit_message(f'Requesting daemon stop. Reason: {message}')
         current_job = self.current_job.get()
         if current_job is not None:
             print('Waiting for job {} to complete.'.format(current_job))
@@ -204,7 +215,7 @@ class JobRunner(base_daemon.Runner):
             print('Job complete. Job-runner is stopping.')
 
     def terminate(self, message):
-
+        self._log_audit_message(f'Terminating daemon. Reason: {message}')
         super().terminate()
 
     def duty_cycle(self, intervals=[6, 24, 24*7]):
@@ -280,30 +291,37 @@ class JobRunner(base_daemon.Runner):
         self.asleep = False
         self.running = True
         logger.debug('starting job runner daemon mainloop')
-        while self.running:
-            job = self._get_next_job() # may be None
-            if job and job.next_run_time > time.time():
-                # not ready to run job yet
-                sleep_time = job.next_run_time - time.time()
-                job = None
-            else:
-                sleep_time = 60*60*24 # sleep for a day
-            if job:
-                # Run a job if there was one
-                self.current_job.set(job)
-                try:
-                    self._run_job(job)
-                finally:
-                    self.current_job.clear()
-            else:
-                # if we're out of jobs, sleep for a while
-                self.asleep = True
-                logger.debug('Sleeping for {}s', sleep_time)
-                try:
-                    time.sleep(sleep_time)
-                except InterruptedError:
-                    logger.debug('Awoken by HUP')
-                self.asleep = False
+        self._log_audit_message(f'Daemon starting.')
+        try:
+            while self.running:
+                self._run_job_or_sleep()
+        finally:
+            self._log_audit_message(f'Daemon exiting.')
+
+    def _run_job_or_sleep(self):
+        job = self._get_next_job() # may be None
+        if job and job.next_run_time > time.time():
+            # not ready to run job yet
+            sleep_time = job.next_run_time - time.time()
+            job = None
+        else:
+            sleep_time = 60*60*24 # sleep for a day
+        if job:
+            # Run a job if there was one
+            self.current_job.set(job)
+            try:
+                self._run_job(job)
+            finally:
+                self.current_job.clear()
+        else:
+            # if we're out of jobs, sleep for a while
+            self.asleep = True
+            logger.debug('Sleeping for {}s', sleep_time)
+            try:
+                time.sleep(sleep_time)
+            except InterruptedError:
+                logger.debug('Awoken by HUP')
+            self.asleep = False
 
     def _run_job(self, job):
         """Actually run a given job and interpret the output"""
@@ -354,13 +372,11 @@ class JobRunner(base_daemon.Runner):
     def _job_broke(self, job, timed_out, error_text, new_status=STATUS_ERROR):
         """Alert the world that the job errored out."""
         self.jobs.update(job.exec_file, status=new_status)
-        if timed_out:
-            logger.error('Acquisition job {} timed out:\n {}\n', job.exec_file, error_text)
-        else:
-            logger.error('Could not run acquisition job in {}:\n {}\n', job.exec_file, error_text)
+        error_type = 'timed out' if timed_out else 'failed'
+        self._log_audit_message(f'Job {error_type}: "{job.exec_file}"')
+        logger.error('Acquisition job {} {}:\n {}\n', job.exec_file, error_type, error_text)
         if job.alert_emails:
-            error = 'timed out' if timed_out else 'failed'
-            subject = '[{}] Job {} {}.'.format(platform.node(), job.exec_file, error)
+            subject = f'[{platform.node()}] Job {job.exec_file} {error_type}.'
             self.send_error_email(job.alert_emails, subject, error_text)
 
     @staticmethod
@@ -369,7 +385,7 @@ class JobRunner(base_daemon.Runner):
             host = platform.node().split('.')[0]
         except:
             host = 'scope_job_runner'
-        sender = '{}@zplab.wustl.edu'.format(host)
+        sender = f'{host}@zplab.wustl.edu'
         config = scope_configuration.get_config()
         message = mimetext.MIMEText(text)
         message['From'] = sender
