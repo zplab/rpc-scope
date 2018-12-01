@@ -114,10 +114,12 @@ class Autofocus:
                 metric = runpy.run_path(path)[metric]
             else:
                 raise ValueError('"metric" must be the name of a known metric or formatted as "/path/to/file.py:function"')
-        assert callable(metric)
+
+        # check if metric is a class at all before asking if it's our subclass of interest:
         if isinstance(metric, type) and issubclass(metric, AutofocusMetricBase):
             return metric(shape, metric_mask, metric_filter_period_range, **metric_kws)
         else:
+            assert callable(metric)
             return AutofocusMetric(metric, shape, metric_mask, metric_filter_period_range, **metric_kws)
 
     def _finish_autofocus(self, metric, z_positions):
