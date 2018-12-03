@@ -212,7 +212,8 @@ class TimepointHandler:
         self.logger.debug('Position done (total: {:.1f} seconds)', t3-t0)
 
     def threaded_write_images(self, images, image_paths, compression=None):
-        compression = self.IMAGE_COMPRESSION if compression is None else compression
+        if compression is None:
+            compression = self.IMAGE_COMPRESSION
         futures_out = self.image_io.write(images, image_paths, compression)
         self._job_futures.extend(futures_out)
 
