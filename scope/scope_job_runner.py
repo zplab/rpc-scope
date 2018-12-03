@@ -80,8 +80,8 @@ class JobRunner(base_daemon.Runner):
                 If not None, then these email addresses will be alerted if the job fails.
             next_run_time: either a time.time() style timestamp, or 'now'.
             """
-        fullpath = self.jobs.add(exec_file, alert_emails, next_run_time, STATUS_QUEUED)
-        self._log_audit_message(f'Adding job "{fullpath}"')
+        job = self.jobs.add(exec_file, alert_emails, next_run_time, STATUS_QUEUED)
+        self._log_audit_message(f'Added job: {job.exec_file}')
         if self.is_running():
             self._awaken_daemon()
         else:
@@ -91,9 +91,9 @@ class JobRunner(base_daemon.Runner):
         """Remove the job specified by the given exec_file.
 
         Note: this will NOT terminate a currently-running job."""
-        fullpath = self.jobs.remove(exec_file)
-        self._log_audit_message(f'Removing job "{fullpath}"')
-        print(f'Job {fullpath} has been removed from the queue for future execution.')
+        job = self.jobs.remove(exec_file)
+        self._log_audit_message(f'Removed job: {job.exec_file}')
+        print(f'Job {job.exec_file} has been removed from the queue for future execution.')
         if self.current_job.get() == exec_file:
             print('This job is running. The current run has NOT been terminated.')
 
@@ -119,9 +119,9 @@ class JobRunner(base_daemon.Runner):
         jobs = self.jobs.get_jobs()
         for job in jobs:
             if job.status == STATUS_QUEUED and job.next_run_time is None:
-                print('Removing job {}.'.format(job.exec_file))
-                fullpath = self.jobs.remove(job.exec_file)
-                self._log_audit_message(f'Purging job "{fullpath}"')
+                self.jobs.remove(job.exec_file)
+                self._log_audit_message(f'Purged job: {job.exec_file}')
+                print(f'Purged: {job.exec_file}')
 
     def resume_all(self):
         """Resume all jobs that are in the error state."""
@@ -206,7 +206,7 @@ class JobRunner(base_daemon.Runner):
         Note: If a job is currently running, it will complete."""
         self.assert_daemon()
         self.signal(signal.SIGINT)
-        self._log_audit_message(f'Requesting daemon stop. Reason: {message}')
+        self._log_audit_message(f'Requesting daemon stop: {message}')
         current_job = self.current_job.get()
         if current_job is not None:
             print('Waiting for job {} to complete.'.format(current_job))
@@ -215,7 +215,7 @@ class JobRunner(base_daemon.Runner):
             print('Job complete. Job-runner is stopping.')
 
     def terminate(self, message):
-        self._log_audit_message(f'Terminating daemon. Reason: {message}')
+        self._log_audit_message(f'Terminating daemon: {message}')
         super().terminate()
 
     def duty_cycle(self, intervals=[6, 24, 24*7]):
@@ -291,12 +291,12 @@ class JobRunner(base_daemon.Runner):
         self.asleep = False
         self.running = True
         logger.debug('starting job runner daemon mainloop')
-        self._log_audit_message(f'Daemon starting.')
+        self._log_audit_message(f'Daemon started.')
         try:
             while self.running:
                 self._run_job_or_sleep()
         finally:
-            self._log_audit_message(f'Daemon exiting.')
+            self._log_audit_message(f'Daemon exited.')
 
     def _run_job_or_sleep(self):
         job = self._get_next_job() # may be None
@@ -373,7 +373,7 @@ class JobRunner(base_daemon.Runner):
         """Alert the world that the job errored out."""
         self.jobs.update(job.exec_file, status=new_status)
         error_type = 'timed out' if timed_out else 'failed'
-        self._log_audit_message(f'Job {error_type}: "{job.exec_file}"')
+        self._log_audit_message(f'Job {error_type}: {job.exec_file}')
         logger.error('Acquisition job {} {}:\n {}\n', job.exec_file, error_type, error_text)
         if job.alert_emails:
             subject = f'[{platform.node()}] Job {job.exec_file} {error_type}.'
@@ -499,11 +499,11 @@ class _JobList:
             exec_file = canonical_path(exec_file)
             jobs = self._read()
             if exec_file in jobs:
-                del jobs[exec_file]
+                job = jobs.pop(exec_file)
                 self._write(jobs)
             else:
                 raise ValueError('No job queued for {}'.format(exec_file))
-        return exec_file
+        return job
 
     def add(self, exec_file, alert_emails, next_run_time, status, check_exists=True):
         """Add a new job to the list.
@@ -526,9 +526,10 @@ class _JobList:
 
         with self.jobs_lock:
             jobs = self._read()
-            jobs[exec_file] = _Job(exec_file, alert_emails, next_run_time, status)
+            job = _Job(exec_file, alert_emails, next_run_time, status)
+            jobs[exec_file] = job
             self._write(jobs)
-        return exec_file
+        return job
 
 
     def update(self, exec_file, **kws):
