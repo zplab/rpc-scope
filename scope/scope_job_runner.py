@@ -80,8 +80,8 @@ class JobRunner(base_daemon.Runner):
                 If not None, then these email addresses will be alerted if the job fails.
             next_run_time: either a time.time() style timestamp, or 'now'.
             """
-        self._log_audit_message(f'Adding job "{exec_file}"')
-        self.jobs.add(exec_file, alert_emails, next_run_time, STATUS_QUEUED)
+        fullpath = self.jobs.add(exec_file, alert_emails, next_run_time, STATUS_QUEUED)
+        self._log_audit_message(f'Adding job "{fullpath}"')
         if self.is_running():
             self._awaken_daemon()
         else:
@@ -90,10 +90,10 @@ class JobRunner(base_daemon.Runner):
     def remove_job(self, exec_file):
         """Remove the job specified by the given exec_file.
 
-        Note: this will NOT terminate a currenlty-running job."""
-        self._log_audit_message(f'Removing job "{exec_file}"')
-        self.jobs.remove(exec_file)
-        print('Job {} has been removed from the queue for future execution.'.format(exec_file))
+        Note: this will NOT terminate a currently-running job."""
+        fullpath = self.jobs.remove(exec_file)
+        self._log_audit_message(f'Removing job "{fullpath}"')
+        print(f'Job {fullpath} has been removed from the queue for future execution.')
         if self.current_job.get() == exec_file:
             print('This job is running. The current run has NOT been terminated.')
 
@@ -120,8 +120,8 @@ class JobRunner(base_daemon.Runner):
         for job in jobs:
             if job.status == STATUS_QUEUED and job.next_run_time is None:
                 print('Removing job {}.'.format(job.exec_file))
-                self._log_audit_message(f'Purging job "{job.exec_file}"')
-                self.jobs.remove(job.exec_file)
+                fullpath = self.jobs.remove(job.exec_file)
+                self._log_audit_message(f'Purging job "{fullpath}"')
 
     def resume_all(self):
         """Resume all jobs that are in the error state."""
@@ -503,6 +503,7 @@ class _JobList:
                 self._write(jobs)
             else:
                 raise ValueError('No job queued for {}'.format(exec_file))
+        return exec_file
 
     def add(self, exec_file, alert_emails, next_run_time, status, check_exists=True):
         """Add a new job to the list.
@@ -527,6 +528,8 @@ class _JobList:
             jobs = self._read()
             jobs[exec_file] = _Job(exec_file, alert_emails, next_run_time, status)
             self._write(jobs)
+        return exec_file
+
 
     def update(self, exec_file, **kws):
         """Update the values of an existing job. Any parameter not in keyword args
