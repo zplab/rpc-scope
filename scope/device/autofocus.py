@@ -114,6 +114,7 @@ class Autofocus:
                 metric = runpy.run_path(path)[metric]
             else:
                 raise ValueError('"metric" must be the name of a known metric or formatted as "/path/to/file.py:function"')
+
         # check if metric is a class at all before asking if it's our subclass of interest:
         if isinstance(metric, type) and issubclass(metric, AutofocusMetricBase):
             return metric(shape, metric_mask, metric_filter_period_range, **metric_kws)
@@ -233,7 +234,7 @@ class Autofocus:
         """
         metric = self._start_autofocus(metric, metric_kws, metric_mask, metric_filter_period_range)
         with self._camera.in_state(live_mode=False, trigger_mode='Internal'):
-            steps, overlap, frame_rate, speed = self.calculate_autofocus_continuous_move_state(end, start, steps, max_speed)
+            steps, overlap, frame_rate, speed = self._calculate_autofocus_continuous_move_state(end, start, steps, max_speed)
             runner = MetricRunner(self._camera, frame_rate, steps, metric, return_images)
             zrecorder = ZRecorder(self._camera, self._stage)
             self._stage.set_z(start) # move to start position at original speed

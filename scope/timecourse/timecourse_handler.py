@@ -169,7 +169,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.scope.camera.readout_rate = self.PIXEL_READOUT_RATE
         self.scope.camera.shutter_mode = 'Rolling'
 
-        self.scope.autofocus.reset_state() # make sure the autofocus mode cache is clear
+        self.scope.camera.autofocus.reset_state() # make sure the autofocus mode cache is clear
 
         self.configure_calibrations() # sets self.bf_exposure and self.tl_intensity
 
