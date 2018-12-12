@@ -153,17 +153,20 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             pass
         assert self.scope.nosepiece.magnification == objective
 
-        self.scope.il.shutter_open = True
         self.scope.il.spectra.lamps(**{lamp+'_enabled': False for lamp in self.scope.il.spectra.lamp_specs})
-        self.scope.tl.shutter_open = True
         self.scope.tl.lamp.enabled = False
-        self.scope.tl.condenser_retracted = objective == 5 # only retract condenser for 5x objective
-        if self.TL_FIELD_DIAPHRAGM is not None:
-            self.scope.tl.field_diaphragm = self.TL_FIELD_DIAPHRAGM
-        if self.TL_APERTURE_DIAPHRAGM is not None:
-            self.scope.tl.aperture_diaphragm = self.TL_APERTURE_DIAPHRAGM
-        if self.IL_FIELD_WHEEL is not None:
-            self.scope.il.field_wheel = self.IL_FIELD_WHEEL
+
+        if hasattr(self.scope.il, 'shutter_open'): # For non-inverted scope acquisitions
+            self.scope.il.shutter_open = True
+            self.scope.tl.shutter_open = True
+            self.scope.tl.condenser_retracted = objective == 5 # only retract condenser for 5x objective
+            if self.TL_FIELD_DIAPHRAGM is not None:
+                self.scope.tl.field_diaphragm = self.TL_FIELD_DIAPHRAGM
+            if self.TL_APERTURE_DIAPHRAGM is not None:
+                self.scope.tl.aperture_diaphragm = self.TL_APERTURE_DIAPHRAGM
+            if self.IL_FIELD_WHEEL is not None:
+                self.scope.il.field_wheel = self.IL_FIELD_WHEEL
+
         self.scope.il.filter_cube = self.experiment_metadata['filter_cube']
         self.scope.camera.sensor_gain = '16-bit (low noise & high well capacity)'
         self.scope.camera.readout_rate = self.PIXEL_READOUT_RATE
