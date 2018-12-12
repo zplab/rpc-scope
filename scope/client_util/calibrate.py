@@ -31,8 +31,9 @@ class DarkCurrentCorrector:
         self.exposure_times = []
         with contextlib.ExitStack() as stack:
             # set up all the scope states
-            stack.enter_context(scope.il.in_state(shutter_open=False))
-            stack.enter_context(scope.tl.in_state(shutter_open=False))
+            if hasattr(scope.il, 'shutter_open'):    # Inverted scope doesn't have shutters.
+                stack.enter_context(scope.il.in_state(shutter_open=False))
+                stack.enter_context(scope.tl.in_state(shutter_open=False))
             stack.enter_context(scope.tl.lamp.in_state(enabled=False))
             if hasattr(scope.il, 'spectra'):
                 stack.enter_context(scope.il.spectra.in_state(**{lamp+'_enabled': False for lamp in scope.il.spectra.lamp_specs.keys()}))
