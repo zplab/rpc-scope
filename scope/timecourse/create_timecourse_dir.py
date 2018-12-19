@@ -32,10 +32,10 @@ class Handler(timecourse_handler.BasicAcquisitionHandler):
     # If using the FAST or NONE levels, consider using the below option to recompress after the fact.
     RECOMPRESS_IMAGE_LEVEL = None # if not None, start a background job to recompress saved images to the specified level.
     LOG_LEVEL = timecourse_handler.logging.INFO # DEBUG may be useful
-    # Set the following to have the script set the microscope apertures as desired:
+    # Set the below to override the sensible per-objective defaults in timecourse_handler:
     TL_FIELD_DIAPHRAGM = None
     TL_APERTURE_DIAPHRAGM = None
-    IL_FIELD_WHEEL = None # 'circle:3' is a good choice.
+    IL_FIELD_WHEEL = 'circle:5' # This is the best choice absent compelling reason.
     VIGNETTE_PERCENT = 5 # 5 is a good number when using a 1x optocoupler. If 0.7x, use 35.
     SEGMENTATION_MODEL = None # name of or path to image-segmentation model to run in the background after the job ends.
     TO_SEGMENT = ['bf'] # image name or names to segment

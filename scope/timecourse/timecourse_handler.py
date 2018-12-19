@@ -75,10 +75,10 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     # If using the FAST or NONE levels, consider using the below option to recompress after the fact.
     RECOMPRESS_IMAGE_LEVEL = None # if not None, start a background job to recompress saved images to the specified level.
     LOG_LEVEL = logging.INFO
-    # Set the following to have the script set the microscope apertures as desired:
+    # Set the TL diaphragm values in subclass to override the default settings for each objective (below).
     TL_FIELD_DIAPHRAGM = None
     TL_APERTURE_DIAPHRAGM = None
-    IL_FIELD_WHEEL = None # 'circle:3' is a good choice.
+    IL_FIELD_WHEEL = 'circle:5' # This really is the best choice unless you have a compelling reason.
     VIGNETTE_PERCENT = 5 # 5 is a good number when using a 1x optocoupler. If 0.7x, use 35.
     SEGMENTATION_MODEL = None # name of or path to image-segmentation model to run in the background after the job ends.
     TO_SEGMENT = ['bf'] # image name or names to segment
@@ -87,6 +87,8 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         metric_kws={}, # use if the metric requires specific keywords; 'brenner' does not
         metric_filter_period_range=None # if not None, (min_size, max_size) tuple for bandpass filtering images before autofocus
     )
+    TL_FIELD_SETTINGS = {5: 10, 10: 16}
+    TL_APERTURE_SETTINGS = {5: 28, 10: 21}
 
     def configure_additional_acquisition_steps(self):
         """Add more steps to the acquisition_sequencer's sequence as desired,
@@ -158,12 +160,22 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.scope.tl.shutter_open = True
         self.scope.tl.lamp.enabled = False
         self.scope.tl.condenser_retracted = objective == 5 # only retract condenser for 5x objective
-        if self.TL_FIELD_DIAPHRAGM is not None:
-            self.scope.tl.field_diaphragm = self.TL_FIELD_DIAPHRAGM
-        if self.TL_APERTURE_DIAPHRAGM is not None:
-            self.scope.tl.aperture_diaphragm = self.TL_APERTURE_DIAPHRAGM
-        if self.IL_FIELD_WHEEL is not None:
-            self.scope.il.field_wheel = self.IL_FIELD_WHEEL
+
+        tl_field = self.TL_FIELD_DIAPHRAGM
+        if tl_field is None:
+            tl_field = self.TL_FIELD_SETTINGS[objective]
+        self.scope.tl.field_diaphragm = tl_field
+
+        tl_aperture = self.TL_APERTURE_DIAPHRAGM
+        if tl_aperture is None:
+            tl_aperture = self.TL_APERTURE_SETTINGS[objective]
+        self.scope.tl.aperture_diaphragm = tl_aperture
+
+        il_field = self.IL_FIELD_WHEEL
+        if il_field is None:
+            il_field = 'circle:5'
+        self.scope.il.field_wheel = il_field
+
         self.scope.il.filter_cube = self.experiment_metadata['filter_cube']
         self.scope.camera.sensor_gain = '16-bit (low noise & high well capacity)'
         self.scope.camera.readout_rate = self.PIXEL_READOUT_RATE
