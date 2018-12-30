@@ -14,32 +14,40 @@ from ..gui import scope_viewer_widget
 
 handler_template = \
 '''import pathlib
+import logging
 from scope.timecourse import timecourse_handler
+from zplib.image.threaded_io import COMPRESSION
 
 class Handler(timecourse_handler.BasicAcquisitionHandler):
+    # Potentially useful attributes to modify
     REFOCUS_INTERVAL_MINS = 45 # re-run autofocus at least this often. Useful for not autofocusing every timepoint.
     DO_COARSE_FOCUS = False
-    # 1 mm distance in 50 steps = 20 microns/step. So we should be somewhere within 20-40 microns of the right plane after coarse autofocus.
+    # 1 mm distance in 50 steps = 20 microns/step. So we should be somewhere within 20-40 microns of the right plane after the coarse autofocus.
     COARSE_FOCUS_RANGE = 1
     COARSE_FOCUS_STEPS = 50
     # We want to get within 2 microns, so sweep over 90 microns with 45 steps.
     FINE_FOCUS_RANGE = 0.09
     FINE_FOCUS_STEPS = 45
+    FINE_FOCUS_SPEED = 0.3
     PIXEL_READOUT_RATE = '100 MHz'
     USE_LAST_FOCUS_POSITION = True # if False, start autofocus from original z position rather than last autofocused position.
-    INTERVAL_MODE = 'scheduled start'
-    IMAGE_COMPRESSION = timecourse_handler.COMPRESSION.DEFAULT # useful options include PNG_FAST, PNG_NONE, TIFF_NONE.
+    INTERVAL_MODE = 'scheduled start' #point in time when the countdown to the next run begins: 'scheduled start', 'actual start' or 'end'.
+    IMAGE_COMPRESSION = COMPRESSION.DEFAULT # useful options include PNG_FAST, PNG_NONE, TIFF_NONE.
     # If using the FAST or NONE levels, consider using the below option to recompress after the fact.
     RECOMPRESS_IMAGE_LEVEL = None # if not None, start a background job to recompress saved images to the specified level.
-    LOG_LEVEL = timecourse_handler.logging.INFO # DEBUG may be useful
-    # Set the below to override the sensible per-objective defaults in timecourse_handler:
-    TL_FIELD_DIAPHRAGM = None
-    TL_APERTURE_DIAPHRAGM = None
-    IL_FIELD_WHEEL = 'circle:5' # This is the best choice absent compelling reason.
-    VIGNETTE_PERCENT = 5 # 5 is a good number when using a 1x optocoupler. If 0.7x, use 35.
+    LOG_LEVEL = logging.INFO # logging.DEBUG may be useful
     SEGMENTATION_MODEL = None # name of or path to image-segmentation model to run in the background after the job ends.
     TO_SEGMENT = ['bf'] # image name or names to segment
-    FOCUS_FILTER_PERIOD_RANGE = None # if not None, (min_size, max_size) tuple for bandpass filtering images before autofocus
+    AUTOFOCUS_PARAMS = dict(
+        metric='brenner',
+        metric_kws={}, # use if the metric requires specific keywords; 'brenner' does not
+        metric_filter_period_range=None # if not None, (min_size, max_size) tuple for bandpass filtering images before autofocus
+    )
+    # Values that are unlikely to be useful to modify, but may in obscure cases be used:
+    TL_FIELD = None # None selects the default for the objective
+    TL_APERTURE = None # None selects the default for the objective
+    IL_FIELD = None # None selects the default (circle:5), which is the best choice unless you have a compelling reason.
+    VIGNETTE_PERCENT = None # None selectes the default based on the optocoupler
 
     def configure_additional_acquisition_steps(self):
         """Add more steps to the acquisition_sequencer's sequence as desired,

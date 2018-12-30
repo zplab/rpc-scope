@@ -35,7 +35,18 @@ scope_configuration = dict(
         SERIAL_PORT = '/dev/ttyScope',
         SERIAL_ARGS = dict(
             baudrate = 115200
-        )
+        ),
+        TL_FIELD_DEFAULTS = {
+            #5: 12, # dm6
+            #5: 10, # dm6000
+            #10: 16 # dm6
+            #10: 18 # dm6000
+        },
+        TL_APERTURE_DEFAULTS = {
+            5: 28, # dm6, dm6000
+            #10: 26 # dm6
+            #10: 22 # dm6000
+        }
     ),
 
     camera = dict(

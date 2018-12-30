@@ -70,16 +70,11 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     FINE_FOCUS_SPEED = 0.3
     PIXEL_READOUT_RATE = '100 MHz'
     USE_LAST_FOCUS_POSITION = True # if False, start autofocus from original z position rather than last autofocused position.
-    INTERVAL_MODE = 'scheduled start'
+    INTERVAL_MODE = 'scheduled start' #point in time when the countdown to the next run begins: 'scheduled start', 'actual start' or 'end'.
     IMAGE_COMPRESSION = COMPRESSION.DEFAULT # useful options include PNG_FAST, PNG_NONE, TIFF_NONE.
     # If using the FAST or NONE levels, consider using the below option to recompress after the fact.
     RECOMPRESS_IMAGE_LEVEL = None # if not None, start a background job to recompress saved images to the specified level.
-    LOG_LEVEL = logging.INFO
-    # Set the TL diaphragm values in subclass to override the default settings for each objective (below).
-    TL_FIELD_DIAPHRAGM = None
-    TL_APERTURE_DIAPHRAGM = None
-    IL_FIELD_WHEEL = 'circle:5' # This really is the best choice unless you have a compelling reason.
-    VIGNETTE_PERCENT = 5 # 5 is a good number when using a 1x optocoupler. If 0.7x, use 35.
+    LOG_LEVEL = logging.INFO # logging.DEBUG may be useful
     SEGMENTATION_MODEL = None # name of or path to image-segmentation model to run in the background after the job ends.
     TO_SEGMENT = ['bf'] # image name or names to segment
     AUTOFOCUS_PARAMS = dict(
@@ -87,8 +82,16 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         metric_kws={}, # use if the metric requires specific keywords; 'brenner' does not
         metric_filter_period_range=None # if not None, (min_size, max_size) tuple for bandpass filtering images before autofocus
     )
-    TL_FIELD_SETTINGS = {5: 10, 10: 16}
-    TL_APERTURE_SETTINGS = {5: 28, 10: 21}
+    # Values that are unlikely to be useful to override, but may in obscure cases be used:
+    TL_FIELD = None # None selects the default for the objective
+    TL_APERTURE = None # None selects the default for the objective
+    IL_FIELD = None # None selects the default (circle:5), which is the best choice unless you have a compelling reason.
+    VIGNETTE_PERCENT = None # None selectes the default based on the optocoupler
+
+    # Not useful to override
+    IL_FIELD_DEFAULT = 'circle:5'
+    OPTOCOUPLER_TO_VIGNETTE_PERCENT = {1: 5, 0.7: 45}
+
 
     def configure_additional_acquisition_steps(self):
         """Add more steps to the acquisition_sequencer's sequence as desired,
@@ -161,19 +164,20 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.scope.tl.lamp.enabled = False
         self.scope.tl.condenser_retracted = objective == 5 # only retract condenser for 5x objective
 
-        tl_field = self.TL_FIELD_DIAPHRAGM
+        config = self.scope.get_configuration()
+        tl_field = self.TL_FIELD
         if tl_field is None:
-            tl_field = self.TL_FIELD_SETTINGS[objective]
+            tl_field = config.stand.TL_FIELD_DEFAULTS[objective]
         self.scope.tl.field_diaphragm = tl_field
 
-        tl_aperture = self.TL_APERTURE_DIAPHRAGM
+        tl_aperture = self.TL_APERTURE
         if tl_aperture is None:
-            tl_aperture = self.TL_APERTURE_SETTINGS[objective]
+            tl_aperture = config.stand.TL_APERTURE_DEFAULTS[objective]
         self.scope.tl.aperture_diaphragm = tl_aperture
 
-        il_field = self.IL_FIELD_WHEEL
+        il_field = self.IL_FIELD
         if il_field is None:
-            il_field = 'circle:5'
+            il_field = self.IL_FIELD_DEFAULT
         self.scope.il.field_wheel = il_field
 
         self.scope.il.filter_cube = self.experiment_metadata['filter_cube']
@@ -257,7 +261,8 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             exposure = calibrate.meter_exposure(self.scope, self.scope.tl.lamp,
                 max_exposure=32, min_intensity_fraction=0.3, max_intensity_fraction=0.85)[0]
             bf_avg = calibrate.get_averaged_images(self.scope, ref_positions, self.dark_corrector, frames_to_average=2)
-        self.vignette_mask = calibrate.get_vignette_mask(bf_avg, self.VIGNETTE_PERCENT)
+        vignette_percent = self.OPTOCOUPLER_TO_VIGNETTE_PERCENT[self.experiment_metadata['optocoupler']]
+        self.vignette_mask = calibrate.get_vignette_mask(bf_avg, vignette_percent)
         bf_flatfield, bf_ref_intensity = calibrate.get_flat_field(bf_avg, self.vignette_mask)
         exposure_ratio = self.bf_exposure / exposure
         bf_ref_intensity *= exposure_ratio
