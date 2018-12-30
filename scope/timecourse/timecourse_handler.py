@@ -70,7 +70,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     FINE_FOCUS_SPEED = 0.3
     PIXEL_READOUT_RATE = '100 MHz'
     USE_LAST_FOCUS_POSITION = True # if False, start autofocus from original z position rather than last autofocused position.
-    INTERVAL_MODE = 'scheduled start' #point in time when the countdown to the next run begins: 'scheduled start', 'actual start' or 'end'.
+    INTERVAL_MODE = 'scheduled start' # Point in time when the countdown to the next run begins: 'scheduled start', 'actual start' or 'end'.
     IMAGE_COMPRESSION = COMPRESSION.DEFAULT # useful options include PNG_FAST, PNG_NONE, TIFF_NONE.
     # If using the FAST or NONE levels, consider using the below option to recompress after the fact.
     RECOMPRESS_IMAGE_LEVEL = None # if not None, start a background job to recompress saved images to the specified level.
@@ -88,7 +88,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     IL_FIELD = None # None selects the default (circle:5), which is the best choice unless you have a compelling reason.
     VIGNETTE_PERCENT = None # None selectes the default based on the optocoupler
 
-    # Not useful to override
+    # Not for overriding
     IL_FIELD_DEFAULT = 'circle:5'
     OPTOCOUPLER_TO_VIGNETTE_PERCENT = {1: 5, 0.7: 45}
 
@@ -164,15 +164,15 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         self.scope.tl.lamp.enabled = False
         self.scope.tl.condenser_retracted = objective == 5 # only retract condenser for 5x objective
 
-        config = self.scope.get_configuration()
+        config = self.scope.configuration
         tl_field = self.TL_FIELD
         if tl_field is None:
-            tl_field = config.stand.TL_FIELD_DEFAULTS[objective]
+            tl_field = config.stand.TL_FIELD_DEFAULTS[str(objective)]
         self.scope.tl.field_diaphragm = tl_field
 
         tl_aperture = self.TL_APERTURE
         if tl_aperture is None:
-            tl_aperture = config.stand.TL_APERTURE_DEFAULTS[objective]
+            tl_aperture = config.stand.TL_APERTURE_DEFAULTS[str(objective)]
         self.scope.tl.aperture_diaphragm = tl_aperture
 
         il_field = self.IL_FIELD
