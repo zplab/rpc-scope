@@ -9,6 +9,7 @@ from zplib import background_process
 from zplib.image.threaded_io import COMPRESSION
 
 from elegant import process_experiment
+from elegant import process_images
 
 from . import base_handler
 from ..client_util import autofocus
@@ -86,12 +87,9 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
     TL_FIELD = None # None selects the default for the objective
     TL_APERTURE = None # None selects the default for the objective
     IL_FIELD = None # None selects the default (circle:5), which is the best choice unless you have a compelling reason.
-    VIGNETTE_PERCENT = None # None selectes the default based on the optocoupler
 
     # Not for overriding
-    IL_FIELD_DEFAULT = 'circle:5'
-    OPTOCOUPLER_TO_VIGNETTE_PERCENT = {1: 5, 0.7: 45}
-
+    _IL_FIELD_DEFAULT = 'circle:5'
 
     def configure_additional_acquisition_steps(self):
         """Add more steps to the acquisition_sequencer's sequence as desired,
@@ -177,7 +175,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
 
         il_field = self.IL_FIELD
         if il_field is None:
-            il_field = self.IL_FIELD_DEFAULT
+            il_field = self._IL_FIELD_DEFAULT
         self.scope.il.field_wheel = il_field
 
         self.scope.il.filter_cube = self.experiment_metadata['filter_cube']
@@ -261,13 +259,12 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             exposure = calibrate.meter_exposure(self.scope, self.scope.tl.lamp,
                 max_exposure=32, min_intensity_fraction=0.3, max_intensity_fraction=0.85)[0]
             bf_avg = calibrate.get_averaged_images(self.scope, ref_positions, self.dark_corrector, frames_to_average=2)
-        vignette_percent = self.OPTOCOUPLER_TO_VIGNETTE_PERCENT[self.experiment_metadata['optocoupler']]
-        self.vignette_mask = calibrate.get_vignette_mask(bf_avg, vignette_percent)
-        bf_flatfield, bf_ref_intensity = calibrate.get_flat_field(bf_avg, self.vignette_mask)
+        vignette_mask = process_images.vignette_mask(self.experiment_metadata['optocoupler'], bf_avg.shape)
+        bf_flatfield, bf_ref_intensity = calibrate.get_flat_field(bf_avg, vignette_mask)
         exposure_ratio = self.bf_exposure / exposure
         bf_ref_intensity *= exposure_ratio
-        cal_image_names = ['vignette_mask.png', 'bf_flatfield.tiff']
-        cal_images = [self.vignette_mask.astype(numpy.uint8)*255, bf_flatfield]
+        cal_image_names = ['bf_flatfield.tiff']
+        cal_images = [bf_flatfield]
 
         bf_metering = self.experiment_metadata.setdefault('brightfield metering', {})
         bf_metering[self.timepoint_prefix] = dict(ref_intensity=bf_ref_intensity, exposure=self.bf_exposure, intensity=self.tl_intensity)
@@ -283,7 +280,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
                 fl_exposure, fl_intensity = calibrate.meter_exposure_and_intensity(self.scope, lamp,
                     max_exposure=400, min_intensity_fraction=0.1)[:2]
                 fl_avg = calibrate.get_averaged_images(self.scope, ref_positions, self.dark_corrector, frames_to_average=5)
-            fl_flatfield, fl_ref_intensity = calibrate.get_flat_field(fl_avg, self.vignette_mask)
+            fl_flatfield, fl_ref_intensity = calibrate.get_flat_field(fl_avg, vignette_mask)
             fl_ref_intensity /= fl_exposure
             cal_image_names.append('fl_flatfield.tiff')
             cal_images.append(fl_flatfield)

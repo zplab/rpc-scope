@@ -47,7 +47,6 @@ class Handler(timecourse_handler.BasicAcquisitionHandler):
     TL_FIELD = None # None selects the default for the objective
     TL_APERTURE = None # None selects the default for the objective
     IL_FIELD = None # None selects the default (circle:5), which is the best choice unless you have a compelling reason.
-    VIGNETTE_PERCENT = None # None selectes the default based on the optocoupler
 
     def configure_additional_acquisition_steps(self):
         """Add more steps to the acquisition_sequencer's sequence as desired,
