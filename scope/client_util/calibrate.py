@@ -258,7 +258,7 @@ def get_averaged_images(scope, positions, dark_corrector, frames_to_average=5):
     """
     position_images = []
     exposure_ms = scope.camera.exposure_time
-    with scope.stage.in_state(async=False):
+    with scope.stage.in_state(async_=False):
         for position in positions:
             scope.stage.position = position
             with scope.camera.image_sequence_acquisition(frames_to_average, trigger_mode='Internal'):

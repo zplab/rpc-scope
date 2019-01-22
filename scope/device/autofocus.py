@@ -126,7 +126,7 @@ class Autofocus:
         best_i, z_scores = metric.find_best_focus_index()
         best_z = z_positions[best_i]
         self._stage.set_z(best_z) # go to focal plane with highest score
-        self._stage.wait() # no op if in sync mode, necessary in async mode
+        self._stage.wait() # no op if in sync mode, necessary in async_ mode
         return best_z, zip(z_positions, z_scores)
 
     def autofocus(self, start, end, steps, metric='brenner', metric_kws=None,
@@ -242,7 +242,7 @@ class Autofocus:
             with self._camera.image_sequence_acquisition(steps, frame_rate=frame_rate, overlap_enabled=overlap):
                 zrecorder.start()
                 runner.start()
-                with self._stage.in_state(async=False, z_speed=speed):
+                with self._stage.in_state(async_=False, z_speed=speed):
                     self._stage.set_z(end)
                 zrecorder.stop()
                 image_names, camera_timestamps = runner.join()

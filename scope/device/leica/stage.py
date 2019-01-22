@@ -72,19 +72,19 @@ Z_MOVE_FUDGE_FACTOR = 0.056
 
 class Stage(stand.LeicaComponent):
     def _setup_device(self):
-        self._x_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_X, async=False).response) / 1000
-        self._y_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_Y, async=False).response) / 1000
-        self._z_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_Z, async=False).response) / 1000
-        self._x_mm_per_count_second = float(self.send_message(GET_SPEED_CONVERSION_FACTOR_X, async=False).response) / 1000
-        self._y_mm_per_count_second = float(self.send_message(GET_SPEED_CONVERSION_FACTOR_Y, async=False).response) / 1000
-        self._x_speed_min = int(self.send_message(GET_MIN_SPEED_X, async=False).response) * self._x_mm_per_count_second
-        self._y_speed_min = int(self.send_message(GET_MIN_SPEED_Y, async=False).response) * self._y_mm_per_count_second
-        self._z_speed_min = int(self.send_message(GET_MIN_SPEED_Z, async=False).response) * self._z_mm_per_count * Z_SPEED_MM_PER_SECOND_PER_UNIT
-        self._x_speed_max = int(self.send_message(GET_MAX_SPEED_X, async=False).response) * self._x_mm_per_count_second
-        self._y_speed_max = int(self.send_message(GET_MAX_SPEED_Y, async=False).response) * self._y_mm_per_count_second
-        self._z_speed_max = int(self.send_message(GET_MAX_SPEED_Z, async=False).response) * self._z_mm_per_count * Z_SPEED_MM_PER_SECOND_PER_UNIT
-        self._z_ramp_min = int(self.send_message(GET_MIN_RAMP_Z, async=False).response) * self._z_mm_per_count * Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT
-        self._z_ramp_max = int(self.send_message(GET_MAX_RAMP_Z, async=False).response) * self._z_mm_per_count * Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT
+        self._x_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_X, async_=False).response) / 1000
+        self._y_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_Y, async_=False).response) / 1000
+        self._z_mm_per_count = float(self.send_message(GET_CONVERSION_FACTOR_Z, async_=False).response) / 1000
+        self._x_mm_per_count_second = float(self.send_message(GET_SPEED_CONVERSION_FACTOR_X, async_=False).response) / 1000
+        self._y_mm_per_count_second = float(self.send_message(GET_SPEED_CONVERSION_FACTOR_Y, async_=False).response) / 1000
+        self._x_speed_min = int(self.send_message(GET_MIN_SPEED_X, async_=False).response) * self._x_mm_per_count_second
+        self._y_speed_min = int(self.send_message(GET_MIN_SPEED_Y, async_=False).response) * self._y_mm_per_count_second
+        self._z_speed_min = int(self.send_message(GET_MIN_SPEED_Z, async_=False).response) * self._z_mm_per_count * Z_SPEED_MM_PER_SECOND_PER_UNIT
+        self._x_speed_max = int(self.send_message(GET_MAX_SPEED_X, async_=False).response) * self._x_mm_per_count_second
+        self._y_speed_max = int(self.send_message(GET_MAX_SPEED_Y, async_=False).response) * self._y_mm_per_count_second
+        self._z_speed_max = int(self.send_message(GET_MAX_SPEED_Z, async_=False).response) * self._z_mm_per_count * Z_SPEED_MM_PER_SECOND_PER_UNIT
+        self._z_ramp_min = int(self.send_message(GET_MIN_RAMP_Z, async_=False).response) * self._z_mm_per_count * Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT
+        self._z_ramp_max = int(self.send_message(GET_MAX_RAMP_Z, async_=False).response) * self._z_mm_per_count * Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT
         self.send_message(
             SET_X_EVENT_SUBSCRIPTIONS,
             1, # X-axis started or stopped
@@ -96,7 +96,7 @@ class Stage(stand.LeicaComponent):
             1, # New XY_STEP_MODE (coarse/fine) set
             1, # Lower software endswitch (X1) changed
             1, # Upper software endswitch (X2) changed,
-            async=False
+            async_=False
         )
         self._register_event_callback(GET_STATUS_X, self._on_status_x_event)
         self._register_event_callback(GET_POS_X, self._on_pos_x_event)
@@ -106,7 +106,7 @@ class Stage(stand.LeicaComponent):
         self._update_property('xy_fine_control', self.get_xy_fine_control())
         self._update_property('x_low_soft_limit', self.get_x_low_soft_limit())
         self._update_property('x_high_soft_limit', self.get_x_high_soft_limit())
-        self._on_status_x_event(self.send_message(GET_STATUS_X, async=False))
+        self._on_status_x_event(self.send_message(GET_STATUS_X, async_=False))
         self.send_message(
             SET_Y_EVENT_SUBSCRIPTIONS,
             1, # Y-axis started or stopped
@@ -117,7 +117,7 @@ class Stage(stand.LeicaComponent):
             1, # New Y-position
             1, # Lower software endswitch (Y1) changed
             1, # Upper software endswitch (Y2) changed
-            async=False
+            async_=False
         )
         self._register_event_callback(GET_STATUS_Y, self._on_status_y_event)
         self._register_event_callback(GET_POS_Y, self._on_pos_y_event)
@@ -125,7 +125,7 @@ class Stage(stand.LeicaComponent):
         self._register_event_callback(GET_Y2_LIMIT, self._on_y_high_soft_limit_event)
         self._update_property('y_low_soft_limit', self.get_y_low_soft_limit())
         self._update_property('y_high_soft_limit', self.get_y_high_soft_limit())
-        self._on_status_y_event(self.send_message(GET_STATUS_Y, async=False))
+        self._on_status_y_event(self.send_message(GET_STATUS_Y, async_=False))
         self.send_message(
             SET_Z_EVENT_SUBSCRIPTIONS,
             1, # Z-DRIVE started or stopped
@@ -137,7 +137,7 @@ class Stage(stand.LeicaComponent):
             1, # New lower threshold set
             0, # New focus position set
             1, # New Z_STEP_MODE (coarse/fine) set
-            async=False
+            async_=False
         )
         self._register_event_callback(GET_STATUS_Z, self._on_status_z_event)
         self._register_event_callback(GET_POS_Z, self._on_pos_z_event)
@@ -146,7 +146,7 @@ class Stage(stand.LeicaComponent):
         self._update_property('z_fine_control', self.get_z_fine_control())
         self._update_property('z_low_soft_limit', self.get_z_low_soft_limit())
         self._update_property('z_high_soft_limit', self.get_z_high_soft_limit())
-        self._on_status_z_event(self.send_message(GET_STATUS_Z, async=False))
+        self._on_status_z_event(self.send_message(GET_STATUS_Z, async_=False))
         x, y, z = self.get_position()
         self._update_property('x', x)
         self._update_property('y', y)
@@ -164,41 +164,41 @@ class Stage(stand.LeicaComponent):
             z = None
         else:
             x, y, z = position
-        with self.in_state(async=True):
+        with self.in_state(async_=True):
             self.set_x(x)
             self.set_y(y)
             self.set_z(z)
             # no need to do self.wait() at end of block: it gets called implicitly!
 
-    def _set_pos(self, value, conversion_factor, command, async):
+    def _set_pos(self, value, conversion_factor, command, async_):
         if value is None: return
         counts = int(round(value / conversion_factor))
-        self.send_message(command, counts, async=async, intent="move stage to position")
+        self.send_message(command, counts, async_=async_, intent="move stage to position")
 
-    def set_x(self, x, async=None):
-        """Set x-axis position in mm.  If a value other than None is supplied for the async parameter,
-        this value is used in place of the stage's current async state for issuing the stage x-axis
+    def set_x(self, x, async_=None):
+        """Set x-axis position in mm.  If a value other than None is supplied for the async_ parameter,
+        this value is used in place of the stage's current async_ state for issuing the stage x-axis
         move command."""
-        self._set_pos(x, self._x_mm_per_count, POS_ABS_X, async)
+        self._set_pos(x, self._x_mm_per_count, POS_ABS_X, async_)
 
-    def set_y(self, y, async=None):
-        """Set y-axis position in mm.  If a value other than None is supplied for the async parameter,
-        this value is used in place of the stage's current async state for issuing the stage y-axis
+    def set_y(self, y, async_=None):
+        """Set y-axis position in mm.  If a value other than None is supplied for the async_ parameter,
+        this value is used in place of the stage's current async_ state for issuing the stage y-axis
         move command."""
-        self._set_pos(y, self._y_mm_per_count, POS_ABS_Y, async)
+        self._set_pos(y, self._y_mm_per_count, POS_ABS_Y, async_)
 
-    def set_z(self, z, async=None):
-        """Set z-axis position in mm.  If a value other than None is supplied for the async parameter,
-        this value is used in place of the stage's current async state for issuing the stage z-axis
+    def set_z(self, z, async_=None):
+        """Set z-axis position in mm.  If a value other than None is supplied for the async_ parameter,
+        this value is used in place of the stage's current async_ state for issuing the stage z-axis
         move command."""
-        self._set_pos(z, self._z_mm_per_count, POS_ABS_Z, async)
+        self._set_pos(z, self._z_mm_per_count, POS_ABS_Z, async_)
 
     def get_position(self):
         """Return (x,y,z) positionz in mm."""
         return self.get_x(), self.get_y(), self.get_z()
 
     def _get_pos(self, conversion_factor, command):
-        counts = int(self.send_message(command, async=False, intent="get stage position").response)
+        counts = int(self.send_message(command, async_=False, intent="get stage position").response)
         mm = counts * conversion_factor
         return mm
 
@@ -255,7 +255,7 @@ class Stage(stand.LeicaComponent):
 
     def _set_soft_limit(self, value, conversion_factor, command):
         counts = int(round(value / conversion_factor))
-        self.send_message(command, counts, async=False, intent="set stage soft limit")
+        self.send_message(command, counts, async_=False, intent="set stage soft limit")
 
     def set_x_low_soft_limit(self, x_min):
         self._set_soft_limit(x_min, self._x_mm_per_count, SET_X1_LIMIT)
@@ -279,7 +279,7 @@ class Stage(stand.LeicaComponent):
         self._update_property('z_high_soft_limit', self.get_z_high_soft_limit())
 
     def _get_soft_limit(self, conversion_factor, command):
-        counts = int(self.send_message(command, async=False, intent="get stage soft limit").response)
+        counts = int(self.send_message(command, async_=False, intent="get stage soft limit").response)
         mm = counts * conversion_factor
         return mm
 
@@ -318,38 +318,38 @@ class Stage(stand.LeicaComponent):
 
     def reset_x_high_soft_limit(self):
         self.send_message(
-            SET_X2_LIMIT, -1, async=False,
+            SET_X2_LIMIT, -1, async_=False,
             intent="reset x soft max to maximum allowed value by sending SET_X2_LIMIT with the special argument value -1.")
 
     def reset_y_high_soft_limit(self):
         self.send_message(
-            SET_Y2_LIMIT, -1, async=False,
+            SET_Y2_LIMIT, -1, async_=False,
             intent="reset y soft max to maximum allowed value by sending SET_Y2_LIMIT with the special argument value -1.")
 
     def reset_z_high_soft_limit(self):
         # The Leica serial protocol docs indicate that the following should work, as it does for x and y.  However,
         # it does not work.
 #       self.send_message(
-#           SET_UPPER_LIMIT, -1, async=False,
+#           SET_UPPER_LIMIT, -1, async_=False,
 #           intent="reset z soft max to maximum allowed value by sending SET_UPPER_LIMIT with the special argument value -1.")
         # So, we just use a value slightly larger than the location of the hard limit.  Unlike the x and y high soft limits,
         # the z high soft limit can be set to ridiculously large values far beyond the hard limit.  Resetting to a sane value
         # not much beyond the hard limit at least offers the user some idea of the largest meaningful value.
         counts = int(round(26.00001 / self._z_mm_per_count))
-        self.send_message(SET_UPPER_LIMIT, counts, async=False, intent="reset z soft max to a position just past z hard max")
+        self.send_message(SET_UPPER_LIMIT, counts, async_=False, intent="reset z soft max to a position just past z hard max")
         self._update_property('z_high_soft_limit', self.get_z_high_soft_limit())
 
     def stop_x(self):
         """Immediately cease movement of the stage along the x axis"""
-        self.send_message(BREAK_X, async=False, intent="stop stage movement along x axis")
+        self.send_message(BREAK_X, async_=False, intent="stop stage movement along x axis")
 
     def stop_y(self):
         """Immediately cease movement of the stage along the y axis"""
-        self.send_message(BREAK_Y, async=False, intent="stop stage movement along y axis")
+        self.send_message(BREAK_Y, async_=False, intent="stop stage movement along y axis")
 
     def stop_z(self):
         """Immediately cease movement of the stage along the z axis"""
-        self.send_message(BREAK_Z, async=False, intent="stop stage movement along z axis")
+        self.send_message(BREAK_Z, async_=False, intent="stop stage movement along z axis")
 
     def set_x_speed(self, speed):
         """Set the speed at which, when commanded to move to a specified position, the stage
@@ -375,19 +375,19 @@ class Stage(stand.LeicaComponent):
     def get_x_speed(self):
         """Get the speed at which, when commanded to move to a specified position, the stage
         moves along x-axis, in mm/second"""
-        counts = int(self.send_message(GET_SPEED_X, async=False, intent="get x auto move speed").response)
+        counts = int(self.send_message(GET_SPEED_X, async_=False, intent="get x auto move speed").response)
         return counts * self._x_mm_per_count_second
 
     def get_y_speed(self):
         """Get the speed at which, when commanded to move to a specified position, the stage
         moves along y-axis, in mm/second"""
-        counts = int(self.send_message(GET_SPEED_Y, async=False, intent="get y auto move speed").response)
+        counts = int(self.send_message(GET_SPEED_Y, async_=False, intent="get y auto move speed").response)
         return counts * self._y_mm_per_count_second
 
     def get_z_speed(self):
         """Get the speed at which, when commanded to move to a specified position, the stage
         moves along z-axis, in mm/second"""
-        counts = int(self.send_message(GET_SPEED_Z, async=False, intent="get z auto move speed").response)
+        counts = int(self.send_message(GET_SPEED_Z, async_=False, intent="get z auto move speed").response)
         return counts * self._z_mm_per_count * Z_SPEED_MM_PER_SECOND_PER_UNIT
 
     def move_along_x(self, speed):
@@ -467,33 +467,33 @@ class Stage(stand.LeicaComponent):
 
     def reinit_x(self):
         """Reinitialize x axis to correct for drift or "stuck" stage. Executes synchronously."""
-        self.send_message(INIT_X, async=False, intent="init stage x axis")
+        self.send_message(INIT_X, async_=False, intent="init stage x axis")
 
     def reinit_y(self):
         """Reinitialize y axis to correct for drift or "stuck" stage. Executes synchronously."""
-        self.send_message(INIT_Y, async=False, intent="init stage y axis")
+        self.send_message(INIT_Y, async_=False, intent="init stage y axis")
 
     def reinit_z(self):
         """Reinitialize z axis to correct for drift or "stuck" stage. Executes synchronously.
 
         CAUTION: Moves stage to top of z range, which could crash the objective if
         there is any obstruction at the current position."""
-        self.send_message(INIT_RANGE_Z, async=False, intent="init stage z axis")
+        self.send_message(INIT_RANGE_Z, async_=False, intent="init stage z axis")
         # now back off from the z position that the stage is left in, which is
         # the closest to the objective (dangerous!)
         self.set_z(self.get_z()- 5)
 
     def set_xy_fine_control(self, fine):
-        self.send_message(SET_XY_STEP_MODE, int(not fine), async=False)
+        self.send_message(SET_XY_STEP_MODE, int(not fine), async_=False)
 
     def set_z_fine_control(self, fine):
-        self.send_message(SET_Z_STEP_MODE, int(not fine), async=False)
+        self.send_message(SET_Z_STEP_MODE, int(not fine), async_=False)
 
     def get_xy_fine_control(self):
-        return not bool(int(self.send_message(GET_XY_STEP_MODE, async=False).response))
+        return not bool(int(self.send_message(GET_XY_STEP_MODE, async_=False).response))
 
     def get_z_fine_control(self):
-        return not bool(int(self.send_message(GET_Z_STEP_MODE, async=False).response))
+        return not bool(int(self.send_message(GET_Z_STEP_MODE, async_=False).response))
 
     def _on_xy_step_mode_event(self, response):
         self._update_property('xy_fine_control', not bool(int(response.response)))
@@ -507,7 +507,7 @@ class Stage(stand.LeicaComponent):
 
     def get_z_ramp(self):
         """Get z-axis ramp in mm/second^2"""
-        counts = int(self.send_message(GET_RAMP_Z, async=False, intent="get z ramp").response)
+        counts = int(self.send_message(GET_RAMP_Z, async_=False, intent="get z ramp").response)
         return counts * self._z_mm_per_count * Z_RAMP_MM_PER_SECOND_PER_SECOND_PER_UNIT
 
     def set_z_ramp(self, ramp):
@@ -654,7 +654,7 @@ class Stage(stand.LeicaComponent):
                     distances.append(d)
                     speeds.append(speed)
                     ramps.append(ramp)
-                with self.in_state(z_speed=speed, z_ramp=ramp, async=False):
+                with self.in_state(z_speed=speed, z_ramp=ramp, async_=False):
                     for d in test_distances:
                         time_move_to(z0 - d, d)
                         time_move_to(z0, d)

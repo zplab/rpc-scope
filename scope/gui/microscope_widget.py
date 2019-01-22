@@ -374,7 +374,7 @@ class MicroscopeWidget(device_widget.DeviceWidget):
                     return
                 if new_pos != get_pos():
                     try:
-                        set_pos(new_pos, async='fire_and_forget')
+                        set_pos(new_pos, async_='fire_and_forget')
                     except rpc_client.RPCError as e:
                         error = 'Could not set {} axis to {} ({}).'.format(axis_name, new_pos, e.args[0])
                         Qt.QMessageBox.warning(self, 'RPC Exception', error)

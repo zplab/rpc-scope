@@ -24,8 +24,8 @@ class ManualNosepiece(stand.LeicaComponent):
     # manually placed there by physical intervention.
 
     def _setup_device(self):
-        self._minp = int(self.send_message(GET_MIN_POS_OBJ, async=False, intent="get minimum objective turret position").response)
-        self._maxp = int(self.send_message(GET_MAX_POS_OBJ, async=False, intent="get maximum objective turret position").response)
+        self._minp = int(self.send_message(GET_MIN_POS_OBJ, async_=False, intent="get minimum objective turret position").response)
+        self._maxp = int(self.send_message(GET_MAX_POS_OBJ, async_=False, intent="get maximum objective turret position").response)
         self._mags = [None for i in range(self._maxp + 1)]
         self._mags_to_positions = collections.defaultdict(list)
         for p in range(self._minp, self._maxp+1):
@@ -40,14 +40,14 @@ class ManualNosepiece(stand.LeicaComponent):
         # NB: does nothing on stands with no correction filter (DMi8, maybe DM6?).
         self._set_objectives_intensities(255)
 
-        self.send_message(SET_OBJECTIVE_TURRET_EVENT_SUBSCRIPTIONS, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, async=False, intent="subscribe to objective turret position change events")
+        self.send_message(SET_OBJECTIVE_TURRET_EVENT_SUBSCRIPTIONS, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, async_=False, intent="subscribe to objective turret position change events")
         self._register_event_callback(GET_OBJPAR, self._on_turret_moved_event)
         self._update_property('position', self.get_position())
 
     def get_position(self):
         '''Current objective turret position. Note that 0 is special and indicates that the objective turret is
         between objective positions.'''
-        return int(self.send_message(GET_POS_OBJ, async=False, intent="get current objective turret position").response)
+        return int(self.send_message(GET_POS_OBJ, async_=False, intent="get current objective turret position").response)
 
     def get_position_min_max(self):
         return self._minp, self._maxp
@@ -68,7 +68,7 @@ class ManualNosepiece(stand.LeicaComponent):
 
     def get_immersion_mode(self):
         '''True if the microscope is in immersion mode.'''
-        return self.send_message(GET_IMM_DRY, async=False, intent="get current objective medium").response == 'I'
+        return self.send_message(GET_IMM_DRY, async_=False, intent="get current objective medium").response == 'I'
 
     def set_immersion_mode(self, immersion):
         '''If set to True, the microscope will be set to immersion mode.'''
@@ -92,7 +92,7 @@ class ManualNosepiece(stand.LeicaComponent):
         self._update_property('position', int(response.response.split()[0]))
 
     def _get_objpar(self, obj_pos, objpar_idx):
-        param = self.send_message(GET_OBJPAR, obj_pos, objpar_idx, async=False).response.split(' ')[2:]
+        param = self.send_message(GET_OBJPAR, obj_pos, objpar_idx, async_=False).response.split(' ')[2:]
         if len(param) == 1:
             return param[0]
         else:
@@ -143,7 +143,7 @@ class ManualNosepiece(stand.LeicaComponent):
     def _set_objectives_intensities(self, intensity):
         intensities = ' '.join([str(intensity)] * 16)
         for p in range(self._minp, self._maxp+1):
-            self.send_message(SET_OBJPAR, p, 14, intensities, async=False, intent="set per-microscopy-mode objective intensities")
+            self.send_message(SET_OBJPAR, p, 14, intensities, async_=False, intent="set per-microscopy-mode objective intensities")
 
 
 class MotorizedNosepiece(ManualNosepiece):
@@ -176,7 +176,7 @@ class MotorizedNosepieceWithSafeMode(MotorizedNosepiece):
     def get_safe_mode(self):
         '''True if the microscope must be explicitly set to "dry" or "immersion" mode before changing to
         a dry or immersion lens.'''
-        return self.send_message(GET_MODE, async=False, intent="get objective turret mode").response == '1'
+        return self.send_message(GET_MODE, async_=False, intent="get objective turret mode").response == '1'
 
     def set_safe_mode(self, mode):
         '''If set to True, the microscope must be explicitly set to "dry" or "immersion" mode before changing to

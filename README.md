@@ -28,7 +28,7 @@ set of message-manager classes that mind the serial port in a background thread
 and take care of sending messages to the serial port and calling the
 appropriate callbacks when messages are received. Any microscope components can
 be set to "synchronous" mode where functions don't return until the microscope
-is done executing them, or "async" mode where all functions return immediately,
+is done executing them, or "async_" mode where all functions return immediately,
 except wait() which will block until all previous outstanding functions are
 done executing.
 
@@ -137,7 +137,7 @@ and callbacks are matched up via a "key" generated based on the reply contents.)
 
 Each class that represents a part of the microscope is a subclass of
 `message_device.AsyncDevice`. This base class interacts with a `MessageManager`
-to send and receive messages either in an async mode (where seveal messages can
+to send and receive messages either in an async_ mode (where seveal messages can
 be sent before calling `wait()` to block until all have been replied to) or in
 synchronous mode where sending a message blocks until the reply for that
 message is received.

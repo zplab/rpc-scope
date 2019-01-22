@@ -24,7 +24,7 @@ def z_stack(scope, mm_range, num_steps, tl_enabled=False, **spectra_state):
     z_positions = numpy.linspace(z - mm_range/2, z + mm_range/2, num_steps)
     images = []
     exposure_sec = scope.camera.exposure_time / 1000
-    with scope.camera.image_sequence_acquisition(num_steps, trigger_mode='Software'), scope.stage.in_state(async=True):
+    with scope.camera.image_sequence_acquisition(num_steps, trigger_mode='Software'), scope.stage.in_state(async_=True):
         # parallelize stage movement and image transfer by dispatching movement
         # and image-retrieval and then waiting for the stage to finish.
         # Overall this will run a bit faster than it would by doing everything

@@ -30,9 +30,9 @@ class Stand(message_device.LeicaAsyncDevice, property_device.PropertyDevice):
         self._message_manager.pending_standalone_responses['9999'].append(lambda response: self._message_manager.pending_standalone_responses.pop('\0999'))
         self._message_manager.pending_standalone_responses['\0999'].append(lambda response: self._message_manager.pending_standalone_responses.pop('9999'))
         self._message_manager._send_message('\r')
-        self.send_message(SET_STAND_EVENT_SUBSCRIPTIONS, 1, 0, 0, 0, 0, 0, 0, 0, async=False, intent="subscribe to stand method change events")
+        self.send_message(SET_STAND_EVENT_SUBSCRIPTIONS, 1, 0, 0, 0, 0, 0, 0, 0, async_=False, intent="subscribe to stand method change events")
         self._register_event_callback(GET_ACT_METHOD, self._on_method_event)
-        r = self.send_message(GET_MODUL_TYPE, async=False, intent="get master model name and list of available function unit IDs").response.split(' ')
+        r = self.send_message(GET_MODUL_TYPE, async_=False, intent="get master model name and list of available function unit IDs").response.split(' ')
         self._model_name = r[0]
         self._available_function_unit_IDs = set(int(rv) for rv in r[1:])
 
@@ -48,7 +48,7 @@ class Stand(message_device.LeicaAsyncDevice, property_device.PropertyDevice):
     def get_all_microscopy_methods(self):
         """Returns a dict of microscopy method names to bool values indicating whether the associated
         microscopy method is available."""
-        method_mask = list(self.send_message(GET_ALL_METHODS, async=False, intent='get mask of available microscopy methods').response.strip())
+        method_mask = list(self.send_message(GET_ALL_METHODS, async_=False, intent='get mask of available microscopy methods').response.strip())
         method_mask.reverse()
         method_dict = {}
         for method, is_available in zip(microscopy_method_names.NAMES, list(method_mask)):
@@ -61,7 +61,7 @@ class Stand(message_device.LeicaAsyncDevice, property_device.PropertyDevice):
         return available_methods
 
     def get_active_microscopy_method(self):
-        method_idx = int(self.send_message(GET_ACT_METHOD, async=False, intent='get name of currently active microscopy method').response)
+        method_idx = int(self.send_message(GET_ACT_METHOD, async_=False, intent='get name of currently active microscopy method').response)
         return microscopy_method_names.NAMES[method_idx]
 
     def set_active_microscopy_method(self, microscopy_method_name):
@@ -76,31 +76,31 @@ class LeicaComponent(message_device.LeicaAsyncDevice, property_device.PropertyDe
         property_device.PropertyDevice.__init__(self, property_server, property_prefix)
         message_device.LeicaAsyncDevice.__init__(self, stand._message_manager)
 
-    # set async first when pushing, revert async last when popping
+    # set async_ first when pushing, revert async_ last when popping
     def _get_push_weights(self, state):
-        return {'async': -1}
+        return {'async_': -1}
 
     def _get_pop_weights(self, state):
-        return {'async': 1}
+        return {'async_': 1}
 
     def push_state(self, **state):
         """Set a number of device parameters at once using keyword arguments, while
         saving the old values of those parameters. pop_state() will restore those
         previous values. push_state/pop_state pairs can be nested arbitrarily.
 
-        If the device is in async mode, wait for the state to be set before
+        If the device is in async_ mode, wait for the state to be set before
         proceeding.
         """
         super().push_state(**state)
-        self.wait() # no-op if not in async, otherwise wait for all setting to be done.
+        self.wait() # no-op if not in async_, otherwise wait for all setting to be done.
 
     def pop_state(self):
         """Restore the most recent set of device parameters changed by a push_state()
         call.
 
-        If the device is in async mode, wait for the state to be restored before
+        If the device is in async_ mode, wait for the state to be restored before
         proceeding.
         """
         super().pop_state()
-        self.wait() # no-op if not in async, otherwise wait for all setting to be done.
+        self.wait() # no-op if not in async_, otherwise wait for all setting to be done.
 

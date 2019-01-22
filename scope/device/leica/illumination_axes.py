@@ -70,18 +70,18 @@ class FilterCube(enumerated_properties.DictProperty):
         return None if hw_value == 0 else self._hw_to_usr[hw_value]
 
     def _get_hw_to_usr(self):
-        min_pos = int(self._il.send_message(GET_MIN_POS_IL_TURRET, async=False, intent="get IL turret minimum position").response)
-        max_pos = int(self._il.send_message(GET_MAX_POS_IL_TURRET, async=False, intent="get IL turret maximum position").response)
+        min_pos = int(self._il.send_message(GET_MIN_POS_IL_TURRET, async_=False, intent="get IL turret minimum position").response)
+        max_pos = int(self._il.send_message(GET_MAX_POS_IL_TURRET, async_=False, intent="get IL turret maximum position").response)
         # Empty filter positions can have odd names, like '-' or '-1'. Filter them out directly.
         d = {}
         for i in range(min_pos, max_pos+1):
-            name = self._il.send_message(GET_CUBENAME, i, async=False, intent="get filter cube name").response[1:].strip()
+            name = self._il.send_message(GET_CUBENAME, i, async_=False, intent="get filter cube name").response[1:].strip()
             if len(name) != 0 and name not in {'-', '-1'}:
                 d[i] = name
         return d
 
     def _read(self):
-        return int(self._il.send_message(GET_POS_IL_TURRET, async=False, intent="get filter turret position").response.split(' ')[0])
+        return int(self._il.send_message(GET_POS_IL_TURRET, async_=False, intent="get filter turret position").response.split(' ')[0])
 
     def _write(self, value):
         self._il.send_message(POS_ABS_IL_TURRET, value, intent="set filter turret position")
@@ -93,11 +93,11 @@ class ILFieldWheel(enumerated_properties.DictProperty):
         super().__init__()
 
     def _get_hw_to_usr(self):
-        min_pos = int(self._il.send_message(GET_MIN_POS_LFWHEEL, async=False, intent="get IL field wheel minimum position").response)
-        max_pos = int(self._il.send_message(GET_MAX_POS_LFWHEEL, async=False, intent="get IL field wheel maximum position").response)
+        min_pos = int(self._il.send_message(GET_MIN_POS_LFWHEEL, async_=False, intent="get IL field wheel minimum position").response)
+        max_pos = int(self._il.send_message(GET_MAX_POS_LFWHEEL, async_=False, intent="get IL field wheel maximum position").response)
         d = {}
         for i in range(min_pos, max_pos+1):
-            pos, shape, size, *special = self._il.send_message(GET_LFWHEEL_PROPERTIES, i, async=False, intent="get IL field wheel property values name").response.split(' ')
+            pos, shape, size, *special = self._il.send_message(GET_LFWHEEL_PROPERTIES, i, async_=False, intent="get IL field wheel property values name").response.split(' ')
 
             name = '{}:{}'.format(self._shape_info[shape], size)
             if special:
@@ -106,7 +106,7 @@ class ILFieldWheel(enumerated_properties.DictProperty):
         return d
 
     def _read(self):
-        return int(self._il.send_message(GET_POS_LFWHEEL, async=False, intent="get IL field wheel position").response)
+        return int(self._il.send_message(GET_POS_LFWHEEL, async_=False, intent="get IL field wheel position").response)
 
     def _write(self, value):
         self._il.send_message(POS_ABS_LFWHEEL, value, intent="set IL field wheel position")
@@ -117,7 +117,7 @@ class _ShutterDeviceMixin:
 
     def get_shutter_open(self):
         '''True: shutter open, False: shutter closed.'''
-        shutter_open = self.send_message(GET_SHUTTER_LAMP, async=False, intent="get shutter openedness").response.split(' ')[self._shutter_idx]
+        shutter_open = self.send_message(GET_SHUTTER_LAMP, async_=False, intent="get shutter openedness").response.split(' ')[self._shutter_idx]
         shutter_open = int(shutter_open)
         if shutter_open == -1:
             raise RuntimeError('Shutter is in an invalid state.')
@@ -133,7 +133,7 @@ class IL(stand.LeicaComponent):
         self.get_filter_cube = self._filter_cube.get_value
         self.get_filter_cube_values = self._filter_cube.get_recognized_values
         self._update_property('filter_cube', self.get_filter_cube())
-        self.send_message(SET_IL_TURRET_EVENT_SUBSCRIPTIONS, 1, async=False, intent="subscribe to filter cube turret position change events")
+        self.send_message(SET_IL_TURRET_EVENT_SUBSCRIPTIONS, 1, async_=False, intent="subscribe to filter cube turret position change events")
         self._register_event_callback(GET_POS_IL_TURRET, self._on_turret_pos_event)
 
     def set_filter_cube(self, cube):
@@ -153,7 +153,7 @@ class FieldWheel_IL(_ShutterDeviceMixin, IL):
         self.get_field_wheel = self._field_wheel.get_value
         self.get_field_wheel_positions = self._field_wheel.get_recognized_values
         self.set_field_wheel = self._field_wheel.set_value
-        self.send_message(SET_LFWHEEL_EVENT_SUBSCRIPTIONS, 0, 1, async=False, intent="subscribe to field diaphragm disk position change events")
+        self.send_message(SET_LFWHEEL_EVENT_SUBSCRIPTIONS, 0, 1, async_=False, intent="subscribe to field diaphragm disk position change events")
         self._register_event_callback(GET_POS_LFWHEEL, self._on_lfwheel_position_change_event)
         self._update_property('field_wheel', self.get_field_wheel())
 
@@ -165,19 +165,19 @@ class TL(_ShutterDeviceMixin, stand.LeicaComponent):
     _shutter_idx = 0
     def _setup_device(self):
         super()._setup_device()
-        self.send_message(SET_KOND_EVENT_SUBSCRIPTIONS, 1, async=False, intent="subscribe to flapping condenser flap events")
+        self.send_message(SET_KOND_EVENT_SUBSCRIPTIONS, 1, async_=False, intent="subscribe to flapping condenser flap events")
         self._register_event_callback(GET_POS_KOND, self._on_condenser_flap_event)
         self._update_property('condenser_retracted', self.get_condenser_retracted())
-        self.send_message(SET_LFBL_TL_EVENT_SUBSCRIPTIONS, 0, 1, async=False, intent="subscribe to TL field diaphragm position change events")
+        self.send_message(SET_LFBL_TL_EVENT_SUBSCRIPTIONS, 0, 1, async_=False, intent="subscribe to TL field diaphragm position change events")
         self._register_event_callback(GET_POS_LFBL_TL, self._on_field_diaphragm_position_change_event)
         self._update_property('field_diaphragm', self.get_field_diaphragm())
-        self.send_message(SET_APBL_TL_EVENT_SUBSCRIPTIONS, 0, 1, async=False, intent="subscribe to TL aperture diaphragm position change events")
+        self.send_message(SET_APBL_TL_EVENT_SUBSCRIPTIONS, 0, 1, async_=False, intent="subscribe to TL aperture diaphragm position change events")
         self._register_event_callback(GET_POS_APBL_TL, self._on_aperture_diaphragm_position_change_event)
         self._update_property('aperture_diaphragm', self.get_aperture_diaphragm())
 
     def get_condenser_retracted(self):
         '''True: condenser head is deployed, False: condenser head is retracted.'''
-        deployed = int(self.send_message(GET_POS_KOND, async=False, intent="get condenser position").response)
+        deployed = int(self.send_message(GET_POS_KOND, async_=False, intent="get condenser position").response)
         if deployed == 2:
             logger.error('The condenser head is in an invalid state.')
         return not bool(deployed)
@@ -192,21 +192,21 @@ class TL(_ShutterDeviceMixin, stand.LeicaComponent):
         self._update_property('condenser_retracted', not bool(deployed))
 
     def get_field_diaphragm(self):
-        return int(self.send_message(GET_POS_LFBL_TL, async=False, intent="get field diaphragm position").response)
+        return int(self.send_message(GET_POS_LFBL_TL, async_=False, intent="get field diaphragm position").response)
 
     def set_field_diaphragm(self, position):
         self.send_message(POS_ABS_LFBL_TL, position, intent="set field diaphragm position")
 
     def get_field_diaphragm_range(self):
-        pos_min = int(self.send_message(GET_MIN_POS_LFBL_TL, async=False, intent="get field diaphragm min position").response)
-        pos_max = int(self.send_message(GET_MAX_POS_LFBL_TL, async=False, intent="get field diaphragm max position").response)
+        pos_min = int(self.send_message(GET_MIN_POS_LFBL_TL, async_=False, intent="get field diaphragm min position").response)
+        pos_max = int(self.send_message(GET_MAX_POS_LFBL_TL, async_=False, intent="get field diaphragm max position").response)
         return pos_min, pos_max
 
     def _on_field_diaphragm_position_change_event(self, response):
         self._update_property('field_diaphragm', int(response.response))
 
     def get_aperture_diaphragm(self):
-        return int(self.send_message(GET_POS_APBL_TL, async=False, intent="get aperture diaphragm position").response)
+        return int(self.send_message(GET_POS_APBL_TL, async_=False, intent="get aperture diaphragm position").response)
 
     def set_aperture_diaphragm(self, position):
         self.send_message(POS_ABS_APBL_TL, position, intent="set aperture diaphragm position")
@@ -215,8 +215,8 @@ class TL(_ShutterDeviceMixin, stand.LeicaComponent):
         self._update_property('aperture_diaphragm', int(response.response))
 
     def get_aperture_diaphragm_range(self):
-        pos_min = int(self.send_message(GET_MIN_POS_APBL_TL, async=False, intent="get aperture diaphragm min position").response)
-        pos_max = int(self.send_message(GET_MAX_POS_APBL_TL, async=False, intent="get aperture diaphragm max position").response)
+        pos_min = int(self.send_message(GET_MIN_POS_APBL_TL, async_=False, intent="get aperture diaphragm min position").response)
+        pos_max = int(self.send_message(GET_MAX_POS_APBL_TL, async_=False, intent="get aperture diaphragm max position").response)
         return pos_min, pos_max
 
 class ShutterWatcher(stand.LeicaComponent):
@@ -229,7 +229,7 @@ class ShutterWatcher(stand.LeicaComponent):
             0, # lamp step mode switched on/off
             1, # TL shutter open/closed
             1, # IL shutter open/closed
-            async=False,
+            async_=False,
             intent="subscribe to TL and IL shutter opened/closed events"
         )
         self._register_event_callback(GET_SHUTTER_LAMP, self._on_shutter_event)

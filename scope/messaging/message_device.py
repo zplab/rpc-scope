@@ -38,11 +38,11 @@ class Response:
 class AsyncDevice:
     """A class that uses a message_manager.MessageManager to deal with sending
     and receiving messages to and from some outside hardware device, potentially
-    in async mode."""
+    in async_ mode."""
 
     def __init__(self, message_manager):
         self._pending_responses = set()
-        self._async = False
+        self._async_ = False
         self._message_manager = message_manager
 
     def wait(self):
@@ -52,7 +52,7 @@ class AsyncDevice:
             response.wait()
 
     def has_pending(self):
-        """Return true if there are any responses to async messages still pending."""
+        """Return true if there are any responses to async_ messages still pending."""
         for response in self._pending_responses:
             # if any response is not ready, we know we're still pending
             if not response.ready.is_set():
@@ -60,21 +60,21 @@ class AsyncDevice:
         # all responses must be ready if we get to this point...
         return False
 
-    def set_async(self, async):
-        """If in async mode, send_message() returns None immediately; otherwise
+    def set_async_(self, async_):
+        """If in async_ mode, send_message() returns None immediately; otherwise
         it waits for the device to finish before returning the response value."""
-        if self._async and not async: # if setting async from True to False...
+        if self._async_ and not async_: # if setting async_ from True to False...
             self.wait() # ... don't let any pending events still be outstanding
-        self._async = async
+        self._async_ = async_
 
-    def get_async(self):
-        return self._async
+    def get_async_(self):
+        return self._async_
 
-    def send_message(self, message, async=None, response=None, coalesce=True):
+    def send_message(self, message, async_=None, response=None, coalesce=True):
         """Send the given message through the MessageManager.
 
-        If the parameter 'async' is not None, it will override the async mode
-        set with set_async(). If 'async' is the string 'fire_and_forget', then
+        If the parameter 'async_' is not None, it will override the async_ mode
+        set with set_async_(). If 'async_' is the string 'fire_and_forget', then
         the command will be sent and NOT added to the pending responses. Use
         with caution.
 
@@ -91,9 +91,9 @@ class AsyncDevice:
         if response is None:
             response = Response()
         self._message_manager.send_message(message, response_key, response, coalesce=coalesce)
-        if async == 'fire_and_forget':
+        if async_ == 'fire_and_forget':
             return
-        if async or (async is None and self._async):
+        if async_ or (async_ is None and self._async_):
             self._pending_responses.add(response)
         else:
             return response.wait()
@@ -179,13 +179,13 @@ class LeicaAsyncDevice(AsyncDevice):
         """Override in subclasses to perform device-specific setup."""
         pass
 
-    def send_message(self, command, *params, async=None, intent=None, coalesce=True):
+    def send_message(self, command, *params, async_=None, intent=None, coalesce=True):
         """Send a message to the Leica microscope
 
         Parameters:
             command: the command number for the Leica scope
             *params: a list of params to be coerced to strings and listed after command, separated by spaces
-            async: if not None, override the async instance variable.
+            async_: if not None, override the async_ instance variable.
             intent: should be helpful text describing the intent of the command.
             coalesce: see AsyncDevice.send_message documentation.
 
@@ -194,7 +194,7 @@ class LeicaAsyncDevice(AsyncDevice):
         """
         message = ' '.join([str(command)] + [str(param) for param in params]) + '\r'
         response = LeicaResponse(message[:-1], intent) # don't include \r from message...
-        return super().send_message(message, async, response=response, coalesce=coalesce)
+        return super().send_message(message, async_, response=response, coalesce=coalesce)
 
     def _generate_response_key(self, message):
         # return the message's function unit ID and command ID
@@ -218,15 +218,15 @@ class LeicaAsyncDevice(AsyncDevice):
 
 class AsyncDeviceNamespace:
     """Simple container class for building a hierarchy of AsyncDevice-like
-    objects which have wait() and set_async() methods. This container
-    implements wait() and set_async() methods that simply call the same on
+    objects which have wait() and set_async_() methods. This container
+    implements wait() and set_async_() methods that simply call the same on
     every object placed into its namespace.
 
     Toy example:
         scope = AsyncDeviceNamespace()
         scope.stage = LeicaDM6000Stage()
         scope.condensor = LeicaDM6000Condensor()
-        scope.set_async(True)
+        scope.set_async_(True)
         scope.stage.set_position(10,10,10)
         scope.condensor.set_field(7)
         scope.wait()
@@ -235,19 +235,19 @@ class AsyncDeviceNamespace:
         self._children = set()
 
     @staticmethod
-    def _is_async_capable(obj):
-        for async_func in ('wait', 'set_async', 'get_async'):
-            if not hasattr(obj, async_func):
+    def _is_async__capable(obj):
+        for async__func in ('wait', 'set_async_', 'get_async_'):
+            if not hasattr(obj, async__func):
                 return False
         return True
 
     def __setattr__(self, name, value):
-        if self._is_async_capable(value):
+        if self._is_async__capable(value):
             self._children.add(name)
         super().__setattr__(name, value)
 
     def __delattr__(self, name):
-        if self._is_async_capable(getattr(self, name)):
+        if self._is_async__capable(getattr(self, name)):
             self._children.remove(name)
         super().__delattr__(name)
 
@@ -255,15 +255,15 @@ class AsyncDeviceNamespace:
         for child in self._children:
             getattr(self, child).wait()
 
-    def set_async(self, async):
+    def set_async_(self, async_):
         for child in self._children:
-            getattr(self, child).set_async(async)
+            getattr(self, child).set_async_(async_)
 
-    def get_async(self):
-        asyncs = [getattr(self, child).get_async() for child in self._children]
-        if all(async is True for async in asyncs):
+    def get_async_(self):
+        async_s = [getattr(self, child).get_async_() for child in self._children]
+        if all(async_ is True for async_ in async_s):
             return True
-        elif all(async is False for async in asyncs):
+        elif all(async_ is False for async_ in async_s):
             return False
         else:
-            return "child devices have mixed async status"
+            return "child devices have mixed async_ status"

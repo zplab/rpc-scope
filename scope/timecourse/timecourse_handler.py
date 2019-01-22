@@ -143,7 +143,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         t0 = time.time()
         self.logger.info('Configuring acquisitions')
 
-        self.scope.async = False
+        self.scope.async_ = False
         # in 'TL BF' mode, condenser auto-retracts for 5x objective, and field/aperture get set appropriately
         # on objective switch. That gives a sane-ish default. Then allow specific customization of
         # these values later.
