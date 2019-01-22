@@ -77,7 +77,7 @@ FeatureStrings = [
     'SerialNumber',
     'SimplePreAmpGainControl', # deprecated on sona
     'SoftwareTrigger',
-    'SoftwareVersion',
+    'SoftwareVersion', # sona only ?
     'SpuriousNoiseFilter',
     'StaticBlemishCorrection', # zyla only
     'TemperatureControl',

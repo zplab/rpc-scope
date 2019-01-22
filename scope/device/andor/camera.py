@@ -83,7 +83,7 @@ class AndorEnum:
         self.values = set(self.index_to_value.values())
 
     def get_value(self):
-        return self.index_to_string[lowlevel.GetEnumIndex(self.feature)]
+        return self.index_to_value[lowlevel.GetEnumIndex(self.feature)]
 
     def set_value(self, value):
         if value not in self.values:
@@ -98,9 +98,9 @@ class AndorEnum:
 
 class AndorProp(dict):
     def __init__(self, at_feature, at_type, default=None, readonly=False):
-        super.__init__(at_feature=at_feature, at_type=at_type, default=default, readonly=readonly)
+        super().__init__(at_feature=at_feature, at_type=at_type, default=default, readonly=readonly)
 
-class CameraBase(property_device.PropertyDevice):
+class Camera(property_device.PropertyDevice):
     _DESCRIPTION = 'Andor camera'
     _EXPECTED_INIT_ERRORS = (lowlevel.AndorError,)
     _CAMERA_PROPERTIES = dict(
@@ -114,7 +114,7 @@ class CameraBase(property_device.PropertyDevice):
         bit_depth = AndorProp('BitDepth', 'Enum', readonly=True),
         current_timestamp = AndorProp('TimestampClock', 'Int', readonly=True),
         cycle_mode = AndorProp('CycleMode', 'Enum', default='Fixed'),
-        exposure_time = AndorProp('ExposureTime', 'Float', default=0.01),
+        exposure_time = AndorProp('ExposureTime', 'Float', default=10),
         fan = AndorProp('FanSpeed', 'Enum', readonly=True, default='On'),
         firmware_version = AndorProp('FirmwareVersion', 'String', readonly=True),
         frame_count = AndorProp('FrameCount', 'Int', default=1),
@@ -140,7 +140,7 @@ class CameraBase(property_device.PropertyDevice):
         sensor_width = AndorProp('SensorWidth', 'Float', readonly=True),
         serial_number = AndorProp('SerialNumber', 'String', readonly=True),
         shutter_mode = AndorProp('ElectronicShutteringMode', 'Enum', default='Rolling'),
-        software_version = AndorProp('SoftwareVersion', 'String', readonly=True),
+        #software_version = AndorProp('SoftwareVersion', 'String', readonly=True),
         spurious_noise_filter_enabled = AndorProp('SpuriousNoiseFilter', 'Bool', default=True),
         static_blemish_correction_enabled = AndorProp('StaticBlemishCorrection', 'Bool', default=True),
         temperature_status = AndorProp('TemperatureStatus', 'Enum', readonly=True),
@@ -183,7 +183,7 @@ class CameraBase(property_device.PropertyDevice):
         'cycle_mode',
         'frame_count',
         'frame_rate',
-        'frame_rate_range',
+        #'frame_rate_range',
         'max_interface_fps',
         'readout_time',
         'trigger_mode'
@@ -210,13 +210,13 @@ class CameraBase(property_device.PropertyDevice):
         # where prop is the AndorProp metadata dict, getter and setter are as expected,
         # and update(value) posts the new value to the property server.
         self._andor_properties = {}
-        names_and_props = list(self._CAMERA_PROPERTIES).items()
+        names_and_props = list(self._CAMERA_PROPERTIES.items())
         names_and_props += [(None, prop) for prop in self._HIDDEN_PROPERTIES]
         for py_name, prop in names_and_props:
             getter, setter, updater = self._add_andor_property(py_name, **prop)
             self._andor_properties[prop['at_feature']] = prop, getter, setter, updater
             if py_name == 'sensor_gain': # grab this setter for use later
-                self._set_sensor_gain = setter
+                self._set_sensor_gain_feature = prop['at_feature']
 
         self.return_to_default_state()
 
@@ -240,16 +240,16 @@ class CameraBase(property_device.PropertyDevice):
         self._latest_data = None
 
     def _timer_update_temp(self):
-        getter, setter, updater = self._andor_properties['SensorTemperature']
+        prop, getter, setter, updater = self._andor_properties['SensorTemperature']
         while self._timer_running:
             updater(getter())
             time.sleep(self._sleep_time)
 
     def _add_andor_property(self, py_name, at_feature, at_type, default, readonly):
         if at_type == 'Enum':
-            getter, setter, valid = _andor_enum(at_feature)
+            getter, setter, valid = self._andor_enum(at_feature)
         else:
-            getter, setter, valid = _andor_property(at_feature, at_type)
+            getter, setter, valid = self._andor_property(at_feature, at_type)
 
         if py_name is None:
             updater = None
@@ -257,16 +257,16 @@ class CameraBase(property_device.PropertyDevice):
             updater = self._add_property(py_name, getter())
             getter_name = 'get_'+py_name
             setter_name = 'set_'+py_name
-            if not hasattr(self, getter_name):
+            if hasattr(self, getter_name):
+                getter = getattr(self, getter_name)
+            else:
                 setattr(self, getter_name, getter)
             if valid is not None:
                 setattr(self, getter_name + valid[0], valid[1])
-            if not readonly and not hasattr(self, setter_name):
-                def wrapper_setter(value):
-                    with self.in_state(live_mode=False):
-                        setter(value)
-                        self._maybe_update_frame_rate_and_range(at_feature)
-                setattr(self, setter_name, wrapper_setter)
+            if hasattr(self, setter_name):
+                setter = getattr(self, setter_name)
+            elif not readonly:
+                setattr(self, setter_name, setter)
         return getter, setter, updater
 
     def _andor_enum(self, at_feature):
@@ -276,7 +276,7 @@ class CameraBase(property_device.PropertyDevice):
         valid = '_values', enum.get_values_validity
         return enum.get_value, enum.set_value, valid
 
-    def _andor_property(at_feature, at_type):
+    def _andor_property(self, at_feature, at_type):
         '''Directly expose numeric or string camera setting.'''
         andor_getter = getattr(lowlevel, 'Get'+at_type)
         def getter():
@@ -305,7 +305,11 @@ class CameraBase(property_device.PropertyDevice):
             valid = '_range', range_getter
         else:
             valid = None
-        setter = getattr(lowlevel, 'Set'+at_type)
+        andor_setter = getattr(lowlevel, 'Set'+at_type)
+        def setter(value):
+            with self.in_state(live_mode=False):
+                andor_setter(at_feature, value)
+                self._maybe_update_frame_rate_and_range(at_feature)
         return getter, setter, valid
 
     def _andor_callback(self, camera_handle, at_feature, context):
@@ -457,7 +461,7 @@ class CameraBase(property_device.PropertyDevice):
 
     def set_sensor_gain(self, value):
         with self.in_state(live_mode=False):
-            self._set_sensor_gain(value)
+            lowlevel.SetEnumString(self._set_sensor_gain_feature, value)
             lowlevel.SetEnumString('PixelEncoding', self._GAIN_TO_ENCODING[value])
 
     def get_aoi(self):
