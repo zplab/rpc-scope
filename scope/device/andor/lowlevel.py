@@ -12,7 +12,7 @@ from .wrapper import *
 # listed in the Andor SDK documentation. The value given for the Feature argument to functions
 # provided by this module should be a string appearing in this list.
 FeatureStrings = [
-    'AccumulateCount',
+    'AccumulateCount', # zyla only
     'AcquisitionStart',
     'AcquisitionStop',
     'AOIBinning',
@@ -24,18 +24,17 @@ FeatureStrings = [
     'AOIVBin',
     'AOIWidth',
     'AuxiliaryOutSource',
-    'BaselineLevel',
+    'Baseline',
     'BitDepth',
     'BufferOverflowEvent',
     'BytesPerPixel',
     'CameraAcquiring',
-    'CameraDump',
+    'CameraFamily', # sona only
     'CameraModel',
     'CameraName',
-    'ControllerID',
+    'CameraPresent',
     'CycleMode',
     'DeviceCount',
-    'DeviceVideoIndex',
     'ElectronicShutteringMode',
     'EventEnable',
     'EventsMissedEvent',
@@ -43,15 +42,18 @@ FeatureStrings = [
     'ExposureTime',
     'ExposureEndEvent',
     'ExposureStartEvent',
+    'ExternalTriggerDelay',
     'FanSpeed',
     'FirmwareVersion',
     'FrameCount',
     'FrameRate',
     'FullAOIControl',
+    'GainMode', # sona only
     'ImageSizeBytes',
     'InterfaceType',
     'IOInvert',
     'IOSelector',
+    'LogLevel',
     'LUTIndex',
     'LUTValue',
     'MaxInterfaceTransferRate',
@@ -59,30 +61,25 @@ FeatureStrings = [
     'MetadataFrame',
     'MetadataTimestamp',
     'Overlap',
-    'PixelCorrection',
     'PixelEncoding',
     'PixelHeight',
     'PixelReadoutRate',
     'PixelWidth',
-    'PreAmpGain',
-    'PreAmpGainChannel',
-    'PreAmpGainControl',
-    'PreAmpGainSelector',
     'ReadoutTime',
-    'RollingShutterGlobalClear',
+    'RollingShutterGlobalClear', # zyla only
     'RowNExposureEndEvent',
     'RowNExposureStartEvent',
+    'RowReadTime',
     'SensorCooling',
     'SensorHeight',
     'SensorTemperature',
     'SensorWidth',
     'SerialNumber',
-    'SimplePreAmpGainControl',
+    'SimplePreAmpGainControl', # deprecated on sona
     'SoftwareTrigger',
     'SoftwareVersion',
     'SpuriousNoiseFilter',
-    'SynchronousTriggering',
-    'TargetSensorTemperature',
+    'StaticBlemishCorrection', # zyla only
     'TemperatureControl',
     'TemperatureStatus',
     'TimestampClock',
@@ -95,7 +92,7 @@ FeatureStrings = [
 
 _AT_HANDLE_SYSTEM = 1
 
-def _init_core_lib(corepath):
+def _init_core_lib(corepath='libatcore.so'):
     if wrapper._at_core_lib is not None:
         return
 
@@ -104,7 +101,7 @@ def _init_core_lib(corepath):
     wrapper._at_core_lib.AT_InitialiseLibrary()
     atexit.register(wrapper._at_core_lib.AT_FinaliseLibrary)
 
-def _init_util_lib(utilpath):
+def _init_util_lib(utilpath='libatutility.so'):
     if wrapper._at_util_lib is not None:
         return
 
@@ -113,19 +110,27 @@ def _init_util_lib(utilpath):
     wrapper._at_util_lib.AT_InitialiseUtilityLibrary()
     atexit.register(wrapper._at_util_lib.AT_FinaliseUtilityLibrary)
 
+def list_cameras():
+    devices_attached = wrapper._at_core_lib.AT_GetInt(_AT_HANDLE_SYSTEM, 'DeviceCount')
+    cameras = []
+    for i in range(devices_attached):
+        handle = wrapper._at_core_lib.AT_Open(i)
+        cameras.append(wrapper._at_core_lib.AT_GetString(handle, 'CameraModel'))
+        wrapper._at_core_lib.AT_Close(handle)
+    return cameras
+
 def _init_camera(desired_camera):
     if wrapper._at_camera_handle is not None:
         return
-
-    devices_attached = wrapper._at_core_lib.AT_GetInt(_AT_HANDLE_SYSTEM, "DeviceCount")
-    if devices_attached == 0:
-        raise AndorError('No Andor SDK3 devices detected. Is the camera turned on?')
+    devices_attached = wrapper._at_core_lib.AT_GetInt(_AT_HANDLE_SYSTEM, 'DeviceCount')
     # Even on the scope machine, the default Andor configuration includes two
     # virtual cameras, for a total of three camera devices. A hardware camera
     # will take device index 0, provided you have only one hardware camera, and
-    # we are very clearly working under this assumption. We might then test
-    # this assumption by querying the camera's name and ensuring that it matches
-    # the name of our hardware camera:
+    # we are very clearly working under this assumption. To be sure, we then query
+    # the camera's name and ensuring that it matches the name of our camera.
+    if devices_attached < 3:
+        raise AndorError('No Andor cameras detected. Is the camera turned on?')
+
     wrapper._at_camera_handle = wrapper._at_core_lib.AT_Open(0)
     actual_camera = GetString('CameraModel')
     if actual_camera != desired_camera:
@@ -141,7 +146,6 @@ def initialize(desired_camera):
     matches the desired camera model name. (If the camera is turned off, Andor
     will often provide a "simulated camera" instead; this check avoids that
     gotcha.)"""
-    _init_core_lib('libatcore.so')
-    _init_util_lib('libatutility.so')
+    _init_core_lib()
+    _init_util_lib()
     _init_camera(desired_camera)
-

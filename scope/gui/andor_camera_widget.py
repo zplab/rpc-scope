@@ -12,29 +12,6 @@ FLOAT_MIN, FLOAT_MAX, FLOAT_DECIMALS = 0, None, 3
 class AndorCameraWidget(device_widget.DeviceWidget):
     PROPERTY_ROOT = 'scope.camera.'
 
-    PROPERTIES = [ # list of properties to display, and logical range info if necessary
-        'is_acquiring',
-        'temperature_status',
-        'sensor_temperature',
-        'exposure_time',
-        'binning',
-        'aoi_left',
-        'aoi_top',
-        'aoi_width',
-        'aoi_height',
-        'sensor_gain',
-        'readout_rate',
-        'shutter_mode',
-        'overlap_enabled',
-        'cycle_mode',
-        'frame_count',
-        'frame_rate',
-        'frame_rate_range',
-        'max_interface_fps',
-        'readout_time',
-        'trigger_mode'
-    ]
-
     UNITS = {
         'exposure_time': 'ms',
         'frame_rate': 'fps',
@@ -53,8 +30,8 @@ class AndorCameraWidget(device_widget.DeviceWidget):
 
     def build_gui(self):
         self.setWindowTitle('Camera')
-        properties = ['live_mode'] + self.PROPERTIES
-        property_types = dict(self.scope.camera.andor_property_types)
+        properties = ['live_mode'] + self.scope.camera.basic_properties
+        property_types = dict(self.scope.camera.camera_properties)
         property_types['live_mode'] = ('Bool', False)
         self.add_property_rows(properties, property_types)
 
@@ -191,5 +168,5 @@ class AndorAdvancedCameraWidget(AndorCameraWidget):
     def build_gui(self):
         self.setWindowTitle('Adv. Camera')
         property_types = dict(self.scope.camera.andor_property_types)
-        advanced_properties = sorted(property_types.keys() - set(self.PROPERTIES))
+        advanced_properties = sorted(property_types.keys() - set(self.scope.camera.basic_properties))
         self.add_property_rows(advanced_properties, property_types)
