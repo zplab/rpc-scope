@@ -12,30 +12,19 @@ FLOAT_MIN, FLOAT_MAX, FLOAT_DECIMALS = 0, None, 3
 class AndorCameraWidget(device_widget.DeviceWidget):
     PROPERTY_ROOT = 'scope.camera.'
 
-    UNITS = {
-        'exposure_time': 'ms',
-        'frame_rate': 'fps',
-        'sensor_temperature': '°C',
-        'readout_time': 'ms',
-        'max_interface_fps': 'fps'
-    }
-
-    RANGE_HINTS = {
-        'exposure_time': (0.001, 30000, 3)
-    }
-
     def __init__(self, scope, parent=None):
         super().__init__(scope, parent)
+        self.camera_properties = dict(self.scope.camera.camera_properties)
         self.build_gui()
 
     def build_gui(self):
         self.setWindowTitle('Camera')
         properties = ['live_mode'] + self.scope.camera.basic_properties
-        property_types = dict(self.scope.camera.camera_properties)
-        property_types['live_mode'] = ('Bool', False)
-        self.add_property_rows(properties, property_types)
+        self.camera_properties['live_mode'] = dict(andor_type='Bool', read_only=False,
+                units=None, range_hint=None)
+        self.add_property_rows(properties)
 
-    def add_property_rows(self, properties, property_types):
+    def add_property_rows(self, properties):
         form = Qt.QFormLayout()
         form.setContentsMargins(0, 0, 0, 0)
         form.setVerticalSpacing(5)
@@ -43,27 +32,30 @@ class AndorCameraWidget(device_widget.DeviceWidget):
         form.setFieldGrowthPolicy(Qt.QFormLayout.ExpandingFieldsGrow)
         self.setLayout(form)
         for row, property in enumerate(properties):
-            type, readonly = property_types.get(property, ('String', True)) # if the property type isn't in the dict, assume its a readonly string
-            self.make_widgets_for_property(row, property, type, readonly)
+            prop_data = self.camera_properties[property]
+            self.make_widgets_for_property(row, property, prop_data)
 
-    def make_widgets_for_property(self, row, property, type, readonly):
-        widget = self.make_widget(property, type, readonly)
-        if property in self.UNITS:
-            unit_label = Qt.QLabel(self.UNITS[property])
+    def make_widgets_for_property(self, row, property, prop_data):
+        widget = self.make_widget(property, prop_data)
+        units = prop_data['units']
+        if units is not None:
+            unit_label = Qt.QLabel(units)
             layout = Qt.QHBoxLayout()
             layout.addWidget(widget)
             layout.addWidget(unit_label)
             widget = layout
         self.layout().addRow(property + ':', widget)
 
-    def make_widget(self, property, type, readonly):
-        if readonly:
+    def make_widget(self, property, prop_data):
+        if prop_data['read_only']:
             return self.make_readonly_widget(property)
-        elif type in {'Int', 'Float'}:
-            return self.make_numeric_widget(property, type)
-        elif type == 'Enum':
+
+        andor_type = prop_data['andor_type']
+        if andor_type in {'Int', 'Float'}:
+            return self.make_numeric_widget(property, prop_data)
+        elif andor_type == 'Enum':
             return self.make_enum_widget(property)
-        elif type == 'Bool':
+        elif andor_type == 'Bool':
             return self.make_bool_widget(property)
         else: # we'll just treat it as readonly and show a string repr
             return self.make_readonly_widget(property)
@@ -73,13 +65,13 @@ class AndorCameraWidget(device_widget.DeviceWidget):
         self.subscribe(self.PROPERTY_ROOT + property, callback=lambda value: widget.setText(str(value)), readonly=True)
         return widget
 
-    def make_numeric_widget(self, property, type):
+    def make_numeric_widget(self, property, prop_data):
         widget = Qt.QLineEdit()
-        widget.setValidator(self.get_numeric_validator(property, type))
+        widget.setValidator(self.get_numeric_validator(property, prop_data))
         update = self.subscribe(self.PROPERTY_ROOT + property, callback=lambda value: widget.setText(str(value)))
         if update is None:
             raise TypeError('{} is not a writable property!'.format(property))
-        coerce_type = int if type == 'Int' else float
+        coerce_type = int if prop_data['andor_type'] == 'Int' else float
         def editing_finished():
             try:
                 value = coerce_type(widget.text())
@@ -102,19 +94,21 @@ class AndorCameraWidget(device_widget.DeviceWidget):
         widget.editingFinished.connect(editing_finished)
         return widget
 
-    def get_numeric_validator(self, property, type):
-        if type == 'Float':
+    def get_numeric_validator(self, property, prop_data):
+        andor_type = prop_data['andor_type']
+        range_hint = prop_data['range_hint']
+        if andor_type == 'Float':
             validator = Qt.QDoubleValidator()
-            if property in self.RANGE_HINTS:
-                min, max, decimals = self.RANGE_HINTS[property]
+            if range_hint is not None:
+                min, max, decimals = range_hint
             else:
                 min, max, decimals = FLOAT_MIN, FLOAT_MAX, FLOAT_DECIMALS
             if decimals is not None:
                 validator.setDecimals(decimals)
-        if type == 'Int':
+        if andor_type == 'Int':
             validator = Qt.QIntValidator()
-            if property in self.RANGE_HINTS:
-                min, max = self.RANGE_HINTS[property]
+            if range_hint is not None:
+                min, max = range_hint
             else:
                 min, max = INT_MIN, INT_MAX
         if min is not None:

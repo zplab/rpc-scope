@@ -103,27 +103,6 @@ class AndorProp(dict):
 class CameraBase(property_device.PropertyDevice):
     _DESCRIPTION = 'Andor camera'
     _EXPECTED_INIT_ERRORS = (lowlevel.AndorError,)
-    _BASIC_PROPERTIES = [ # minimal set of properties to concern oneself with (e.g. from a GUI)
-        'is_acquiring',
-        'temperature_status',
-        'sensor_temperature',
-        'exposure_time',
-        'binning',
-        'aoi_left',
-        'aoi_top',
-        'aoi_width',
-        'aoi_height',
-        'sensor_gain',
-        'readout_rate',
-        'overlap_enabled',
-        'cycle_mode',
-        'frame_count',
-        'frame_rate',
-        'frame_rate_range',
-        'max_interface_fps',
-        'readout_time',
-        'trigger_mode'
-    ]
     _CAMERA_PROPERTIES = dict(
         aoi_height = AndorProp('AOIHeight', 'Int'),
         aoi_left = AndorProp('AOILeft', 'Int'),
@@ -188,6 +167,37 @@ class CameraBase(property_device.PropertyDevice):
         '16-bit (low noise & high well capacity)': 'Mono16'
     }
     _IO_PINS = ['Fire 1', 'Fire N', 'Aux Out 1', 'Arm', 'External Trigger']
+    _BASIC_PROPERTIES = [ # minimal set of properties to concern oneself with (e.g. from a GUI)
+        'is_acquiring',
+        'temperature_status',
+        'sensor_temperature',
+        'exposure_time',
+        'binning',
+        'aoi_left',
+        'aoi_top',
+        'aoi_width',
+        'aoi_height',
+        'sensor_gain',
+        'readout_rate',
+        'overlap_enabled',
+        'cycle_mode',
+        'frame_count',
+        'frame_rate',
+        'frame_rate_range',
+        'max_interface_fps',
+        'readout_time',
+        'trigger_mode'
+    ]
+    _UNITS = {
+        'exposure_time': 'ms',
+        'frame_rate': 'fps',
+        'sensor_temperature': '°C',
+        'readout_time': 'ms',
+        'max_interface_fps': 'fps'
+    }
+    _RANGE_HINTS = {
+        'exposure_time': (0.001, 30000, 3)
+    }
 
     def __init__(self, property_server=None, property_prefix=''):
         super().__init__(property_server, property_prefix)
@@ -335,11 +345,20 @@ class CameraBase(property_device.PropertyDevice):
             lowlevel.SetBool('IOInvert', False)
 
     def get_camera_properties(self):
-        """Return a dict mapping the property names to a pair of:
-        (andor_type, read_only), where andor_type is a one of 'Int', 'String',
-        'Bool', 'Float', or 'Enum', and read_only is a boolean value."""
-        return {py_name: (prop['at_type'], prop['readonly'])
-            for py_name, prop in self._CAMERA_PROPERTIES.items()}
+        """Return a dict mapping the property names to a dict with keys:
+        (andor_type, read_only, units, range_hint), where andor_type is one of
+        'Int', 'String', 'Bool', 'Float', or 'Enum'; read_only is a boolean;
+        units is None or the name of the relevant units; and range_hint is None
+        or a hint as to the data range."""
+        properties = {}
+        for py_name, prop in self._CAMERA_PROPERTIES.items():
+            andor_type = prop['at_type']
+            read_only = prop['readonly']
+            units = self._UNITS.get(py_name)
+            range_hint = self._RANGE_HINTS.get(py_name)
+            properties[py_name] = dict(andor_type=andor_type, read_only=read_only,
+                units=units, range_hint=range_hint)
+        return properties
 
     def get_basic_properties(self):
         return self._BASIC_PROPERTIES
