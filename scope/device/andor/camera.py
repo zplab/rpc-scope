@@ -133,7 +133,7 @@ class Camera(property_device.PropertyDevice):
         readout_time = AndorProp('ReadoutTime', 'Float', readonly=True),
         row_read_time = AndorProp('RowReadTime', 'Float', readonly=True),
         selected_io_pin_inverted = AndorProp('IOInvert', 'Bool'),
-        sensor_cooling_enabled = AndorProp('SensorCooling', 'Bool', readonly=True),
+        sensor_cooling_enabled = AndorProp('SensorCooling', 'Bool', default=True, readonly=True),
         sensor_gain = AndorProp('SimplePreAmpGainControl', 'Enum', default='16-bit (low noise & high well capacity)'),
         sensor_height = AndorProp('SensorHeight', 'Float', readonly=True),
         sensor_temperature = AndorProp('SensorTemperature', 'Float', readonly=True),
@@ -263,7 +263,9 @@ class Camera(property_device.PropertyDevice):
             def updater():
                 prop_update(getter())
             if valid is not None:
-                setattr(self, getter_name + valid[0], valid[1])
+                valid_name = getter_name + valid[0]
+                if not hasattr(self, valid_name):
+                    setattr(self, valid_name, valid[1])
             if hasattr(self, setter_name):
                 setter = getattr(self, setter_name)
             elif not readonly:
@@ -374,7 +376,7 @@ class Camera(property_device.PropertyDevice):
         update the range and set the frame rate to the max possible."""
         if at_feature in self._PROPERTIES_THAT_CAN_CHANGE_FRAME_RATE_RANGE:
             min, max = self.get_frame_rate_range()
-            self._update_property('frame_rate_range',  '[{:.5f}, {:.5f}]'.format(min, max))
+            self._update_property('frame_rate_range', (min, max))
             if lowlevel.IsWritable('FrameRate'):
                 lowlevel.SetFloat('FrameRate', max)
                 self._update_property('frame_rate', max)

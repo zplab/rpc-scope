@@ -60,12 +60,12 @@ class AndorCameraWidget(device_widget.DeviceWidget):
         widget = Qt.QLabel()
         if prop.endswith('_range'):
             def receive_update(value):
-                mx, mn = value
-                widget.setText(f'{mn:.3g}\N{THIN SPACE}\N{EN DASH}\N{THIN SPACE}{mx:.3g}')
+                mn, mx = value
+                widget.setText(f'{mn:.6g} \N{EN DASH} {mx:.6g}')
         else:
             def receive_update(value):
                 if isinstance(value, float):
-                    text = f'{value:.3g}'
+                    text = f'{value:.6g}'
                 else:
                     text = str(value)
                 widget.setText(text)
@@ -84,7 +84,7 @@ class AndorCameraWidget(device_widget.DeviceWidget):
         widget = Qt.QLineEdit()
         widget.setValidator(validator)
         def receive_update(value):
-            widget.setText(f'{value:.3g}')
+            widget.setText(f'{value:.6g}')
 
         update = self.subscribe(self.PROPERTY_ROOT + prop, callback=receive_update)
         if update is None:
@@ -103,11 +103,12 @@ class AndorCameraWidget(device_widget.DeviceWidget):
                         update(valid_min)
                     elif value > valid_max:
                         update(valid_max)
-                elif e.args[0].find('NOTWRITABLE') != -1:
-                    error = 'Given the camera state, {} is not modifiable.'.format(prop)
                 else:
-                    error = 'Could not set {} ({}).'.format(prop, e.args[0])
-                Qt.QMessageBox.warning(self, 'Invalid Value', error)
+                    if e.args[0].find('NOTWRITABLE') != -1:
+                        error = 'Given the camera state, {} is not modifiable.'.format(prop)
+                    else:
+                        error = 'Could not set {} ({}).'.format(prop, e.args[0])
+                    Qt.QMessageBox.warning(self, 'Invalid Value', error)
 
         widget.editingFinished.connect(editing_finished)
         return widget
