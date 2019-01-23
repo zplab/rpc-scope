@@ -168,6 +168,7 @@ class Camera(property_device.PropertyDevice):
     }
     _IO_PINS = ['Fire 1', 'Fire N', 'Aux Out 1', 'Arm', 'External Trigger']
     _BASIC_PROPERTIES = [ # minimal set of properties to concern oneself with (e.g. from a GUI)
+        'live_mode',
         'is_acquiring',
         'temperature_status',
         'sensor_temperature',
@@ -183,7 +184,7 @@ class Camera(property_device.PropertyDevice):
         'cycle_mode',
         'frame_count',
         'frame_rate',
-        #'frame_rate_range',
+        'frame_rate_range',
         'max_interface_fps',
         'readout_time',
         'trigger_mode'
@@ -195,9 +196,6 @@ class Camera(property_device.PropertyDevice):
         'readout_time': 'ms',
         'max_interface_fps': 'fps'
     }
-    _RANGE_HINTS = {
-        'exposure_time': (0.001, 30000, 3)
-    }
 
     def __init__(self, property_server=None, property_prefix=''):
         super().__init__(property_server, property_prefix)
@@ -206,27 +204,28 @@ class Camera(property_device.PropertyDevice):
         self._live_mode = False
 
         # initialize properties
-        # _andor_properties maps Andor property names (CamelCase) to (prop, getter, setter, update),
-        # where prop is the AndorProp metadata dict, getter and setter are as expected,
-        # and update(value) posts the new value to the property server.
-        self._andor_properties = {}
+        # _updaters maps Andor property names to a function that will update the scope clients as to the new value
+        # _defaulters is a list of functions to call to return the camera to the default state
+        self._updaters = {}
+        self._defaulters = []
         names_and_props = list(self._CAMERA_PROPERTIES.items())
         names_and_props += [(None, prop) for prop in self._HIDDEN_PROPERTIES]
         for py_name, prop in names_and_props:
-            getter, setter, updater = self._add_andor_property(py_name, **prop)
-            self._andor_properties[prop['at_feature']] = prop, getter, setter, updater
-            if py_name == 'sensor_gain': # grab this setter for use later
+            updater, defaulter = self._add_andor_property(py_name, **prop)
+            if updater is not None:
+                self._updaters[prop['at_feature']] = updater
+            if defaulter is not None:
+                self._defaulters.append(defaulter)
+            if py_name == 'sensor_gain':
+                # grab this property name for later use because it differs on different camera models
                 self._set_sensor_gain_feature = prop['at_feature']
 
         self.return_to_default_state()
 
         if property_server:
             self._c_callback = lowlevel.FeatureCallback(self._andor_callback)
-            for at_feature, (prop, getter, setter, update) in self._andor_properties.items():
-                if update is not None:
-                    # if there's an update function (i.e. this is a property that we want python to track)
-                    # add a callback when the property changes.
-                    lowlevel.RegisterFeatureCallback(at_feature, self._c_callback, 0)
+            for at_feature in self._updaters.keys():
+                lowlevel.RegisterFeatureCallback(at_feature, self._c_callback, 0)
 
             self._sleep_time = 10
             self._timer_running = True
@@ -240,9 +239,9 @@ class Camera(property_device.PropertyDevice):
         self._latest_data = None
 
     def _timer_update_temp(self):
-        prop, getter, setter, updater = self._andor_properties['SensorTemperature']
+        updater = self._updaters['SensorTemperature']
         while self._timer_running:
-            updater(getter())
+            updater()
             time.sleep(self._sleep_time)
 
     def _add_andor_property(self, py_name, at_feature, at_type, default, readonly):
@@ -254,20 +253,28 @@ class Camera(property_device.PropertyDevice):
         if py_name is None:
             updater = None
         else:
-            updater = self._add_property(py_name, getter())
             getter_name = 'get_'+py_name
             setter_name = 'set_'+py_name
             if hasattr(self, getter_name):
                 getter = getattr(self, getter_name)
             else:
                 setattr(self, getter_name, getter)
+            prop_update = self._add_property(py_name, getter())
+            def updater():
+                prop_update(getter())
             if valid is not None:
                 setattr(self, getter_name + valid[0], valid[1])
             if hasattr(self, setter_name):
                 setter = getattr(self, setter_name)
             elif not readonly:
                 setattr(self, setter_name, setter)
-        return getter, setter, updater
+
+        if default is None:
+            defaulter = None
+        else:
+            def defaulter():
+                setter(default)
+        return updater, defaulter
 
     def _andor_enum(self, at_feature):
         """Expose a camera setting presented by the Andor API as an enum (via GetEnumIndex,
@@ -314,17 +321,15 @@ class Camera(property_device.PropertyDevice):
 
     def _andor_callback(self, camera_handle, at_feature, context):
         try:
-            prop, getter, setter, update = self._andor_properties[at_feature]
-            update(getter())
+            self._updaters[at_feature]()
         except:
             logger.log_exception('Error in andor callback:')
         return lowlevel.AT_CALLBACK_SUCCESS
 
     def __del__(self):
         if self._property_server:
-            for at_feature, (prop, getter, setter, update) in self._andor_properties.items():
-                if update is not None: # if we registered a callback in the first place
-                    lowlevel.UnregisterFeatureCallback(at_feature, self._c_callback, 0)
+            for at_feature in self._updaters.keys():
+                lowlevel.UnregisterFeatureCallback(at_feature, self._c_callback, 0)
 
     def return_to_default_state(self):
         """Set the camera to its default, baseline state. Always a good idea to do before doing anything else."""
@@ -338,10 +343,8 @@ class Camera(property_device.PropertyDevice):
             pass
         lowlevel.Flush()
         self.set_trigger_mode('Internal') # overlap can't be set in software triggering mode
-        for prop, getter, setter, update in self._andor_properties.values():
-            default = prop['default']
-            if default is not None:
-                setter(default)
+        for defaulter in self._defaulters:
+            defaulter()
         self.set_trigger_mode('Software') # software is default triggering mode
         self.full_aoi()
         for io_pin in self._IO_PINS:
@@ -359,9 +362,8 @@ class Camera(property_device.PropertyDevice):
             andor_type = prop['at_type']
             read_only = prop['readonly']
             units = self._UNITS.get(py_name)
-            range_hint = self._RANGE_HINTS.get(py_name)
-            properties[py_name] = dict(andor_type=andor_type, read_only=read_only,
-                units=units, range_hint=range_hint)
+            properties[py_name] = dict(andor_type=andor_type, read_only=read_only, units=units)
+        properties['live_mode'] = dict(andor_type='Bool', read_only=False, units=None)
         return properties
 
     def get_basic_properties(self):
@@ -776,7 +778,7 @@ class Camera(property_device.PropertyDevice):
             # NB: setting overlap mode in global shutter mode with a short exposure has the effect of setting the exposure time to
             # the readout time. So don't do this! Also can't use overlap mode with Rolling Shutter software triggering.
             try_overlap = True
-            if self.get_shutter_mode() == 'Global' and desired_trigger_interval > self.readout_time():
+            if self.get_shutter_mode() == 'Global' and 1/desired_frame_rate > self.readout_time():
                 try_overlap = False
             if self.get_shutter_mode() == 'Rolling' and self.get_trigger_mode() == 'Software':
                 try_overlap = False

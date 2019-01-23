@@ -40,7 +40,7 @@ class Handler(timecourse_handler.BasicAcquisitionHandler):
     TO_SEGMENT = ['bf'] # image name or names to segment
     AUTOFOCUS_PARAMS = dict(
         metric='brenner',
-        metric_kws={}, # use if the metric requires specific keywords; 'brenner' does not
+        metric_kws={{}}, # use if the metric requires specific keywords; 'brenner' does not
         metric_filter_period_range=None # if not None, (min_size, max_size) tuple for bandpass filtering images before autofocus
     )
     # Values that are unlikely to be useful to modify, but may in obscure cases be used:
@@ -119,7 +119,7 @@ def create_acquire_file(data_dir, run_interval):
 
 def create_metadata_file(data_dir, positions, z_max, reference_positions,
         nominal_temperature, objective, optocoupler, filter_cube,
-        fluorescence_flatfield_lamp=None, save_focus_stacks=None, **other_metadata):
+        fluorescence_flatfield_lamp, save_focus_stacks=None, **other_metadata):
     """ Create the experiment_metadata.json file for timecourse acquisitions.
 
     Parameters:
@@ -134,7 +134,8 @@ def create_metadata_file(data_dir, positions, z_max, reference_positions,
         filter_cube: name of the filter cube to use
         fluorescence_flatfield_lamp: if fluorescent flatfield images are
             desired, provide the name of an appropriate spectra x lamp that is
-            compatible with the specified filter cube.
+            compatible with the specified filter cube. Use None to disable
+            fluorescence flatfielding.
         save_focus_stacks: if None, don't save any focus stacks. If a list of position
             names, save focus stacks for those positions. If a number, save
             focus stacks for that number of positions.
