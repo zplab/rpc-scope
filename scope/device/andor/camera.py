@@ -140,7 +140,6 @@ class Camera(property_device.PropertyDevice):
         sensor_width = AndorProp('SensorWidth', 'Float', readonly=True),
         serial_number = AndorProp('SerialNumber', 'String', readonly=True),
         shutter_mode = AndorProp('ElectronicShutteringMode', 'Enum', default='Rolling'),
-        #software_version = AndorProp('SoftwareVersion', 'String', readonly=True),
         spurious_noise_filter_enabled = AndorProp('SpuriousNoiseFilter', 'Bool', default=True),
         static_blemish_correction_enabled = AndorProp('StaticBlemishCorrection', 'Bool', default=True),
         temperature_status = AndorProp('TemperatureStatus', 'Enum', readonly=True),

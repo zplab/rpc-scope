@@ -34,7 +34,7 @@ FeatureStrings = [
     'CameraName',
     'CameraPresent',
     'CycleMode',
-    'DeviceCount',
+    'DeviceCount', # system
     'ElectronicShutteringMode',
     'EventEnable',
     'EventsMissedEvent',
@@ -53,7 +53,7 @@ FeatureStrings = [
     'InterfaceType',
     'IOInvert',
     'IOSelector',
-    'LogLevel',
+    'LogLevel', # system
     'LUTIndex',
     'LUTValue',
     'MaxInterfaceTransferRate',
@@ -77,7 +77,7 @@ FeatureStrings = [
     'SerialNumber',
     'SimplePreAmpGainControl', # deprecated on sona
     'SoftwareTrigger',
-    'SoftwareVersion', # sona only ?
+    'SoftwareVersion', # system
     'SpuriousNoiseFilter',
     'StaticBlemishCorrection', # zyla only
     'TemperatureControl',
@@ -149,3 +149,4 @@ def initialize(desired_camera):
     _init_core_lib()
     _init_util_lib()
     _init_camera(desired_camera)
+    return wrapper._at_core_lib.AT_GetString(_AT_HANDLE_SYSTEM, 'SoftwareVersion')
