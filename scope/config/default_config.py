@@ -13,7 +13,8 @@ scope_configuration = dict(
         #('il.spectra', 'spectra.Spectra'), # dm6
         #('il.spectra', 'spectra.SpectraX'), # dm6000 dmi8
         ('tl.lamp', 'tl_lamp.SutterLED_Lamp'),
-        ('camera', 'andor.Camera'),
+        # ('camera', 'andor.Zyla'),
+        # ('camera', 'andor.Sona'),
         ('camera.acquisition_sequencer', 'acquisition_sequencer.AcquisitionSequencer'),
         ('camera.autofocus', 'autofocus.Autofocus'),
         #('temperature_controller', 'temp_control.Peltier'), # dm6000
@@ -50,7 +51,6 @@ scope_configuration = dict(
     ),
 
     camera = dict(
-        MODEL = 'ZYLA-5.5-USB3',
         IOTOOL_PINS = dict(
             trigger = 'B0',
             arm = 'B1',
