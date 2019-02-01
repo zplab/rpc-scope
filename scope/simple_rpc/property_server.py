@@ -9,6 +9,8 @@ from zplib import datafile
 from ..util import logging
 logger = logging.get_logger(__name__)
 
+_NOTHING = object() # will compare false to anything, even None
+
 class PropertyServer(threading.Thread):
     """Server for publishing changes to properties (i.e. (key, value) pairs) to
     other clients.
@@ -72,6 +74,9 @@ class PropertyServer(threading.Thread):
 
     def update_property(self, property_name, value):
         """Inform the server that the property has a new value"""
+        if self.properties.get(property_name, _NOTHING) == value: # don't use None as the default since the value might be None
+            # don't update if we already have this precise value
+            return
         self.properties[property_name] = value
         logger.debug('updating property: {} to {}', property_name, value)
         self.task_queue.put((property_name, value))

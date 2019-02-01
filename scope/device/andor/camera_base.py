@@ -68,33 +68,9 @@ import itertools
 from . import lowlevel
 from ...util import transfer_ism_buffer
 from ...util import property_device
-from ...config import scope_configuration
-
 
 from ...util import logging
 logger = logging.get_logger(__name__)
-
-class AndorEnum:
-    def __init__(self, feature):
-        self.feature = feature
-        n = lowlevel.GetEnumCount(feature)
-        self.index_to_value = {i: lowlevel.GetEnumStringByIndex(feature, i)
-            for i in range(n) if lowlevel.IsEnumIndexImplemented(feature, i)}
-        self.values = set(self.index_to_value.values())
-
-    def get_value(self):
-        return self.index_to_value[lowlevel.GetEnumIndex(self.feature)]
-
-    def set_value(self, value):
-        if value not in self.values:
-            raise ValueError(f'Value must be one of: {sorted(self.values)}')
-        lowlevel.SetEnumString(self.feature, value)
-
-    def get_values_validity(self):
-        """Dict mapping value strings to True/False depending on whether that value
-        may be assigned without raising an AndorError, given the camera's current state."""
-        return {value: lowlevel.IsEnumIndexAvailable(self.feature, i)
-            for i, value in self.index_to_value.items()}
 
 class AndorProp(dict):
     def __init__(self, at_feature, at_type, default=None, readonly=False):
@@ -170,7 +146,6 @@ class Camera(property_device.PropertyDevice):
 
     def __init__(self, property_server=None, property_prefix=''):
         super().__init__(property_server, property_prefix)
-        config = scope_configuration.get_config()
         lowlevel.initialize(self._MODEL_NAME) # safe to call this multiple times
         self._live_mode = False
 
@@ -206,7 +181,7 @@ class Camera(property_device.PropertyDevice):
         self._frame_number = -1
         self._update_property('frame_number', self._frame_number)
         self._update_property('live_mode', self._live_mode)
-        self._maybe_update_frame_rate_and_range('ExposureTime') # pretend exposure time was updated, to force the frame rate range to get updated
+        self._update_frame_rate_and_range()
         self._latest_data = None
 
     def _timer_update_temp(self):
@@ -217,9 +192,19 @@ class Camera(property_device.PropertyDevice):
 
     def _add_andor_property(self, py_name, at_feature, at_type, default, readonly):
         if at_type == 'Enum':
-            getter, setter, valid = self._andor_enum(at_feature)
+            getter, andor_setter, valid, valid_suffix = self._andor_enum(at_feature)
         else:
-            getter, setter, valid = self._andor_property(at_feature, at_type)
+            getter, andor_setter, valid, valid_suffix = self._andor_property(at_feature, at_type)
+
+        if at_feature in self._PROPERTIES_THAT_CAN_CHANGE_FRAME_RATE_RANGE:
+            def setter(value):
+                with self.in_state(live_mode=False):
+                    andor_setter(at_feature, value)
+                    self._update_frame_rate_and_range()
+        else:
+            def setter(value):
+                with self.in_state(live_mode=False):
+                    andor_setter(at_feature, value)
 
         if py_name is None:
             updater = None
@@ -233,10 +218,11 @@ class Camera(property_device.PropertyDevice):
             prop_update = self._add_property(py_name, getter())
             def updater():
                 prop_update(getter())
+
             if valid is not None:
-                valid_name = getter_name + valid[0]
+                valid_name = getter_name + valid_suffix
                 if not hasattr(self, valid_name):
-                    setattr(self, valid_name, valid[1])
+                    setattr(self, valid_name, valid)
             if hasattr(self, setter_name):
                 setter = getattr(self, setter_name)
             elif not readonly:
@@ -252,9 +238,25 @@ class Camera(property_device.PropertyDevice):
     def _andor_enum(self, at_feature):
         """Expose a camera setting presented by the Andor API as an enum (via GetEnumIndex,
         SetEnumIndex, and GetEnumStringByIndex) as an "enumerated" property."""
-        enum = AndorEnum(at_feature)
-        valid = '_values', enum.get_values_validity
-        return enum.get_value, enum.set_value, valid
+        n = lowlevel.GetEnumCount(at_feature)
+        index_to_value = {i: lowlevel.GetEnumStringByIndex(at_feature, i)
+            for i in range(n) if lowlevel.IsEnumIndexImplemented(at_feature, i)}
+        def getter():
+            return index_to_value[lowlevel.GetEnumIndex(at_feature)]
+
+        values = set(index_to_value.values())
+        def setter(value):
+            if value not in values:
+                raise ValueError(f'Value must be one of: {sorted(values)}')
+            lowlevel.SetEnumString(at_feature, value)
+
+        def valid():
+            """Dict mapping value strings to True/False depending on whether that value
+            may be assigned without raising an AndorError, given the camera's current state."""
+            return {value: lowlevel.IsEnumIndexAvailable(at_feature, i)
+                for i, value in index_to_value.items()}
+
+        return getter, setter, valid, '_values'
 
     def _andor_property(self, at_feature, at_type):
         '''Directly expose numeric or string camera setting.'''
@@ -269,10 +271,13 @@ class Camera(property_device.PropertyDevice):
                 return andor_getter(at_feature)
             except lowlevel.AndorError:
                 return None
+
+        setter = getattr(lowlevel, 'Set'+at_type)
+
         if at_type in ('Float', 'Int'):
             andor_min_getter = getattr(lowlevel, 'Get'+at_type+'Min')
             andor_max_getter = getattr(lowlevel, 'Get'+at_type+'Max')
-            def range_getter():
+            def valid():
                 try:
                     min = andor_min_getter(at_feature)
                 except lowlevel.AndorError:
@@ -282,15 +287,9 @@ class Camera(property_device.PropertyDevice):
                 except lowlevel.AndorError:
                     max = None
                 return min, max
-            valid = '_range', range_getter
         else:
             valid = None
-        andor_setter = getattr(lowlevel, 'Set'+at_type)
-        def setter(value):
-            with self.in_state(live_mode=False):
-                andor_setter(at_feature, value)
-                self._maybe_update_frame_rate_and_range(at_feature)
-        return getter, setter, valid
+        return getter, setter, valid, '_range'
 
     def _andor_callback(self, camera_handle, at_feature, context):
         try:
@@ -342,15 +341,13 @@ class Camera(property_device.PropertyDevice):
     def get_basic_properties(self):
         return self._BASIC_PROPERTIES
 
-    def _maybe_update_frame_rate_and_range(self, at_feature):
+    def _update_frame_rate_and_range(self):
         """When setting a property, the frame rate range may change. If so,
         update the range and set the frame rate to the max possible."""
-        if at_feature in self._PROPERTIES_THAT_CAN_CHANGE_FRAME_RATE_RANGE:
-            min, max = self.get_frame_rate_range()
-            self._update_property('frame_rate_range', (min, max))
-            if lowlevel.IsWritable('FrameRate'):
-                lowlevel.SetFloat('FrameRate', max)
-                self._update_property('frame_rate', max)
+        min, max = self.get_frame_rate_range()
+        self._update_property('frame_rate_range', (min, max))
+        if lowlevel.IsWritable('FrameRate'):
+            self.set_frame_rate(max)
 
     # STATE-STACK HANDLING
     # there are complex dependencies here. When pushing, better to set frame_count AFTER cycle_mode,
@@ -412,7 +409,7 @@ class Camera(property_device.PropertyDevice):
             # but trying to unset it in this mode should not be...
             return
         lowlevel.SetBool('Overlap', enabled)
-        self._maybe_update_frame_rate_and_range('Overlap')
+        self._update_frame_rate_and_range()
 
     def get_exposure_time(self):
         """Return exposure time in ms"""
@@ -421,7 +418,7 @@ class Camera(property_device.PropertyDevice):
     def set_exposure_time(self, ms):
         """Set the exposure time in ms. If necessary, live imaging will be paused."""
         lowlevel.SetFloat('ExposureTime', ms / 1000)
-        self._maybe_update_frame_rate_and_range('ExposureTime')
+        self._update_frame_rate_and_range()
         if self._live_mode:
             trigger_interval = self._calculate_live_trigger_interval()
             self._live_trigger.trigger_interval = trigger_interval

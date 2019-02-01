@@ -61,7 +61,7 @@ class AndorCameraWidget(device_widget.DeviceWidget):
         if prop.endswith('_range'):
             def receive_update(value):
                 mn, mx = value
-                widget.setText(f'{mn:.6g} \N{EN DASH} {mx:.6g}')
+                widget.setText(f'{mn:.6g} to {mx:.6g}')
         else:
             def receive_update(value):
                 if isinstance(value, float):
