@@ -11,7 +11,7 @@ class Zyla(Camera):
         static_blemish_correction_enabled = AndorProp('StaticBlemishCorrection', 'Bool', default=True),
     )
     _HIDDEN_PROPERTIES = Camera._HIDDEN_PROPERTIES + (
-        AndorProp('AccumulateCount', 'Int', default=1)
+        AndorProp('AccumulateCount', 'Int', default=1),
     )
     _GAIN_TO_ENCODING = {
         '12-bit (high well capacity)': 'Mono12Packed',
