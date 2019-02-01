@@ -92,9 +92,8 @@ FeatureStrings = [
 
 _AT_HANDLE_SYSTEM = 1
 def _string_for_handle(handle, feature):
-    wrapper._at_core_lib.AT_GetString(handle, feature, _at_wchar_scratch, _at_wchar_scratch._length_)
-    return _at_wchar_scratch.value
-
+    wrapper._at_core_lib.AT_GetString(handle, feature, wrapper._at_wchar_scratch, wrapper._at_wchar_scratch._length_)
+    return wrapper._at_wchar_scratch.value
 
 def _init_core_lib(corepath='libatcore.so'):
     if wrapper._at_core_lib is not None:
