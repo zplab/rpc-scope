@@ -91,6 +91,10 @@ FeatureStrings = [
 
 
 _AT_HANDLE_SYSTEM = 1
+def _string_for_handle(handle, feature):
+    wrapper._at_core_lib.AT_GetString(handle, feature, _at_wchar_scratch, _at_wchar_scratch._length_)
+    return _at_wchar_scratch.value
+
 
 def _init_core_lib(corepath='libatcore.so'):
     if wrapper._at_core_lib is not None:
@@ -115,7 +119,7 @@ def list_cameras():
     cameras = []
     for i in range(devices_attached):
         handle = wrapper._at_core_lib.AT_Open(i)
-        cameras.append(wrapper._at_core_lib.AT_GetString(handle, 'CameraModel'))
+        cameras.append(_string_for_handle(handle, 'CameraModel'))
         wrapper._at_core_lib.AT_Close(handle)
     return cameras
 
@@ -149,4 +153,4 @@ def initialize(desired_camera):
     _init_core_lib()
     _init_util_lib()
     _init_camera(desired_camera)
-    return wrapper._at_core_lib.AT_GetString(_AT_HANDLE_SYSTEM, 'SoftwareVersion')
+    return _string_for_handle(_AT_HANDLE_SYSTEM, 'SoftwareVersion')
