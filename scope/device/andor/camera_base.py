@@ -100,7 +100,7 @@ class AndorProp(dict):
     def __init__(self, at_feature, at_type, default=None, readonly=False):
         super().__init__(at_feature=at_feature, at_type=at_type, default=default, readonly=readonly)
 
-class CameraBase(property_device.PropertyDevice):
+class Camera(property_device.PropertyDevice):
     _DESCRIPTION = 'Andor camera'
     _EXPECTED_INIT_ERRORS = (lowlevel.AndorError,)
     _CAMERA_PROPERTIES = dict(
