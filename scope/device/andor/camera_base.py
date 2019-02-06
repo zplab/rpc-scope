@@ -199,12 +199,12 @@ class Camera(property_device.PropertyDevice):
         if at_feature in self._PROPERTIES_THAT_CAN_CHANGE_FRAME_RATE_RANGE:
             def setter(value):
                 with self.in_state(live_mode=False):
-                    andor_setter(at_feature, value)
+                    andor_setter(value)
                     self._update_frame_rate_and_range()
         else:
             def setter(value):
                 with self.in_state(live_mode=False):
-                    andor_setter(at_feature, value)
+                    andor_setter(value)
 
         if py_name is None:
             updater = None
@@ -245,7 +245,7 @@ class Camera(property_device.PropertyDevice):
             return index_to_value[lowlevel.GetEnumIndex(at_feature)]
 
         values = set(index_to_value.values())
-        def setter(value):
+        def andor_setter(value):
             if value not in values:
                 raise ValueError(f'Value must be one of: {sorted(values)}')
             lowlevel.SetEnumString(at_feature, value)
@@ -256,7 +256,7 @@ class Camera(property_device.PropertyDevice):
             return {value: lowlevel.IsEnumIndexAvailable(at_feature, i)
                 for i, value in index_to_value.items()}
 
-        return getter, setter, valid, '_values'
+        return getter, andor_setter, valid, '_values'
 
     def _andor_property(self, at_feature, at_type):
         '''Directly expose numeric or string camera setting.'''
@@ -272,7 +272,9 @@ class Camera(property_device.PropertyDevice):
             except lowlevel.AndorError:
                 return None
 
-        setter = getattr(lowlevel, 'Set'+at_type)
+        _setter = getattr(lowlevel, 'Set'+at_type)
+        def andor_setter(value):
+            return _setter(at_feature, value)
 
         if at_type in ('Float', 'Int'):
             andor_min_getter = getattr(lowlevel, 'Get'+at_type+'Min')
@@ -289,7 +291,7 @@ class Camera(property_device.PropertyDevice):
                 return min, max
         else:
             valid = None
-        return getter, setter, valid, '_range'
+        return getter, andor_setter, valid, '_range'
 
     def _andor_callback(self, camera_handle, at_feature, context):
         try:
