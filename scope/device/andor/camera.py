@@ -51,17 +51,17 @@ class Zyla(Camera):
 
 class Sona(Camera):
     _DESCRIPTION = 'Andor Sona'
-    _MODEL_NAME = 'SONA-4.2-USB3'
+    _MODEL_NAME = 'SONA-2BV-11'
     _CAMERA_PROPERTIES = dict(Camera._CAMERA_PROPERTIES,
         family_name = AndorProp('CameraFamily', 'String', readonly=True),
         readout_rate = AndorProp('PixelReadoutRate', 'Enum', readonly=True),
         sensor_cooling_target = AndorProp('TemperatureControl', 'Enum', default='-25.0', readonly=True),
-        sensor_gain = AndorProp('GainMode', 'Enum', default='High dynamic range (16-bit)'),
+        sensor_gain = AndorProp('GainMode', 'Enum', default='HDR'),
         shutter_mode = AndorProp('ElectronicShutteringMode', 'Enum', readonly=True),
     )
     _GAIN_TO_ENCODING = {
-        'Fastest frame rate (12-bit)': 'Mono12Packed',
-        'High dynamic range (16-bit)': 'Mono16'
+        'STD HG': 'Mono12Packed',
+        'HDR': 'Mono16'
     }
     _IO_PINS = [
         'Fire 1',
