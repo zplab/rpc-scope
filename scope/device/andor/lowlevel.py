@@ -129,8 +129,8 @@ def _init_camera(desired_camera):
     # Even on the scope machine, the default Andor configuration includes two
     # virtual cameras, for a total of three camera devices. A hardware camera
     # will take device index 0, provided you have only one hardware camera, and
-    # we are very clearly working under this assumption. To be sure, we then query
-    # the camera's name and ensuring that it matches the name of our camera.
+    # we are very clearly working under this assumption. To be sure, we query
+    # the camera's name and ensure that it matches the name of our camera.
     if devices_attached < 3:
         raise AndorError('No Andor cameras detected. Is the camera turned on?')
 

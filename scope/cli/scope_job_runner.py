@@ -67,6 +67,8 @@ def main(argv=None):
         if args.command == 'start':
             runner.start(args.verbose)
         elif args.command == 'stop':
+            # don't worry about getting a message if runner isn't even running...
+            runner.assert_daemon() # (raise error if not running)
             message = args.message.strip()
             while not message:
                 message = input('Reason for stopping (for log): ').strip()
