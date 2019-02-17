@@ -2,7 +2,7 @@ from .camera_base import Camera, AndorProp
 
 class Zyla(Camera):
     _DESCRIPTION = 'Andor Zyla'
-    _MODEL_NAME = 'ZYLA-5.5-USB3'
+    _MODEL_PREFIX = 'ZYLA'
     _CAMERA_PROPERTIES = dict(Camera._CAMERA_PROPERTIES,
         readout_rate = AndorProp('PixelReadoutRate', 'Enum', default='100 MHz'),
         sensor_cooling_target = AndorProp('TemperatureControl', 'Enum', readonly=True),
@@ -51,7 +51,7 @@ class Zyla(Camera):
 
 class Sona(Camera):
     _DESCRIPTION = 'Andor Sona'
-    _MODEL_NAME = 'SONA-2BV-11'
+    _MODEL_PREFIX = 'SONA'
     _CAMERA_PROPERTIES = dict(Camera._CAMERA_PROPERTIES,
         family_name = AndorProp('CameraFamily', 'String', readonly=True),
         readout_rate = AndorProp('PixelReadoutRate', 'Enum', readonly=True),

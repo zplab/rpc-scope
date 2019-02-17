@@ -122,7 +122,7 @@ def list_cameras():
         wrapper._at_core_lib.AT_Close(handle)
     return cameras
 
-def _init_camera(desired_camera):
+def _init_camera():
     if wrapper._at_camera_handle is not None:
         return
     devices_attached = wrapper._at_core_lib.AT_GetInt(_AT_HANDLE_SYSTEM, 'DeviceCount')
@@ -133,23 +133,20 @@ def _init_camera(desired_camera):
     # the camera's name and ensure that it matches the name of our camera.
     if devices_attached < 3:
         raise AndorError('No Andor cameras detected. Is the camera turned on?')
-
     wrapper._at_camera_handle = wrapper._at_core_lib.AT_Open(0)
-    actual_camera = GetString('CameraModel')
-    if actual_camera != desired_camera:
-        wrapper._at_core_lib.AT_Close(wrapper._at_camera_handle)
-        wrapper._at_camera_handle = None
-        raise AndorError('Model name of Andor device 0, "' + actual_camera +
-                         '", does not match the desired camera model name, "' +
-                         desired_camera + '".')
-    atexit.register(wrapper._at_core_lib.AT_Close, wrapper._at_camera_handle)
+    camera_name = GetString('CameraModel')
+    atexit.register(close_camera)
+    return camera_name
 
-def initialize(desired_camera):
-    """Initialize the andor libraries and make sure that the connected camera
-    matches the desired camera model name. (If the camera is turned off, Andor
-    will often provide a "simulated camera" instead; this check avoids that
-    gotcha.)"""
+def initialize():
+    """Initialize the andor libraries."""
     _init_core_lib()
     _init_util_lib()
-    _init_camera(desired_camera)
-    return _string_for_handle(_AT_HANDLE_SYSTEM, 'SoftwareVersion')
+    camera_name = _init_camera()
+    software_version = _string_for_handle(_AT_HANDLE_SYSTEM, 'SoftwareVersion')
+    return camera_name, software_version
+
+def close_camera():
+    if wrapper._at_camera_handle is not None:
+        wrapper._at_core_lib.AT_Close(wrapper._at_camera_handle)
+        wrapper._at_camera_handle = None

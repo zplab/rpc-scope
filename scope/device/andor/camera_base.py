@@ -142,11 +142,15 @@ class Camera(property_device.PropertyDevice):
         'frame_rate_range': 'fps',
         'sensor_temperature': '°C'
     }
-    _MODEL_NAME = None # to be filled by subclass
+    _MODEL_PREFIX = None # to be filled by subclass
 
     def __init__(self, property_server=None, property_prefix=''):
         super().__init__(property_server, property_prefix)
-        lowlevel.initialize(self._MODEL_NAME) # safe to call this multiple times
+        camera_name, software_version = lowlevel.initialize() # safe to call this multiple times
+        if not camera_name.startswith(self._MODEL_PREFIX):
+            lowlevel.close_camera()
+            raise RuntimeError(f'Attached camera is "{camera_name}" but "{self._MODEL_PREFIX}" expected.')
+
         self._live_mode = False
 
         # initialize properties
@@ -327,8 +331,8 @@ class Camera(property_device.PropertyDevice):
 
     def get_camera_properties(self):
         """Return a dict mapping the property names to a dict with keys:
-        (andor_type, read_only, units, range_hint), where andor_type is one of
-        'Int', 'String', 'Bool', 'Float', or 'Enum'; read_only is a boolean;
+        (andor_type, read_only, units), where andor_type is one of
+        'Int', 'String', 'Bool', 'Float', 'Enum', or 'Range'; read_only is a boolean;
         units is None or the name of the relevant units; and range_hint is None
         or a hint as to the data range."""
         properties = {}
@@ -337,6 +341,9 @@ class Camera(property_device.PropertyDevice):
             read_only = prop['readonly']
             units = self._UNITS.get(py_name)
             properties[py_name] = dict(andor_type=andor_type, read_only=read_only, units=units)
+            range_name = py_name+'_range'
+            if range_name in self._BASIC_PROPERTIES:
+                properties[range_name] = dict(andor_type='Range', read_only=True, units=self._UNITS.get(range_name))
         properties['live_mode'] = dict(andor_type='Bool', read_only=False, units=None)
         return properties
 

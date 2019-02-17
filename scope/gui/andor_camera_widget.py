@@ -37,7 +37,7 @@ class AndorCameraWidget(device_widget.DeviceWidget):
         if units is not None:
             layout = Qt.QHBoxLayout()
             layout.addWidget(widget)
-            layout.addWidget( Qt.QLabel(units))
+            layout.addWidget(Qt.QLabel(units))
             layout.setSpacing(4)
             widget = layout
         self.layout().addRow(prop + ':', widget)
@@ -58,7 +58,16 @@ class AndorCameraWidget(device_widget.DeviceWidget):
 
     def make_readonly_widget(self, prop):
         widget = Qt.QLabel()
-        if prop.endswith('_range'):
+        if prop == 'temperature_status':
+            def receive_update(value):
+                if value == 'Stabilised':
+                    sign = '<span style="color: green">\N{black circle}</span>'
+                elif value in {'Cooling', 'Not Stabilised'}:
+                    sign = '<span style="color: yellow">\N{black circle}</span>'
+                else:
+                    sign = '<span style="color: red">\N{heavy multiplication x}</span>'
+                widget.setText(f'{sign} {value}')
+        elif prop.endswith('_range'):
             def receive_update(value):
                 mn, mx = value
                 widget.setText(f'{mn:.6g} to {mx:.6g}')
@@ -69,7 +78,6 @@ class AndorCameraWidget(device_widget.DeviceWidget):
                 else:
                     text = str(value)
                 widget.setText(text)
-
         self.subscribe(self.PROPERTY_ROOT + prop, callback=receive_update, readonly=True)
         return widget
 
