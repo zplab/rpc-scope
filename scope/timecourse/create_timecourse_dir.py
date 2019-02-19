@@ -208,7 +208,7 @@ def _maybe_reinit_stage(scope):
         scope.stage.reinit_y()
         scope.stage.x, scope.stage.y = current_position
 
-def get_positions_with_roi(scope):
+def get_positions_with_roi(scope, focus_roi=None):
     """Interactively obtain scope stage positions and an elliptical ROI for each.
 
     A viewer showing the live scope image is displayed, with a movable, resizable
@@ -220,6 +220,7 @@ def get_positions_with_roi(scope):
 
     Parameters:
         scope: microscope object
+        focus_roi: ROI object to use
 
     Returns: positions, rois
         positions: list of (x, y, z) positions
@@ -228,7 +229,7 @@ def get_positions_with_roi(scope):
     _maybe_reinit_stage(scope)
     viewer = scope_viewer_widget.ScopeViewerWidget(scope)
     viewer.show()
-    focus_roi = roi.EllipseROI(viewer, geometry=((400, 200), (2200, 2000)))
+    focus_roi.geometry = (400, 200), (2200, 2000)
     focus_roi.setSelected(True)
     positions = []
     rois = []
@@ -250,7 +251,7 @@ def get_positions_with_roi(scope):
     viewer.close()
     return positions, rois
 
-def write_roi_mask_files(data_dir, rois):
+def write_roi_mask_files(data_dir, rois, focus_roi):
     """ Create a "Focus Masks" directory of ROIs for timecourse acquisitions.
 
     Focus ROIs obtained from get_positions_with_roi() will be converted to mask
@@ -261,26 +262,33 @@ def write_roi_mask_files(data_dir, rois):
 
     Parameters:
         data_dir: directory to write metadata file into
-        rois: list of Qt.QRectFs describing the bounds of an elliptical ROI within
+        rois: list of Qt.QRectFs describing the bounds of an ROI within
             which autofocus scores will be calculated, OR dict mapping different
             category names to lists of Qt.QRectFs.
+        focus_roi: ROI object used (needed to decide how to draw the ROI)
     """
     mask_dir = pathlib.Path(data_dir) / 'Focus Masks'
     mask_dir.mkdir(parents=True, exist_ok=True)
     image = Qt.QImage(2560, 2160, Qt.QImage.Format_Grayscale8)
     painter = Qt.QPainter()
-
     try:
         items = rois.items()
     except AttributeError:
         items = [('', rois)]
+
     for name_prefix, rois in items:
         names = _name_positions(len(rois), name_prefix)
-        for name, roi in zip(names, rois):
+        for name, r in zip(names, rois):
             image.fill(Qt.Qt.black)
             painter.begin(image)
             painter.setBrush(Qt.Qt.white)
-            painter.drawEllipse(roi)
+            if isinstance(focus_roi, roi.EllipseROI):
+                painter.drawEllipse(r)
+            elif isinstance(focus_roi, roi.RoundRectROI):
+                radius = r.width() * focus_roi.radius
+                painter.drawRoundedRect(r, radius, radius)
+            else:
+                painter.drawRect(r)
             painter.end()
             image.save(str(mask_dir / name)+'.png')
     del image # image must be deleted before painter to avoid warning. So delete now...
