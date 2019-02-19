@@ -208,7 +208,7 @@ def _maybe_reinit_stage(scope):
         scope.stage.reinit_y()
         scope.stage.x, scope.stage.y = current_position
 
-def get_positions_with_roi(scope, focus_roi=None):
+def get_positions_with_roi(scope, roi_class=roi.EllipseROI, **roi_kws):
     """Interactively obtain scope stage positions and an elliptical ROI for each.
 
     A viewer showing the live scope image is displayed, with a movable, resizable
@@ -225,11 +225,12 @@ def get_positions_with_roi(scope, focus_roi=None):
     Returns: positions, rois
         positions: list of (x, y, z) positions
         rois: list of Qt.QRectF objects describing the ROI for each position.
+        roi_class: class of ROI to use for display
     """
     _maybe_reinit_stage(scope)
     viewer = scope_viewer_widget.ScopeViewerWidget(scope)
     viewer.show()
-    focus_roi.geometry = (400, 200), (2200, 2000)
+    focus_roi = roi_class(viewer, geometry=((400, 200), (2200, 2000)), **roi_kws)
     focus_roi.setSelected(True)
     positions = []
     rois = []
@@ -251,7 +252,7 @@ def get_positions_with_roi(scope, focus_roi=None):
     viewer.close()
     return positions, rois
 
-def write_roi_mask_files(data_dir, rois, focus_roi):
+def write_roi_mask_files(data_dir, rois, shape='ellipse', radius=0):
     """ Create a "Focus Masks" directory of ROIs for timecourse acquisitions.
 
     Focus ROIs obtained from get_positions_with_roi() will be converted to mask
@@ -265,8 +266,11 @@ def write_roi_mask_files(data_dir, rois, focus_roi):
         rois: list of Qt.QRectFs describing the bounds of an ROI within
             which autofocus scores will be calculated, OR dict mapping different
             category names to lists of Qt.QRectFs.
-        focus_roi: ROI object used (needed to decide how to draw the ROI)
+        shape: rect or ellipse
+        radius: if shape is rect, radius of corners in terms of percent of width
+
     """
+    assert shape in {'rect', 'ellipse'}
     mask_dir = pathlib.Path(data_dir) / 'Focus Masks'
     mask_dir.mkdir(parents=True, exist_ok=True)
     image = Qt.QImage(2560, 2160, Qt.QImage.Format_Grayscale8)
@@ -282,11 +286,11 @@ def write_roi_mask_files(data_dir, rois, focus_roi):
             image.fill(Qt.Qt.black)
             painter.begin(image)
             painter.setBrush(Qt.Qt.white)
-            if isinstance(focus_roi, roi.EllipseROI):
+            if shape == 'ellipse':
                 painter.drawEllipse(r)
-            elif isinstance(focus_roi, roi.RoundRectROI):
-                radius = r.width() * focus_roi.radius
-                painter.drawRoundedRect(r, radius, radius)
+            elif raidus > 0:
+                corner = r.width() * radius
+                painter.drawRoundedRect(r, corner, corner)
             else:
                 painter.drawRect(r)
             painter.end()

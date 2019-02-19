@@ -287,7 +287,7 @@ class LiveStreamer:
         self._last_time = time.time()
 
     def _image_update(self, frame_number):
-        # called in property client's thread: note we can't do RPC calls...
+        # called in property client's thread: note we can't do RPC calls
         if frame_number == -1:
             return
         self.image_received.set()
