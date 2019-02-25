@@ -266,7 +266,7 @@ def write_roi_mask_files(data_dir, rois, shape='ellipse', radius=0):
         rois: list of Qt.QRectFs describing the bounds of an ROI within
             which autofocus scores will be calculated, OR dict mapping different
             category names to lists of Qt.QRectFs.
-        shape: rect or ellipse
+        shape: 'rect' or 'ellipse'
         radius: if shape is rect, radius of corners in terms of percent of width
 
     """
