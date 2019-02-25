@@ -4,6 +4,7 @@ import numpy
 import logging
 import time
 import datetime
+import concurrent.futures as futures
 
 from zplib import background_process
 from zplib.image.threaded_io import COMPRESSION
@@ -413,8 +414,11 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             z, scores = zip(*focus_scores)
             focus_data = dict(z=z, scores=scores, best_index=numpy.argmax(scores))
             self._write_atomic_json(save_image_dir / 'focus_data.json', focus_data)
-            with self.heartbeat_timer():
-                self.image_io.write(focus_images, image_paths, self.IMAGE_COMPRESSION)
+            pending = self.image_io.write(focus_images, image_paths, self.IMAGE_COMPRESSION)
+            while pending:
+                # send heartbeats while we wait for futures to finish
+                done, pending = futures.wait(pending, timeout=60)
+                self.heartbeat()
 
         return images, self.image_names, metadata
 
