@@ -106,7 +106,7 @@ class TimepointHandler:
     def debug_timing(self, task):
         t0 = time.time()
         yield
-        self.logger.debug(f'{task} complete ({{:.1f}} seconds)')
+        self.logger.debug(f'{task} complete ({{:.1f}} seconds)', time.time() - t0)
 
     def run_all_positions(self):
         for position_name, position_coords in sorted(self.positions.items()):

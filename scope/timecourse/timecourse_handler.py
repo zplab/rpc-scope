@@ -4,7 +4,6 @@ import numpy
 import logging
 import time
 import datetime
-import concurrent.futures as futures
 
 from zplib import background_process
 from zplib.image.threaded_io import COMPRESSION
@@ -377,7 +376,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         if not override_autofocus and time.time() - last_autofocus_time > self.REFOCUS_INTERVAL_MINS * 60:
             if position_name in self.experiment_metadata.get('save_focus_stacks', []):
                 save_focus_stack = True
-            with self.debug_timing('Autofocus')
+            with self.debug_timing('Autofocus'):
                 coarse_z, fine_z, focus_scores, focus_images = self.run_autofocus(position_name, save_focus_stack)
             if coarse_z is not None:
                 metadata['coarse_z'] = coarse_z
