@@ -141,9 +141,6 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
 
     # Internal implementation functions are below. Override with care.
     def configure_timepoint(self):
-        t0 = time.time()
-        self.logger.info('Configuring acquisitions')
-
         self.scope.async_ = False
         # in 'TL BF' mode, condenser auto-retracts for 5x objective, and field/aperture get set appropriately
         # on objective switch. That gives a sane-ish default. Then allow specific customization of
@@ -211,8 +208,6 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         temperature_log = self.experiment_metadata.setdefault('temperature', {})
         humidity_log[self.timepoint_prefix] = dict(humidity=humidity, target_humidity=target_humidity)
         temperature_log[self.timepoint_prefix] = dict(temperature=temperature, target_temperature=target_temperature)
-        t1 = time.time()
-        self.logger.debug('Configuration done ({:.1f} seconds)', t1-t0)
 
     def configure_calibrations(self):
         self.dark_corrector = calibrate.DarkCurrentCorrector(self.scope)
@@ -351,7 +346,6 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         return coarse_z, fine_z, focus_scores, focus_images
 
     def acquire_images(self, position_name, position_dir, position_metadata):
-        t0 = time.time()
         self.scope.camera.exposure_time = self.bf_exposure
         self.scope.tl.lamp.intensity = self.tl_intensity
         metadata = {}
@@ -380,22 +374,18 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
                     override_autofocus = True
 
         save_focus_stack = False
-        if not override_autofocus and t0 - last_autofocus_time > self.REFOCUS_INTERVAL_MINS * 60:
+        if not override_autofocus and time.time() - last_autofocus_time > self.REFOCUS_INTERVAL_MINS * 60:
             if position_name in self.experiment_metadata.get('save_focus_stacks', []):
                 save_focus_stack = True
-            coarse_z, fine_z, focus_scores, focus_images = self.run_autofocus(position_name, save_focus_stack)
+            with self.debug_timing('Autofocus')
+                coarse_z, fine_z, focus_scores, focus_images = self.run_autofocus(position_name, save_focus_stack)
             if coarse_z is not None:
                 metadata['coarse_z'] = coarse_z
             metadata['fine_z'] = fine_z
-            t1 = time.time()
-            self.logger.debug('Autofocused ({:.1f} seconds)', t1-t0)
             self.logger.info('Autofocus z: {}', fine_z)
-        else:
-            t1 = time.time()
         metadata['stage_z'] = self.scope.stage.z
-        images = self.scope.camera.acquisition_sequencer.run()
-        t2 = time.time()
-        self.logger.debug('Acquisition sequence run ({:.1f} seconds)', t2-t1)
+        with self.debug_timing('Acquisition sequence'):
+            images = self.scope.camera.acquisition_sequencer.run()
         exposures = self.scope.camera.acquisition_sequencer.exposure_times
         timestamps = list(self.scope.camera.acquisition_sequencer.latest_timestamps)
         self.post_acquisition_sequence(position_name, position_dir, position_metadata, metadata, images, exposures, timestamps)
@@ -414,11 +404,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             z, scores = zip(*focus_scores)
             focus_data = dict(z=z, scores=scores, best_index=numpy.argmax(scores))
             self._write_atomic_json(save_image_dir / 'focus_data.json', focus_data)
-            pending = self.image_io.write(focus_images, image_paths, self.IMAGE_COMPRESSION)
-            while pending:
-                # send heartbeats while we wait for futures to finish
-                done, pending = futures.wait(pending, timeout=60)
-                self.heartbeat()
+            self.image_io.write(focus_images, image_paths, self.IMAGE_COMPRESSION)
 
         return images, self.image_names, metadata
 
