@@ -175,7 +175,7 @@ class Autofocus:
             frame_rate, overlap = self._camera.calculate_streaming_mode(steps, desired_frame_rate=1000) # try to get the max possible frame rate...
             z_positions = numpy.linspace(start, end, steps)
             runner = MetricRunner(self._camera, frame_rate, steps, metric, return_images)
-            with self._camera.image_sequence_acquisition(steps):
+            with self._stage.in_state(async_=True), self._camera.image_sequence_acquisition(steps):
                 runner.start()
                 for z in z_positions:
                     self._stage.set_z(z)
