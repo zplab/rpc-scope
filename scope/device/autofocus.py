@@ -242,13 +242,14 @@ class Autofocus:
             self._stage.wait()
             with self._stage.in_state(async_=True, z_speed=speed), self._camera.in_state(frame_rate=frame_rate, overlap_enabled=overlap):
                 self._stage.set_z(end)
-                while abs(self.stage.z - self.stage.start) < 0.001: # wait for at least 1 micron of movement
-                    time.sleep(0.0001)
+                while abs(self._stage.get_z() - start) < 0.0005: # wait for at least half a micron of movement
+                    pass
                 with self._camera.image_sequence_acquisition(steps):
                     zrecorder.start()
                     runner.start()
-            zrecorder.stop()
-            image_names, camera_timestamps = runner.join()
+                    self._stage.wait()
+                    zrecorder.stop()
+                    image_names, camera_timestamps = runner.join()
         if len(camera_timestamps) != steps:
             raise RuntimeError('Autofocus image acquisition failed: Expected {} images, got {}.'.format(steps, len(camera_timestamps)))
         z_positions = zrecorder.interpolate_zs(camera_timestamps)
