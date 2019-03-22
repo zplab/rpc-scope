@@ -145,6 +145,11 @@ class Camera(property_device.PropertyDevice):
     _MODEL_PREFIX = None # to be filled by subclass
 
     def __init__(self, property_server=None, property_prefix=''):
+        # _updaters maps Andor property names to a function that will update the scope clients as to the new value
+        # _defaulters is a list of functions to call to return the camera to the default state
+        self._updaters = {} # define here because needed by __del__
+        self._defaulters = []
+
         super().__init__(property_server, property_prefix)
         camera_name, software_version = lowlevel.initialize() # safe to call this multiple times
         if not camera_name.startswith(self._MODEL_PREFIX):
@@ -154,10 +159,6 @@ class Camera(property_device.PropertyDevice):
         self._live_mode = False
 
         # initialize properties
-        # _updaters maps Andor property names to a function that will update the scope clients as to the new value
-        # _defaulters is a list of functions to call to return the camera to the default state
-        self._updaters = {}
-        self._defaulters = []
         names_and_props = list(self._CAMERA_PROPERTIES.items())
         names_and_props += [(None, prop) for prop in self._HIDDEN_PROPERTIES]
         for py_name, prop in names_and_props:

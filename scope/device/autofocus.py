@@ -90,7 +90,7 @@ class Autofocus:
         self._camera = camera
         self._stage = stage
         self._iotool = iotool
-        trigger = scope_configuration.get_config().cameraIOTOOL_PINS.trigger
+        trigger = scope_configuration.get_config().camera.IOTOOL_PINS.trigger
         self._cam_trigger = [
             iotool.commands.set_high(trigger),
             iotool.commands.delay_us(2),
@@ -251,8 +251,8 @@ class Autofocus:
             cam_state = dict(trigger_mode='External Start', frame_rate=frame_rate, overlap_enabled=overlap)
             with self._stage.in_state(async_=True, z_speed=speed), self._camera.image_sequence_acquisition(steps, **cam_state):
                 self._stage.set_z(end)
-                while abs(self._stage.get_z() - start) < 0.001: # wait for at least a micron of movement
-                    time.sleep(0.0001)
+                while abs(self._stage.get_z() - start) < 0.0005: # wait for at least a micron of movement
+                    time.sleep(0.00001)
                 zrecorder.start()
                 self._iotool.execute(*self._cam_trigger)
                 runner.start()
