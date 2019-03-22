@@ -114,7 +114,8 @@ class Autofocus:
                 metric = runpy.run_path(path)[metric]
             else:
                 raise ValueError('"metric" must be the name of a known metric or formatted as "/path/to/file.py:function"')
-
+        if metric_kws is None:
+            metric_kws = {}
         # check if metric is a class at all before asking if it's our subclass of interest:
         if isinstance(metric, type) and issubclass(metric, AutofocusMetricBase):
             return metric(shape, mask=metric_mask, fft_period_range=metric_filter_period_range, **metric_kws)
@@ -178,10 +179,10 @@ class Autofocus:
                 runner.start()
                 for z in z_positions:
                     self._stage.set_z(z)
+                    if z != start:
+                        time.sleep(1/frame_rate)
                     self._stage.wait()
                     self._camera.send_software_trigger()
-                    if z != end:
-                        time.sleep(1/frame_rate)
                 image_names, camera_timestamps = runner.join()
         best_z, positions_and_scores = self._finish_autofocus(metric, z_positions)
         if not return_images:
@@ -239,13 +240,15 @@ class Autofocus:
             zrecorder = ZRecorder(self._camera, self._stage)
             self._stage.set_z(start) # move to start position at original speed
             self._stage.wait()
-            with self._camera.image_sequence_acquisition(steps, frame_rate=frame_rate, overlap_enabled=overlap):
-                zrecorder.start()
-                runner.start()
-                with self._stage.in_state(async_=False, z_speed=speed):
-                    self._stage.set_z(end)
-                zrecorder.stop()
-                image_names, camera_timestamps = runner.join()
+            with self._stage.in_state(async_=True, z_speed=speed), self._camera.in_state(frame_rate=frame_rate, overlap_enabled=overlap):
+                self._stage.set_z(end)
+                while abs(self.stage.z - self.stage.start) < 0.001: # wait for at least 1 micron of movement
+                    time.sleep(0.0001)
+                with self._camera.image_sequence_acquisition(steps):
+                    zrecorder.start()
+                    runner.start()
+            zrecorder.stop()
+            image_names, camera_timestamps = runner.join()
         if len(camera_timestamps) != steps:
             raise RuntimeError('Autofocus image acquisition failed: Expected {} images, got {}.'.format(steps, len(camera_timestamps)))
         z_positions = zrecorder.interpolate_zs(camera_timestamps)
