@@ -407,6 +407,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             pending = self.image_io.write(focus_images, image_paths, self.IMAGE_COMPRESSION)
             while pending:
                 # send heartbeats while we wait for futures to finish
+                import concurrent.futures as futures
                 done, pending = futures.wait(pending, timeout=60)
                 self.heartbeat()
 
