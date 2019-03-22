@@ -15,6 +15,7 @@ from ..util import logging
 from ..config import scope_configuration
 from . import andor
 from .leica import stage
+from . import iotool
 
 logger = logging.get_logger(__name__)
 
@@ -85,9 +86,16 @@ def brenner_metric(image, mask):
 class Autofocus:
     _METRICS = dict(brenner=brenner_metric)
 
-    def __init__(self, camera: andor.Camera, stage: stage.Stage):
+    def __init__(self, camera: andor.Camera, stage: stage.Stage, iotool: iotool.IOTool):
         self._camera = camera
         self._stage = stage
+        self._iotool = iotool
+        trigger = scope_configuration.get_config().cameraIOTOOL_PINS.trigger
+        self._cam_trigger = [
+            iotool.commands.set_high(trigger),
+            iotool.commands.delay_us(2),
+            iotool.commands.set_low(trigger)
+        ]
 
     def ensure_fft_ready(self):
         """Make sure the autofocus FFT filter is ready for the current camera
@@ -240,16 +248,17 @@ class Autofocus:
             zrecorder = ZRecorder(self._camera, self._stage)
             self._stage.set_z(start) # move to start position at original speed
             self._stage.wait()
-            with self._stage.in_state(async_=True, z_speed=speed), self._camera.in_state(frame_rate=frame_rate, overlap_enabled=overlap):
+            cam_state = dict(trigger_mode='External Start', frame_rate=frame_rate, overlap_enabled=overlap)
+            with self._stage.in_state(async_=True, z_speed=speed), self._camera.image_sequence_acquisition(steps, **cam_state):
                 self._stage.set_z(end)
-                while abs(self._stage.get_z() - start) < 0.0005: # wait for at least half a micron of movement
-                    pass
-                with self._camera.image_sequence_acquisition(steps):
-                    zrecorder.start()
-                    runner.start()
-                    self._stage.wait()
-                    zrecorder.stop()
-                    image_names, camera_timestamps = runner.join()
+                while abs(self._stage.get_z() - start) < 0.001: # wait for at least a micron of movement
+                    time.sleep(0.0001)
+                zrecorder.start()
+                self._iotool.execute(*self._cam_trigger)
+                runner.start()
+                self._stage.wait()
+                zrecorder.stop()
+                image_names, camera_timestamps = runner.join()
         if len(camera_timestamps) != steps:
             raise RuntimeError('Autofocus image acquisition failed: Expected {} images, got {}.'.format(steps, len(camera_timestamps)))
         z_positions = zrecorder.interpolate_zs(camera_timestamps)
