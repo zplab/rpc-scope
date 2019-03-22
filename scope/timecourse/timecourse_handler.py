@@ -403,7 +403,10 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             z, scores = zip(*focus_scores)
             focus_data = dict(z=z, scores=scores, best_index=numpy.argmax(scores))
             self._write_atomic_json(save_image_dir / 'focus_data.json', focus_data)
-            self.image_io.write(focus_images, image_paths, self.IMAGE_COMPRESSION)
+            #self.image_io.write(focus_images, image_paths, self.IMAGE_COMPRESSION)
+            import freeimage
+            for i, p in zip(focus_images, image_paths):
+                freeimage.write(i, p)
 
         return images, self.image_names, metadata
 
