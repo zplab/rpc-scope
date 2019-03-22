@@ -404,9 +404,11 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
             focus_data = dict(z=z, scores=scores, best_index=numpy.argmax(scores))
             self._write_atomic_json(save_image_dir / 'focus_data.json', focus_data)
             #self.image_io.write(focus_images, image_paths, self.IMAGE_COMPRESSION)
-            import freeimage
-            for i, p in zip(focus_images, image_paths):
-                freeimage.write(i, p)
+            pending = self.image_io.write(focus_images, image_paths, self.IMAGE_COMPRESSION)
+            while pending:
+                # send heartbeats while we wait for futures to finish
+                done, pending = futures.wait(pending, timeout=60)
+                self.heartbeat()
 
         return images, self.image_names, metadata
 
