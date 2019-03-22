@@ -142,11 +142,11 @@ class TimepointHandler:
                 self._write_atomic_json(self.experiment_metadata_path, self.experiment_metadata)
             run_again = self.skip_positions != self.positions.keys() # don't run again if we're skipping all the positions
             # wait for all queued background jobs to complete.
-            with self.debug_timing('Image IO'), self.heartbeat_timer:
+            with self.debug_timing('Image IO'), self.heartbeat_timer():
                 self.image_io.wait()
             if self._job_futures:
                 # wait for all queued background jobs to complete.
-                with self.debug_timing('Background jobs'), self.heartbeat_timer:
+                with self.debug_timing('Background jobs'), self.heartbeat_timer():
                     futures.wait(self._job_futures)
                 # now get the result() from each future, which will raise any errors encountered
                 # during the execution.
