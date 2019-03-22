@@ -117,10 +117,10 @@ class Autofocus:
 
         # check if metric is a class at all before asking if it's our subclass of interest:
         if isinstance(metric, type) and issubclass(metric, AutofocusMetricBase):
-            return metric(shape, metric_mask, metric_filter_period_range, **metric_kws)
+            return metric(shape, mask=metric_mask, fft_period_range=metric_filter_period_range, **metric_kws)
         else:
             assert callable(metric)
-            return AutofocusMetric(metric, shape, metric_mask, metric_filter_period_range, **metric_kws)
+            return AutofocusMetric(metric, shape, mask=metric_mask, fft_period_range=metric_filter_period_range, **metric_kws)
 
     def _finish_autofocus(self, metric, z_positions):
         best_i, z_scores = metric.find_best_focus_index()
