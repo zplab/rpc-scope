@@ -66,8 +66,10 @@ import atexit
 import itertools
 
 from . import lowlevel
+from .. import iotool
 from ...util import transfer_ism_buffer
 from ...util import property_device
+from ...config import scope_configuration
 
 from ...util import logging
 logger = logging.get_logger(__name__)
@@ -783,7 +785,6 @@ class Camera(property_device.PropertyDevice):
                 overlap = False
         return frame_rate, overlap
 
-
     def stream_acquire(self, frame_count, frame_rate, **camera_params):
         """Acquire a given number of images at the specified frame rate, or
         as fast as possible if the frame rate is unattainable given the current
@@ -815,6 +816,13 @@ class Camera(property_device.PropertyDevice):
                 image_names.append(name)
                 timestamps.append(timestamp)
         return image_names, timestamps, frame_rate
+
+    def get_iotool_trigger_command(self):
+        """Get a sequence of IOTool commands to trigger the camera"""
+        trigger = scope_configuration.get_config().camera.IOTOOL_PINS.trigger
+        return (iotool.commands.set_high(trigger),
+                iotool.commands.delay_us(1),
+                iotool.commands.set_low(trigger))
 
 
 UINT8_P = ctypes.POINTER(ctypes.c_uint8)

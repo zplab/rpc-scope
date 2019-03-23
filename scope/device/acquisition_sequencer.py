@@ -17,6 +17,7 @@ class AcquisitionSequencer:
         self._spectra = spectra
         self._tl_lamp = tl_lamp
         self._config = scope_configuration.get_config()
+        self._cam_trigger = camera.get_iotool_trigger_command()
         self._exposures = None
         self._output = None
         self._iotool_program = None
@@ -131,8 +132,7 @@ class AcquisitionSequencer:
         iotool_steps.append(commands.wait_time(20)) # configure a 20 microsecond debounce-wait for high/low signals to stabilize
         iotool_steps.append(commands.wait_high(cam_config.IOTOOL_PINS.arm))
         for step in self._steps:
-            iotool_steps.append(commands.set_high(cam_config.IOTOOL_PINS.trigger)) # trigger a camera acquisition
-            iotool_steps.append(commands.set_low(cam_config.IOTOOL_PINS.trigger))
+            iotool_steps.extend(self._cam_trigger) # trigger a camera acquisition
             # wait until all rows are exposing, reported by the camera's FireAll signal
             # Sometimes it takes a moment for the FireAll signal to clear after the trigger, so delay 50 us before waiting for FireAll
             iotool_steps += self._add_delay(0.05)
@@ -155,8 +155,7 @@ class AcquisitionSequencer:
             self._fire_all_time.append(step.on_delay_ms + total_off_delay)
 
         # send one last trigger to end the final acquisition
-        iotool_steps.append(commands.set_high(cam_config.IOTOOL_PINS.trigger))
-        iotool_steps.append(commands.set_low(cam_config.IOTOOL_PINS.trigger))
+        iotool_steps.extend(self._cam_trigger)
         self._iotool.store_program(*iotool_steps)
         self._compiled = True
         self._iotool_program = iotool_steps

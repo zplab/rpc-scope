@@ -90,12 +90,7 @@ class Autofocus:
         self._camera = camera
         self._stage = stage
         self._iotool = iotool
-        trigger = scope_configuration.get_config().camera.IOTOOL_PINS.trigger
-        self._cam_trigger = [
-            iotool.commands.set_high(trigger),
-            iotool.commands.delay_us(2),
-            iotool.commands.set_low(trigger)
-        ]
+        self._cam_trigger = camera.get_iotool_trigger_command()
 
     def ensure_fft_ready(self):
         """Make sure the autofocus FFT filter is ready for the current camera
