@@ -29,7 +29,7 @@ class TimepointHandler:
     IMAGE_COMPRESSION = threaded_io.COMPRESSION.DEFAULT
     LOG_LEVEL = logging.INFO
     IO_THREADS = 4
-    MAX_IO_JOBS = 512
+    MAX_IO_JOBS = 256 # max pending image writes before the threaded IO will block.
 
     def __init__(self, data_dir, log_level=None, scope_host='127.0.0.1', dry_run=False):
         """Setup the basic code to take a single timepoint from a timecourse experiment.
