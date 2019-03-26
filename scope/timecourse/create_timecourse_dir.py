@@ -4,11 +4,14 @@ import pathlib
 import datetime
 import json
 import numpy
-from scipy.spatial import distance
+from scipy import spatial
 
 from PyQt5 import Qt
 from zplib import datafile
+from zplib import fit_affine
+import freeimage
 from ris_widget.overlay import roi
+from ris_widget import layer
 
 from ..gui import scope_viewer_widget
 
@@ -172,11 +175,11 @@ def create_metadata_file(data_dir, positions, z_max, reference_positions,
         datafile.json_encode_legible_to_file(metadata, f)
 
 def _choose_bf_metering_pos(positions):
-    # find the position which has the smallest distance to it's 8 closest neighbors,
+    # find the position which has the smallest distance to its 8 closest neighbors,
     # because that position is likely right in the middle
     pos_names, pos_values = zip(*positions.items())
     xys = numpy.array(pos_values)[:,:2]
-    distances = distance.squareform(distance.pdist(xys))
+    distances = spatial.distance_matrix(xys, xys)
     distances.sort(axis=1)
     distance_sums = distances[:,:8].sum(axis=1)
     return pos_names[distance_sums.argmin()]
@@ -288,7 +291,7 @@ def write_roi_mask_files(data_dir, rois, shape='ellipse', radius=0):
             painter.setBrush(Qt.Qt.white)
             if shape == 'ellipse':
                 painter.drawEllipse(r)
-            elif raidus > 0:
+            elif radius > 0:
                 corner = r.width() * radius
                 painter.drawRoundedRect(r, corner, corner)
             else:
@@ -330,3 +333,107 @@ def update_z_positions(data_dir, scope):
 
     experiment_metadata.setdefault('z_updates', {})[datetime.datetime.now().isoformat()] = new_z
     datafile.json_encode_atomic_legible_to_file(experiment_metadata, experiment_metadata_path)
+
+
+def update_positions(data_dir, scope, image_type='bf', dry_run=False, ignore_autofocus_z=False):
+    """Interactively update the xyz positions for an existing experiment.
+
+    New z positions are written to a 'z_updates' metadata dictionary, which is
+    used by the acquisiton script to override the previous focal position. New
+    x,y positions are written directly to the experiment metadata. (The old
+    positions are stored in the metadata file as "old_positions".)
+
+    Parameters:
+        data_dir: experiment directory with existing experiment_metadata.json
+            file.
+        scope: scope object
+        dry_run: if True, don't actually write files
+        ignore_autofocus_z: if True, don't use the last-autofocused z value;
+            instead just use the value from the original metadata file.
+    """
+    data_dir = pathlib.Path(data_dir)
+    experiment_metadata_path = data_dir / 'experiment_metadata.json'
+    with experiment_metadata_path.open() as f:
+        experiment_metadata = json.load(f)
+    positions = experiment_metadata['positions']
+    new_positions = {}
+    names, xyzs = zip(*positions.items())
+    old_xys = []
+    new_xys = []
+    rotation = numpy.eye(2)
+    translation = [0, 0]
+    position_order = _farthest_points(numpy.array(xyzs)[:, :2])
+    viewer = scope_viewer_widget.ScopeViewerWidget(scope)
+    viewer.show()
+    viewer.layers.append(layer.Layer())
+    viewer.layers[0].tint = 0, 1, 0 # green
+    viewer.layers[1].tint = 1, 0, 1 # purple
+
+    with scope.camera.in_state(live_mode=True), scope.tl.lamp.in_state(enabled=True), scope.stage.in_state(async_=True):
+        for i in position_order:
+            position_name = names[i]
+            x, y, z = xyzs[i]
+            # now apply current guess of rotation and translation to get estimated
+            # new position
+            x, y = numpy.dot([x, y], rotation) + translation
+            scope.stage.position = x, y, z
+
+            position_dir = data_dir / position_name
+            position_metadata_path = position_dir / 'position_metadata.json'
+            with position_metadata_path.open() as f:
+                position_metadata = json.load(f)
+            if not ignore_autofocus_z:
+                for m in position_metadata[::-1]:
+                    if 'fine_z' in m:
+                        z = m['fine_z']
+                        break
+            image = None
+            for m in position_metadata[::-1]:
+                timepoint = m['timepoint']
+                image_f = position_dir / f'{timepoint} {image_type}.png'
+                if image_f.exists():
+                    image = freeimage.read(image_f)
+                    break
+
+            scope.stage.wait()
+
+            if image is None:
+                print(f'Could not find any {image_type} image for position {position_name}; skipping')
+                continue
+            if len(viewer.live_image_page) == 2:
+                viewer.live_image_page[1] = image
+            else:
+                viewer.live_image_page.append(image)
+
+            out = viewer.input('refine position {} (press enter when done, or press "x" if the position is no longer available)'.format(position_name))
+            if out.strip().lower() == 'x':
+                continue
+            old_xys.append(x, y)
+            x, y, z = scope.stage.position
+            new_positions[position_name] = x, y, z
+            new_xys.append(x, y)
+            rotation, _, translation, _ = fit_affine.fit_affine(old_xys, new_xys, find_scale=False, find_translation=True)
+            angle = numpy.arctan2(rotation[0, 1], rotation[0, 0]) * 180 / numpy.pi
+            micron_trans = translation * 1000
+            print(f'\t estimated rotation angle: {angle:.1f}°')
+            print(f'\t estimated translation: ({micron_trans[0]:.0f}, {micron_trans[1]:.0f}) µm')
+
+    new_z = {position_name: z for position_name, (x, y, z) in new_positions.items()}
+    experiment_metadata.setdefault('z_updates', {})[datetime.datetime.now().isoformat()] = new_z
+    experiment_metadata['old_positions'] = positions
+    experiment_metadata['positions'] = new_positions
+    if not dry_run:
+        datafile.json_encode_atomic_legible_to_file(experiment_metadata, experiment_metadata_path)
+
+def _farthest_points(points):
+    points = numpy.asarray(points)
+    bbox_lower_left = points.min(axis=0)
+    lower_left = numpy.linalg.norm(points - bbox_lower_left, axis=1).argmin()
+    selected = [lower_left]
+    dist = spatial.distance_matrix(points, points)
+    for _ in range(len(points) - 1):
+        dist_to_selected = dist[selected]
+        dist_to_nearest_selected = dist_to_selected.min(axis=0)
+        farthest_from_selected = dist_to_nearest_selected.argmax()
+        selected.append(farthest_from_selected)
+    return selected
