@@ -144,18 +144,8 @@ class Circulator(TemperatureController):
 class PolySciCirculator(TemperatureController)
     _DESCRIPTION = 'PolyScience Circulator'
 
-    # for configuration.py on new scope computer
-    # circulator = dict(
-    #     SERIAL_PORT = '/dev/ttyCirculator',
-    #     SERIAL_ARGS = dict(
-    #         baudrate=57600
-    #     )
-    # ),
-    #Info on communications with circulator via RS232
-    #https://www.polyscience.com/system/files/product-pdfs/110-514%2520PSC%2520EN_Advanced%2520Programmable%2520Operator%2520Manual_English.pdf
-
     def __init__(self,property_server=None,property_prefix=''):
-        serial_config = scope_configuration.get_config().circulator
+        serial_config = scope_configuration.get_config().polysciCirculator
         super().__init__(serial_config, property_server, property_prefix)
 
     def _call_response(self, val):
