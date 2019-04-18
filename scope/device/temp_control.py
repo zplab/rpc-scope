@@ -145,7 +145,7 @@ class PolySciCirculator(TemperatureController)
     _DESCRIPTION = 'PolyScience Circulator'
 
     def __init__(self,property_server=None,property_prefix=''):
-        serial_config = scope_configuration.get_config().polysciCirculator
+        serial_config = scope_configuration.get_config().polysci_circulator
         super().__init__(serial_config, property_server, property_prefix)
 
     def _call_response(self, val):

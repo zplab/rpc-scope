@@ -129,7 +129,7 @@ scope_configuration = dict(
     #     )
     # ),
     #
-    # polysciCirculator = dict(
+    # polysci_circulator = dict(
     #     SERIAL_PORT = '/dev/ttyCirculator',
     #     SERIAL_ARGS = dict(
     #         baudrate=57600
