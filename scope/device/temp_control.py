@@ -103,7 +103,7 @@ class Peltier(TemperatureController):
         self._call('E')
 
 class Circulator(TemperatureController):
-    _DESCRIPTION = 'Anova circulator'
+    _DESCRIPTION = 'Anova Circulator'
 
     def __init__(self, property_server=None, property_prefix=''):
         serial_config = scope_configuration.get_config().circulator
@@ -140,12 +140,14 @@ class Circulator(TemperatureController):
             raise ValueError('invalid temperature setting')
         return float(ret)
 
-
-class PolySciCirculator(TemperatureController)
+# TODO: Test on actual hardware.
+# To check: Does the PolySci circulator echo back commands (as the anova does?)  If so code will need to handle this
+# Also: can this class be combined with the above?
+class PolyscienceCirculator(TemperatureController)
     _DESCRIPTION = 'PolyScience Circulator'
 
     def __init__(self,property_server=None,property_prefix=''):
-        serial_config = scope_configuration.get_config().polysci_circulator
+        serial_config = scope_configuration.get_config().circulator
         super().__init__(serial_config, property_server, property_prefix)
 
     def _call_response(self, val):
