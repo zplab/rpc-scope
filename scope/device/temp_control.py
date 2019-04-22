@@ -139,3 +139,32 @@ class Circulator(TemperatureController):
             self._read() # clear a stray \n\r from the output
             raise ValueError('invalid temperature setting')
         return float(ret)
+
+
+class PolySciCirculator(TemperatureController)
+    _DESCRIPTION = 'PolyScience Circulator'
+
+    def __init__(self,property_server=None,property_prefix=''):
+        serial_config = scope_configuration.get_config().polysci_circulator
+        super().__init__(serial_config, property_server, property_prefix)
+
+    def _call_response(self, val):
+        with self._serial_port_lock:
+            self._write(val)
+            result = self._read()
+            if result == "?": # Always back a status flag as last character
+                raise ValueError('Invalid command to temperature controller')
+            return result[:-1]
+
+    def _call(self, val):
+        self._call_response(val)
+
+    def _get_target_temperature(self):
+        return float(self._call_response('RS'))
+
+    def _set_target_temperature(self, temp):
+        command_str = f'SS{temp:3.2f}'
+        self._call(command_str)
+
+    def _get_temperature(self):
+        return float(self._call_response('RT'))
