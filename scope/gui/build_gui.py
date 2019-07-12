@@ -23,20 +23,20 @@ WIDGETS = [
 ]
 
 def gui_main(host):
-    app = shared_resources.init_qapplication(icon_resource_path=(__name__, 'icon.svg'))
+    shared_resources.init_qapplication(icon_resource_path=(__name__, 'icon.svg'))
     scope = scope_client.ScopeClient(host)
     title = "Microscope Control"
     if host not in {'localhost', '127.0.0.1'}:
         title += ': {}'.format(host)
     main_window = scope_widgets.WidgetWindow(scope, WIDGETS, window_title=title)
-    app.exec()
+    shared_resources.run_qapplication()
 
 def monitor_main(hosts, downsample=None, fps_max=None):
-    app = shared_resources.init_qapplication(icon_resource_path=(__name__, 'icon.svg'))
+    shared_resources.init_qapplication(icon_resource_path=(__name__, 'icon.svg'))
     viewers = []
     for host in hosts:
         scope = scope_client.ScopeClient(host, allow_interrupt=False, auto_connect=False)
         app_prefs_name = 'viewer-{}'.format(host)
         viewer = scope_viewer_widget.MonitorWidget(scope, host, downsample, fps_max, app_prefs_name)
         viewers.append(viewer)
-    app.exec()
+    shared_resources.run_qapplication()
