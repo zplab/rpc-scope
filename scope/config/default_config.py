@@ -12,13 +12,14 @@ scope_configuration = dict(
         ('iotool', 'iotool.IOTool'),
         #('il.spectra', 'spectra.Spectra'), # dm6
         #('il.spectra', 'spectra.SpectraX'), # dm6000 dmi8
+        #('il.spectra', 'spectra.SpectraIII'), # dm6
         ('tl.lamp', 'tl_lamp.SutterLED_Lamp'),
         # ('camera', 'andor.Zyla'),
-        # ('camera', 'andor.Sona'),
         ('camera.acquisition_sequencer', 'acquisition_sequencer.AcquisitionSequencer'),
         ('camera.autofocus', 'autofocus.Autofocus'),
-        #('temperature_controller', 'temp_control.Peltier'), # dm6000
-        #('temperature_controller', 'temp_control.Circulator'), # dm6
+        #('temperature_controller', 'temp_control.TorreyPinesPeltier'), # dm6000
+        #('temperature_controller', 'temp_control.AnovaCirculator'), # dm6
+        #('temperature_controller', 'temp_control.PolyScienceCirculator'), # dm6
         #('humidity_controller', 'humidity_control.HumidityController'), # dm6, dm6000
         ('job_runner', 'runner_device.JobRunner')
     ),
@@ -67,16 +68,22 @@ scope_configuration = dict(
 
     spectra = dict(
         SERIAL_PORT = '/dev/ttySpectra',
-        SERIAL_ARGS = {},
+        SERIAL_ARGS = {
+            #baudrate=115200 # Spectra III
+            #baudrate=9600 # Spectra, Spectra X
+        },
         IOTOOL_LAMP_PINS = dict(
             uv = 'D6',
             blue = 'D5',
             cyan = 'D3',
             teal = 'D4',
-            green_yellow = 'D2',
-            #red = 'D1' # dm6000 dmi8
+            #green_yellow = 'D2', # Spectra, Spectra X
+            #green = 'D2', # Spectra III
+            #yellow = 'D7' # Spectra III
+            #red = 'D1', # Spectra X, Spectra III
+            #nIR = 'D6' # Spectra III
         ),
-        #IOTOOL_GREEN_YELLOW_SWITCH_PIN = 'D1', # dm6
+        #IOTOOL_GREEN_YELLOW_SWITCH_PIN = 'D1', # Spectra
 
         # TIMING: depends *strongly* on how recently the last time the
         # lamp was turned on was. 100 ms ago vs. 10 sec ago changes the on-latency
@@ -99,7 +106,7 @@ scope_configuration = dict(
             off_latency_ms = 0.01, # Time from end of trigger to start of fall
             fall_ms = 0.015 # Time from start of fall to end of fall
         ),
-        #FILTER_SWITCH_DELAY = 0.15 # dm6
+        #FILTER_SWITCH_DELAY = 0.15 # Spectra
     ),
 
     sutter_led = dict(
@@ -126,7 +133,7 @@ scope_configuration = dict(
     #     SERIAL_PORT = '/dev/ttyCirculator',
     #     SERIAL_ARGS = dict(
     #         # baudrate=9600 # for Anova circulators
-    #         # baudrate=57600 # for Polyscience circulators
+    #         # baudrate=115200 # for Polyscience circulators
     #     )
     # ),
     #

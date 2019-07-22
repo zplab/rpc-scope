@@ -69,6 +69,7 @@ from . import lowlevel
 from .. import iotool
 from ...util import transfer_ism_buffer
 from ...util import property_device
+from ...util import timer
 from ...config import scope_configuration
 
 from ...util import logging
@@ -179,11 +180,7 @@ class Camera(property_device.PropertyDevice):
             self._c_callback = lowlevel.FeatureCallback(self._andor_callback)
             for at_feature in self._updaters.keys():
                 lowlevel.RegisterFeatureCallback(at_feature, self._c_callback, 0)
-
-            self._sleep_time = 10
-            self._timer_running = True
-            self._timer_thread = threading.Thread(target=self._timer_update_temp, daemon=True)
-            self._timer_thread.start()
+            self._timer_thread = timer.Timer(self._update_properties, interval=10)
 
         self._frame_number = -1
         self._update_property('frame_number', self._frame_number)
@@ -191,11 +188,8 @@ class Camera(property_device.PropertyDevice):
         self._update_frame_rate_and_range()
         self._latest_data = None
 
-    def _timer_update_temp(self):
-        updater = self._updaters['SensorTemperature']
-        while self._timer_running:
-            updater()
-            time.sleep(self._sleep_time)
+    def _update_properties(self):
+        self._updaters['SensorTemperature']()
 
     def _add_andor_property(self, py_name, at_feature, at_type, default, readonly):
         if at_type == 'Enum':

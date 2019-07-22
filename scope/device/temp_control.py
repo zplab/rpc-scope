@@ -10,9 +10,11 @@ from ..config import scope_configuration
 class TemperatureController(property_device.PropertyDevice):
     _DESCRIPTION = 'temperature controller'
     _EXPECTED_INIT_ERRORS = (smart_serial.SerialException,)
+    _SERIAL_CONFIG = None
 
-    def __init__(self, serial_config, property_server=None, property_prefix=''):
+    def __init__(self, property_server=None, property_prefix=''):
         super().__init__(property_server, property_prefix)
+        serial_config = getattr(scope_configuration.get_config(), self._SERIAL_CONFIG)
         self._serial_port = smart_serial.Serial(serial_config.SERIAL_PORT, timeout=1, **serial_config.SERIAL_ARGS)
         self._serial_port.clear_input_buffer() # bad configurations can leave garbage in the Anova input buffer
         self._serial_port_lock = threading.RLock()
@@ -33,16 +35,10 @@ class TemperatureController(property_device.PropertyDevice):
             self._serial_port.write(val.encode('ascii') + b'\r')
 
     def _update_properties(self):
-        self.get_temperature()
         self.get_target_temperature()
 
     def _test_connection(self):
-        self.get_temperature()
-
-    def get_temperature(self):
-        temp = self._get_temperature()
-        self._update_property('temperature', temp)
-        return temp
+        self._get_target_temperature()
 
     def set_target_temperature(self, temp):
         temp_out = self._set_target_temperature(temp)
@@ -53,13 +49,39 @@ class TemperatureController(property_device.PropertyDevice):
         self._update_property('target_temperature', temp)
         return temp
 
+    def _get_target_temperature(self):
+        raise NotImplementedError()
 
-class Peltier(TemperatureController):
+class TemperatureControllerWithReadout(TemperatureController):
+    def _update_properties(self):
+        super()._update_properties()
+        self.get_temperature()
+
+    def get_temperature(self):
+        temp = self._get_temperature()
+        self._update_property('temperature', temp)
+        return temp
+
+    def _get_temperature(self):
+        raise NotImplementedError()
+
+class TemperatureControllerWithBathTemp(TemperatureController):
+    def _update_properties(self):
+        super()._update_properties()
+        self.get_bath_temperature()
+
+    def get_bath_temperature(self):
+        temp = self._get_bath_temperature()
+        self._update_property('temperature', temp)
+        return temp
+
+    def _get_bath_temperature(self):
+        raise NotImplementedError()
+
+
+class TorreyPinesPeltier(TemperatureControllerWithReadout):
     _DESCRIPTION = 'Peltier controller'
-
-    def __init__(self, property_server=None, property_prefix=''):
-        serial_config = scope_configuration.get_config().peltier
-        super().__init__(serial_config, property_server, property_prefix)
+    _SERIAL_CONFIG = 'peltier'
 
     def _call_response(self, val):
         with self._serial_port_lock:
@@ -88,26 +110,10 @@ class Peltier(TemperatureController):
         self._call('A', '{:.1f}'.format(temp))
         return round(temp, 1)
 
-    def set_timer(self, hours, minutes, seconds):
-        assert hours <= 99 and minutes <= 99 and seconds <= 99
-        self._call('B', '{:02d}{:02d}{:02d}'.format(hours, minutes, seconds))
 
-    def set_auto_off_mode(self, mode):
-        mode_str = "ON" if mode else "OFF"
-        self._call('C', mode_str)
-
-    def show_temperature_on_screen(self):
-        self._call('D')
-
-    def show_timer_on_screen(self):
-        self._call('E')
-
-class Circulator(TemperatureController):
+class AnovaCirculator(TemperatureControllerWithBathTemp):
     _DESCRIPTION = 'Anova Circulator'
-
-    def __init__(self, property_server=None, property_prefix=''):
-        serial_config = scope_configuration.get_config().circulator
-        super().__init__(serial_config, property_server, property_prefix)
+    _SERIAL_CONFIG = 'circulator'
 
     def _call_response(self, val):
         with self._serial_port_lock:
@@ -127,7 +133,7 @@ class Circulator(TemperatureController):
         except:
             raise RuntimeError(f'Could not communicate properly with circulator. Expecting floating-point temperature reading, got "{result}".')
 
-    def _get_temperature(self):
+    def _get_bath_temperature(self):
         return float(self._call_response('temp'))
 
     def _get_target_temperature(self):
@@ -140,33 +146,37 @@ class Circulator(TemperatureController):
             raise ValueError('invalid temperature setting')
         return float(ret)
 
-# TODO: Test on actual hardware.
-# To check: Does the PolySci circulator echo back commands (as the anova does?)  If so code will need to handle this
-# Also: can this class be combined with the above?
-class PolyscienceCirculator(TemperatureController)
+class PolyScienceCirculator(TemperatureControllerWithReadout, TemperatureControllerWithBathTemp)
     _DESCRIPTION = 'PolyScience Circulator'
-
-    def __init__(self,property_server=None,property_prefix=''):
-        serial_config = scope_configuration.get_config().circulator
-        super().__init__(serial_config, property_server, property_prefix)
+    _SERIAL_CONFIG = 'circulator'
 
     def _call_response(self, val):
         with self._serial_port_lock:
             self._write(val)
             result = self._read()
-            if result == "?": # Always back a status flag as last character
+            if result[0] == "?":
                 raise ValueError('Invalid command to temperature controller')
+            if val[0] == 'S' and result[0] != '!':
+                raise ValueError('Invalid response from temperature controller')
             return result[:-1]
-
-    def _call(self, val):
-        self._call_response(val)
 
     def _get_target_temperature(self):
         return float(self._call_response('RS'))
 
     def _set_target_temperature(self, temp):
-        command_str = f'SS{temp:3.2f}'
-        self._call(command_str)
+        self._call_response(f'SS{temp:3.2f}')
+        return round(temp, 2)
 
     def _get_temperature(self):
+        return float(self._call_response('RR'))
+
+    def _get_bath_temperature(self):
         return float(self._call_response('RT'))
+
+    def set_pump_speed(self, speed):
+        """Set pump speed from 1 - 25"""
+        assert 1 <= speed <= 20
+        self._call_response(f'SM{speed*5}')
+
+    def get_pump_speed(self):
+        return int(self._call_response('RR'))//5
