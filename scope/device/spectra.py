@@ -253,7 +253,6 @@ class SpectraError(Exception):
     pass
 
 class SpectraIII(_BaseSpectra):
-    _EXPECTED_INIT_ERRORS = _BaseSpectra._EXPECTED_INIT_ERRORS + (SpectraError,)
     _DESCRIPTION = 'Lumencor Spectra III'
     _LAMP_NAMES = ['uv', 'blue', 'cyan', 'teal', 'green', 'yellow', 'red', 'nIR']
     _LAMP_IDX = {lamp: i for i, lamp in enumerate(_LAMP_NAMES)}
@@ -265,13 +264,13 @@ class SpectraIII(_BaseSpectra):
         'green': (555, 28),
         'yellow': (575, 25),
         'red': (635, 22),
-        'nIR': (747.5 11)
+        'nIR': (747.5, 11)
     }
     _ERROR_CODES = {
-        '41': 'Invalid I2​C bus',
-        '42': 'Invalid I2​C slave (device) address',
-        '43': 'I2​C bus write error',
-        '44': 'I2​C bus read error',
+        '41': 'Invalid I2C bus',
+        '42': 'Invalid I2C slave (device) address',
+        '43': 'I2C bus write error',
+        '44': 'I2C bus read error',
         '45': 'SPI bus write error',
         '46': 'SPI bus read error',
         '47': 'GPIO set state error',
@@ -322,11 +321,13 @@ class SpectraIII(_BaseSpectra):
         cmdname = cmd.split(' ')[1]
         with self._serial_port_lock:
             self._serial_port.write(cmd.encode('ascii') + b'\r')
-            code, name_out, *ret = self._serial_port.read_until(b'\r')[:-1].decode('ascii').split(' ')
+            code, name_out, *ret = self._serial_port.read_until(b'\r\n')[:-2].decode('ascii').split(' ')
         if len(ret) == 1:
             ret = ret[0]
+        elif len(ret) == 0:
+            ret = None
         if code != 'A':
-            raise SpectraError(f'Error from Spectra III: command "{val}" returned error "{self._ERROR_CODES[ret]}"')
+            raise SpectraError(f'Error from Spectra III: command "{cmd}" returned error "{self._ERROR_CODES[ret]}"')
         if name_out != cmdname:
             raise SpectraError(f'Unknown response to command "{cmd}": "{cmd_out}"')
         return ret

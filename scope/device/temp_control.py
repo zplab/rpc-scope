@@ -146,7 +146,7 @@ class AnovaCirculator(TemperatureControllerWithBathTemp):
             raise ValueError('invalid temperature setting')
         return float(ret)
 
-class PolyScienceCirculator(TemperatureControllerWithReadout, TemperatureControllerWithBathTemp)
+class PolyScienceCirculator(TemperatureControllerWithReadout, TemperatureControllerWithBathTemp):
     _DESCRIPTION = 'PolyScience Circulator'
     _SERIAL_CONFIG = 'circulator'
 

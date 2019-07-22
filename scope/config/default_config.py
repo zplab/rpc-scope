@@ -68,21 +68,30 @@ scope_configuration = dict(
 
     spectra = dict(
         SERIAL_PORT = '/dev/ttySpectra',
-        SERIAL_ARGS = {
+        SERIAL_ARGS = dict(
             #baudrate=115200 # Spectra III
             #baudrate=9600 # Spectra, Spectra X
-        },
-        IOTOOL_LAMP_PINS = dict(
-            uv = 'D6',
-            blue = 'D5',
-            cyan = 'D3',
-            teal = 'D4',
-            #green_yellow = 'D2', # Spectra, Spectra X
-            #green = 'D2', # Spectra III
-            #yellow = 'D7' # Spectra III
-            #red = 'D1', # Spectra X, Spectra III
-            #nIR = 'D6' # Spectra III
         ),
+        #IOTOOL_LAMP_PINS = dict( # Spectra, Spectra X
+        #   uv = 'D6',
+        #   blue = 'D5',
+        #   cyan = 'D3',
+        #   teal = 'D4',
+        #   green_yellow = 'D2', 
+        #   #red = 'D1', # Spectra X
+        #),
+
+        #IOTOOL_LAMP_PINS = dict( # Spectra III
+        #    uv = 'D5',
+        #    blue = 'D4',
+        #    cyan = 'D2',
+        #    teal = 'D3',
+        #    green = 'D1',
+        #    yellow = 'D7',
+        #    red = 'D0',
+        #    nIR = 'D6'
+        #),
+
         #IOTOOL_GREEN_YELLOW_SWITCH_PIN = 'D1', # Spectra
 
         # TIMING: depends *strongly* on how recently the last time the

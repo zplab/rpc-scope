@@ -105,7 +105,7 @@ class Serial(serialposix.Serial):
             match_pos = self.read_buffer.find(match, search_start)
             if match_pos != -1:
                 break
-            search_start = len(self.read_buffer) - ml + 1
+            search_start = max(0, len(self.read_buffer) - ml + 1)
             try:
                 ready,_,_ = select.select([self.fd],[],[], self.timeout)
                 # If select was used with a timeout, and the timeout occurs, it
