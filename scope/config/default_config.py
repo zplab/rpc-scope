@@ -77,7 +77,7 @@ scope_configuration = dict(
         #   blue = 'D5',
         #   cyan = 'D3',
         #   teal = 'D4',
-        #   green_yellow = 'D2', 
+        #   green_yellow = 'D2',
         #   #red = 'D1', # Spectra X
         #),
 

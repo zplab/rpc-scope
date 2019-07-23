@@ -25,9 +25,12 @@ class AcquisitionSequencer:
         self._lamp_names = set(self._spectra.get_lamp_specs())
         # starting state is with all the spectra lamps off
         self._default_fl_lamp_state = {}
+        iotool_lamps = {}
         for lamp in self._lamp_names:
             self._default_fl_lamp_state[lamp+'_enabled'] = False
             self._default_fl_lamp_state[lamp+'_intensity'] = 255
+            iotool_lamps[lamp] = False
+        self._iotool_lamps_off = self._spectra._iotool_lamp_commands(**iotool_lamps)
         self.new_sequence()
 
     def new_sequence(self, **fl_intensities):
@@ -73,8 +76,7 @@ class AcquisitionSequencer:
 
         Parameters
         exposure_ms: exposure time in ms for the image.
-        lamp: 'TL' for transmitted light, or name of a spectra lamp for
-            fluorescence (or a list of one or more spectra lamp names).
+        lamp: 'TL' for transmitted light, or name of a spectra lamp for fluorescence.
         tl_intensity: intensity of the transmitted lamp, should it be enabled.
             If None, then do not change intensity setting from current value.
         delay_after_ms: time to delay after turning off the lamps but before triggering
@@ -86,10 +88,9 @@ class AcquisitionSequencer:
         else:
             if tl_intensity is not None:
                 raise ValueError('Cannot control TL intensity when the requested lamp is not TL.')
-            if isinstance(lamp, str):
-                lamp = [lamp]
-            if not self._lamp_names.issuperset(lamp):
-                raise ValueError('Unrecognized spectra lamp name. Valid names are: {}'.format(', '.join(sorted(self._lamp_names))))
+            if lamp not in self._lamp_names:
+                valid = ', '.join(sorted(self._lamp_names))
+                raise ValueError(f'Unrecognized spectra lamp name "{lamp}". Valid names are: {valid}')
             lamp_timing = self._config.spectra.TIMING
         # Now, calculate the exposure timing: how long to delay after turning the lamp on, and
         # how long to delay after turning the lamp off.
@@ -141,14 +142,14 @@ class AcquisitionSequencer:
             if step.lamp == 'TL':
                 iotool_steps.extend(self._tl_lamp._iotool_lamp_commands(enabled=True, intensity=step.tl_intensity))
             else:
-                iotool_steps.extend(self._spectra._iotool_lamp_commands(**{lamp: True for lamp in step.lamp}))
+                iotool_steps.extend(self._spectra._iotool_lamp_commands(**{step.lamp: True}))
             # wait the required amount of time for the lamp to turn on and expose the image (as calculated in add_step)
             iotool_steps += self._add_delay(step.on_delay_ms)
             # Now turn off the lamp.
             if step.lamp == 'TL':
                 iotool_steps.extend(self._tl_lamp._iotool_lamp_commands(enabled=False))
             else:
-                iotool_steps.extend(self._spectra._iotool_lamp_commands(**{lamp: False for lamp in step.lamp}))
+                iotool_steps.extend(self._spectra._iotool_lamp_commands(**{step.lamp: False}))
             # Now wait for the lamp to go off, plus any extra requested delay.
             total_off_delay = step.off_delay_ms + step.delay_after_ms
             iotool_steps += self._add_delay(total_off_delay)
@@ -220,11 +221,20 @@ class AcquisitionSequencer:
         with self._camera.image_sequence_acquisition(num_images, **camera_state), \
              self._spectra.in_state(**self._starting_fl_lamp_state), \
              self._tl_lamp.in_state(enabled=False, intensity=self._tl_lamp.get_intensity()):
+            # above _spectra.in_state() turns all lamps off via spectra, in a way that the
+            # previous state gets restored after the with-block. However, we will *also*
+            # turn all IOTool TTL outputs off unconditionally, below. This is because
+            # on the Spectra III, the enabled states are otherwise handled via serial
+            # commands and not TTL, so we also need to make sure to turn off the TTLs.
+            # For Spectra or Spectra X, this just amounts to sending two sets of commands
+            # to turn the TTLs off, but that's fine.
+            self._iotool.execute(self._iotool_lamps_off)
             # wait for lamps to turn off
             time.sleep(max(config.sutter_led.TIMING.off_latency_ms + config.sutter_led.TIMING.fall_ms,
                            config.spectra.TIMING.off_latency_ms + config.spectra.TIMING.fall_ms) / 1000)
             readout_ms = self._camera.get_readout_time() # get this after setting the relevant camera modes above
             self._exposures = [exp + readout_ms for exp in self._fire_all_time]
+            self._iotool.wait_until_done() # make sure IOTool is ready
             self._iotool.start_program()
             names, self._latest_timestamps = [], []
             for exposure in self._exposures:

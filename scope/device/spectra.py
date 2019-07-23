@@ -31,6 +31,7 @@ class Lamp(state_stack.StateStackDevice):
 
 class _BaseSpectra(property_device.PropertyDevice):
     _EXPECTED_INIT_ERRORS = (smart_serial.SerialException,)
+    _UPDATE_INTERVAL = 10
 
     def __init__(self, iotool: iotool.IOTool, property_server=None, property_prefix=''):
         super().__init__(property_server, property_prefix)
@@ -44,7 +45,7 @@ class _BaseSpectra(property_device.PropertyDevice):
             raise smart_serial.SerialException('Could not read data from Spectra -- is it turned on?')
         self._iotool = iotool
         if property_server:
-            self._timer_thread = timer.Timer(self._update_properties, interval=10)
+            self._timer_thread = timer.Timer(self._update_properties, interval=self._UPDATE_INTERVAL)
 
         self._available_lamps = set(self._spconfig.IOTOOL_LAMP_PINS.keys())
         for name in self._available_lamps:
@@ -64,21 +65,20 @@ class _BaseSpectra(property_device.PropertyDevice):
     def _initialize_spectra(self):
         raise NotImplementedError()
 
-    def _set_intensity(self, lamp, value):
+    def _get_temperature(self):
         raise NotImplementedError()
 
-    def _get_temperature(self):
+    def _set_intensity(self, lamp, value):
         raise NotImplementedError()
 
     def _get_intensity(self, lamp):
         raise NotImplementedError()
 
-    def _get_enabled(self, lamp):
+    def _set_enabled(self, lamp, value):
         raise NotImplementedError()
 
-    def _set_enabled(self, lamp, enabled):
-        self._iotool.execute(*self._iotool_lamp_commands(**{lamp: enabled}))
-        self._update_property(lamp+'.enabled', enabled)
+    def _get_enabled(self, lamp):
+        raise NotImplementedError()
 
     def _iotool_lamp_commands(self, **lamps):
         """Produce a sequence of IOTool commands to enable and disable given
@@ -123,7 +123,7 @@ class _BaseSpectra(property_device.PropertyDevice):
             if lamp_name not in self._available_lamps:
                 raise ValueError('Invalid lamp name')
             lamp = getattr(self, lamp_name)
-            if hasattr(lamp, 'set_'+ lamp_prop):
+            if hasattr(lamp, 'set_' + lamp_prop):
                 return getattr(lamp, 'get_'+lamp_prop), getattr(lamp, 'set_'+lamp_prop)
             else:
                 raise ValueError('Invalid lamp parameter "{}"'.format(lamp_prop))
@@ -186,6 +186,14 @@ class SpectraX(_BaseSpectra):
         self._lamp_intensities = {}
         self._lamp_enableds = {}
 
+    def _get_enabled(self, lamp):
+        return self._lamp_enableds[lamp]
+
+    def _set_enabled(self, lamp, enabled):
+        self._iotool.execute(*self._iotool_lamp_commands(**{lamp: enabled}))
+        self._lamp_enableds[lamp] = enabled
+        self._update_property(lamp+'.enabled', enabled)
+
     def _get_intensity(self, lamp):
         return self._lamp_intensities[lamp]
 
@@ -202,13 +210,6 @@ class SpectraX(_BaseSpectra):
             self._serial_port.write(bytes(dac_bytes))
         self._lamp_intensities[lamp] = value
         self._update_property(lamp+'.intensity', value)
-
-    def _get_enabled(self, lamp):
-        return self._lamp_enableds[lamp]
-
-    def _set_enabled(self, lamp, enabled):
-        self._lamp_enableds[lamp] = enabled
-        super()._set_enabled(lamp, enabled)
 
     def _get_temperature(self):
         with self._serial_port_lock:
@@ -254,6 +255,7 @@ class SpectraError(Exception):
 
 class SpectraIII(_BaseSpectra):
     _DESCRIPTION = 'Lumencor Spectra III'
+    _UPDATE_INTERVAL = 2
     _LAMP_NAMES = ['uv', 'blue', 'cyan', 'teal', 'green', 'yellow', 'red', 'nIR']
     _LAMP_IDX = {lamp: i for i, lamp in enumerate(_LAMP_NAMES)}
     _LAMP_SPECS = {
@@ -287,7 +289,7 @@ class SpectraIII(_BaseSpectra):
         '60': 'Interlock active',
         '61': 'Feature unavailable',
         '62': 'Governor lock acquired (permanent)',
-        '63': 'Governor prediction lock acquired',
+        '63': 'Power limit exceeded', # 'Governor prediction lock acquired',
         '64': 'TEC lock active',
         '65': 'TEC temperature out of range (temperature control error)',
         '66': 'Permanent storage error (eMMC)',
@@ -318,17 +320,17 @@ class SpectraIII(_BaseSpectra):
     }
 
     def send_command(self, cmd):
-        cmdname = cmd.split(' ')[1]
+        cmd_in = cmd.split(' ')[1]
         with self._serial_port_lock:
             self._serial_port.write(cmd.encode('ascii') + b'\r')
-            code, name_out, *ret = self._serial_port.read_until(b'\r\n')[:-2].decode('ascii').split(' ')
+            code, cmd_out, *ret = self._serial_port.read_until(b'\r\n')[:-2].decode('ascii').split(' ')
         if len(ret) == 1:
             ret = ret[0]
         elif len(ret) == 0:
             ret = None
         if code != 'A':
             raise SpectraError(f'Error from Spectra III: command "{cmd}" returned error "{self._ERROR_CODES[ret]}"')
-        if name_out != cmdname:
+        if cmd_out != cmd_in:
             raise SpectraError(f'Unknown response to command "{cmd}": "{cmd_out}"')
         return ret
 
@@ -345,22 +347,39 @@ class SpectraIII(_BaseSpectra):
         if len(errs) != 0:
             raise SpectraError('Lamps not ready:\n' + '\n'.join(errs))
 
-    def get_status(self):
+    def get_spectra_status(self):
         return self._STATUS_CODES[self.send_command('GET STAT')]
 
     def get_lamps_status(self):
         values = self.send_command('GET MULCHSTAT')
         return {lamp: self._LAMP_STATUS_CODES[value] for lamp, value in zip(self._LAMP_NAMES, values)}
 
-    def get_intensities(self):
+    def get_lamps_intensity(self):
         values = self.send_command('GET MULCHINT')
         intensities = {lamp: int(round(int(value) * 255/1000)) for lamp, value in zip(self._LAMP_NAMES, values)}
+        # in some scenarios, the spectra will zero out the lamp intensities
+        # to prevent an over-power state, so we should update our intensity state
+        # when possible
         for lamp, value in intensities.items():
             self._update_property(lamp+'.intensity', value)
         return intensities
 
+    def get_lamps_enabled(self):
+        values = self.send_command('GET MULCH')
+        enableds = {lamp: bool(int(value)) for lamp, value in zip(self._LAMP_NAMES, values)}
+        # in some scenarios, the spectra can over-power then reboot into a lamps-disabled
+        # state, so we should update our enabled state when possible
+        for lamp, value in enableds.items():
+            self._update_property(lamp+'.enabled', value)
+        return enableds
+
+    def get_ttls_active(self):
+        """Returns set of TTL signals the Spectra III is receiving"""
+        values = self.send_command('GET MULCHTTL')
+        return {lamp: bool(int(value)) for lamp, value in zip(self._LAMP_NAMES, values)}
+
     def _get_intensity(self, lamp):
-        return self.get_intensities()[lamp]
+        return self.get_lamps_intensity()[lamp]
 
     def _set_intensity(self, lamp, value):
         assert 0 <= value <= 255
@@ -368,15 +387,13 @@ class SpectraIII(_BaseSpectra):
         self.send_command(f'SET CHINT {self._LAMP_IDX[lamp]} {int(round(value * 1000/255))}')
         self._update_property(lamp+'.intensity', value)
 
-    def get_lamps_enabled(self):
-        values = self.send_command('GET MULCHACT')
-        enableds = {lamp: bool(int(value)) for lamp, value in zip(self._LAMP_NAMES, values)}
-        for lamp, value in enableds.items():
-            self._update_property(lamp+'.enabled', value)
-        return enableds
-
     def _get_enabled(self, lamp):
         return self.get_lamps_enabled()[lamp]
+
+    def _set_enabled(self, lamp, value):
+        value = bool(value)
+        self.send_command(f'SET CH {self._LAMP_IDX[lamp]} {int(value)}')
+        self._update_property(lamp+'.enabled', value)
 
     def _get_temperature(self):
         return float(self.send_command('GET TEMP'))
@@ -387,5 +404,5 @@ class SpectraIII(_BaseSpectra):
     def _update_properties(self):
         super()._update_properties()
         self.get_power_usage()
-        self.get_intensities()
         self.get_lamps_enabled()
+        self.get_lamps_intensity()

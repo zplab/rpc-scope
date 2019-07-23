@@ -30,6 +30,24 @@ class LampWidget(device_widget.DeviceWidget):
             # sort lamp names by the values of the lamp_specs dict; to wit, the center wavelengths
             lamps = sorted(lamp_specs.keys(), key=lamp_specs.get)
             self.lamp_controllers += [LampController(self, 'scope.il.spectra.'+lamp, grid_layout) for lamp in lamps]
+            if hasattr(scope.il.spectra, 'green_yellow_filter'):
+                hbox = Qt.QHBoxLayout()
+                hbox.setContentsMargins(0, 0, 0, 0)
+                hbox.setSpacing(2)
+                green = Qt.QRadioButton('green')
+                yellow = Qt.QRadioButton('yellow')
+                hbox.addWidget(Qt.QLabel('Filter position:'))
+                hbox.addWidget(green)
+                hbox.addWidget(yellow)
+                container_layout.addLayout(hbox)
+                buttons = dict(green=green, yellow=yellow)
+                def filter_changed(value):
+                    buttons[value].setChecked(True)
+                filter_update = self.subscribe('scope.il.spectra.green_yellow_filter', callback=filter_changed)
+                def green_toggled(checked):
+                    color = 'green' if checked else 'yellow'
+                    filter_update(color)
+                green.toggled.connect(green_toggled)
 
 class LampController:
     def __init__(self, widget, name, layout):
