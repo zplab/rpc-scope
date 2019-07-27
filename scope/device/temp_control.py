@@ -23,8 +23,12 @@ class TemperatureController(property_device.PropertyDevice):
         except smart_serial.SerialTimeout:
             # explicitly clobber traceback from SerialTimeout exception
             raise smart_serial.SerialException('Could not read data from temperature controller -- is it turned on?')
+        self._initialize_controller()
         if property_server:
             self._timer_thread = timer.Timer(self._update_properties, interval=10)
+
+    def _initialize_controller(self):
+        pass
 
     def _read(self):
         with self._serial_port_lock:
@@ -159,6 +163,11 @@ class PolyScienceCirculator(TemperatureControllerWithReadout, TemperatureControl
             if val[0] == 'S' and result[0] != '!':
                 raise ValueError('Invalid response from temperature controller')
             return result[:-1]
+
+    def _initialize_controller(self):
+        self._call_response(f'SO1') # Turn pump off standby if it's not on
+        self._call_response(f'SW1') # Set pump to auto-restart
+        self._call_response(f'SJ1') # Use external probe
 
     def _get_target_temperature(self):
         return float(self._call_response('RS'))
