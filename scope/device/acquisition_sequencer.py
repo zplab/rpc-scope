@@ -228,7 +228,7 @@ class AcquisitionSequencer:
             # commands and not TTL, so we also need to make sure to turn off the TTLs.
             # For Spectra or Spectra X, this just amounts to sending two sets of commands
             # to turn the TTLs off, but that's fine.
-            self._iotool.execute(self._iotool_lamps_off)
+            self._iotool.execute(*self._iotool_lamps_off)
             # wait for lamps to turn off
             time.sleep(max(config.sutter_led.TIMING.off_latency_ms + config.sutter_led.TIMING.fall_ms,
                            config.spectra.TIMING.off_latency_ms + config.spectra.TIMING.fall_ms) / 1000)
