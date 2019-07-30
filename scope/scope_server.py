@@ -67,7 +67,7 @@ class ScopeServer(base_daemon.Runner):
         # Provide some basic RPC calls for testing...
         scope_controller._sleep = time.sleep
         scope_controller._ping = lambda: "pong"
-        scope_controller.time = time.time
+        scope_controller.time = lambda: time.time() # must be lambda: introspection (in __describe__) fails on builtin time.time
 
         image_transfer_namespace = Namespace()
         # add transfer_ism_buffer as hidden elements of the namespace, which RPC clients can use for seamless buffer sharing
