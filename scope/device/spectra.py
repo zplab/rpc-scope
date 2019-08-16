@@ -29,8 +29,11 @@ class Lamp(state_stack.StateStackDevice):
     def get_enabled(self):
         return self._spectra._get_enabled(self._name)
 
+class SpectraError(Exception):
+    pass
+
 class _BaseSpectra(property_device.PropertyDevice):
-    _EXPECTED_INIT_ERRORS = (smart_serial.SerialException,)
+    _EXPECTED_INIT_ERRORS = (smart_serial.SerialException, SpectraError)
     _UPDATE_INTERVAL = 10
 
     def __init__(self, iotool: iotool.IOTool, property_server=None, property_prefix=''):
@@ -250,9 +253,6 @@ class Spectra(SpectraX):
         return self._green_yellow_pos
 
 
-class SpectraError(Exception):
-    pass
-
 class SpectraIII(_BaseSpectra):
     _DESCRIPTION = 'Lumencor Spectra III'
     _UPDATE_INTERVAL = 2
@@ -337,7 +337,7 @@ class SpectraIII(_BaseSpectra):
     def _initialize_spectra(self):
         self.send_command('SET TTLENABLE 1')
         self.send_command('SET TTLPOL 1')
-        status = self.get_status()
+        status = self.get_spectra_status()
         if status != 'OK':
             raise SpectraError(f'Spectra III in error condition: "{status}"')
         errs = []
