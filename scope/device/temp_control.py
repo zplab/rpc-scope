@@ -162,7 +162,7 @@ class PolyScienceCirculator(TemperatureControllerWithReadout, TemperatureControl
                 raise ValueError('Invalid command to temperature controller')
             if val[0] == 'S' and result[0] != '!':
                 raise ValueError('Invalid response from temperature controller')
-            return result[:-1]
+            return result
 
     def _initialize_controller(self):
         self._call_response(f'SO1') # Turn pump off standby if it's not on

@@ -67,8 +67,9 @@ class ScopeServer(base_daemon.Runner):
         # Provide some basic RPC calls for testing...
         scope_controller._sleep = time.sleep
         scope_controller._ping = lambda: "pong"
-        scope_controller.time = lambda: time.time() # must be lambda: introspection (in __describe__) fails on builtin time.time
-
+        # need a python function for below: time.time() is builtin, for which
+        # introspection (used to describe the namespace over RPC) would fail
+        scope_controller.time = lambda: time.time()
         image_transfer_namespace = Namespace()
         # add transfer_ism_buffer as hidden elements of the namespace, which RPC clients can use for seamless buffer sharing
         image_transfer_namespace._transfer_ism_buffer = transfer_ism_buffer

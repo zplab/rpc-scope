@@ -4,10 +4,13 @@ import threading
 import collections
 import time
 
+from ..config import scope_configuration
 from ..util import smart_serial
 from ..util import property_device
 from ..util import timer
-from ..config import scope_configuration
+
+from .util import logging
+logger = logging.get_logger(__name__)
 
 COMMAND_CHAR = b'*'
 
@@ -64,6 +67,7 @@ class HumidityController(property_device.PropertyDevice):
             humidity, temperature = self.get_data()
             self.get_target_humidity()
             self._logged_data.append((time.time(), humidity, temperature))
+            logger.info(f'Temperature: {temperature:.1f}C Humidity: {humidity:.1f}%')
 
     def full_reset(self):
         with self._serial_port_lock:

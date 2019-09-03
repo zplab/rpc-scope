@@ -35,6 +35,10 @@ class JobRunner(property_device.PropertyDevice):
             jobs_out.append(d)
         return jobs_out
 
+    def get_job_blurbs(self):
+        jobs = [job for job in self._runner.jobs.get_jobs() if job.exec_file.name != 'incubator_check']
+        return [self._runner.format_job_blurb(job) for job in jobs]
+
     def get_current_job(self):
         job = self._runner.current_job.get()
         if job is not None:

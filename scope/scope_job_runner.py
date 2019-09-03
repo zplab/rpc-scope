@@ -173,7 +173,8 @@ class JobRunner(base_daemon.Runner):
             for job in non_queued_jobs:
                 print(self.format_job_blurb(job))
 
-    def format_job_blurb(self, job):
+    @staticmethod
+    def format_job_blurb(job):
         if job.next_run_time is None:
             time_blurb = 'no additional runs scheduled'
         else:
