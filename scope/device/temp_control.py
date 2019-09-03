@@ -123,14 +123,18 @@ class AnovaCirculator(TemperatureControllerWithBathTemp):
         with self._serial_port_lock:
             self._write(val)
             echo = self._read()
+            reply = self._read()
             if echo != val: # read back echo
+                self._serial_port.clear_input_buffer()
                 raise RuntimeError('unexpected serial response: "{}"'.format(echo))
-            return self._read()
+            return reply
 
     def _test_connection(self):
+        self._serial_port.clear_input_buffer()
         result = self._call_response('temp')
         if result.strip() == '':
             # sometimes after a reboot (?) the circulator sends extra newlines...
+            self._serial_port.clear_input_buffer()
             result = self._call_response('temp')
         try:
             float(result)
@@ -144,11 +148,13 @@ class AnovaCirculator(TemperatureControllerWithBathTemp):
         return float(self._call_response('get temp setting'))
 
     def _set_target_temperature(self, temp):
-        ret = self._call_response('set temp {:.2f}'.format(temp))
-        if ret.startswith('Error'):
-            self._read() # clear a stray \n\r from the output
+        reply = self._call_response('set temp {:.2f}'.format(temp))
+        if reply.startswith('Error'):
+            with self._serial_port_lock:
+                # clear a stray \n\r from the output buffer
+                self._serial_port.clear_input_buffer()
             raise ValueError('invalid temperature setting')
-        return float(ret)
+        return float(reply)
 
 class PolyScienceCirculator(TemperatureControllerWithReadout, TemperatureControllerWithBathTemp):
     _DESCRIPTION = 'PolyScience Circulator'
