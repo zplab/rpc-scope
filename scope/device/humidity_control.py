@@ -9,7 +9,7 @@ from ..util import smart_serial
 from ..util import property_device
 from ..util import timer
 
-from .util import logging
+from ..util import logging
 logger = logging.get_logger(__name__)
 
 COMMAND_CHAR = b'*'
