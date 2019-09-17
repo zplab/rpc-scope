@@ -11,7 +11,7 @@ from . import tl_lamp
 ExposureStep = collections.namedtuple('ExposureStep', ['exposure_ms', 'lamp', 'tl_intensity', 'delay_after_ms', 'on_delay_ms', 'off_delay_ms'])
 
 class AcquisitionSequencer:
-    def __init__(self, camera: andor.Camera, iotool: iotool.IOTool, spectra: spectra.SpectraX, tl_lamp: tl_lamp.SutterLED_Lamp):
+    def __init__(self, camera: andor.Camera, iotool: iotool.IOTool, spectra: spectra._BaseSpectra, tl_lamp: tl_lamp.SutterLED_Lamp):
         self._camera = camera
         self._iotool = iotool
         self._spectra = spectra
