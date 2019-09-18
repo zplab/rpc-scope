@@ -13,7 +13,7 @@ def image_order_statistic(image, k):
 class DarkCurrentCorrector:
     """Class that acquires dark-current images and corrects newly-acquired images
     for the dark currents."""
-    def __init__(self, scope, min_exposure_ms=0.5, max_exposure_ms=1000, frames_to_average=5):
+    def __init__(self, scope, min_exposure_ms=1, max_exposure_ms=1000, frames_to_average=5):
         """Collect dark-current images across a range of exposures.
 
         NB: generally the dark-current images will only be valid for images
