@@ -234,7 +234,6 @@ class AcquisitionSequencer:
                            config.spectra.TIMING.off_latency_ms + config.spectra.TIMING.fall_ms) / 1000)
             readout_ms = self._camera.get_readout_time() # get this after setting the relevant camera modes above
             self._exposures = [exp + readout_ms for exp in self._fire_all_time]
-            self._iotool.wait_until_done() # make sure IOTool is ready
             self._iotool.start_program()
             names, self._latest_timestamps = [], []
             for exposure in self._exposures:
