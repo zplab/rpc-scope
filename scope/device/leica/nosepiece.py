@@ -18,6 +18,14 @@ GET_MIN_POS_OBJ = 76038
 GET_MAX_POS_OBJ = 76039
 SET_OBJECTIVE_TURRET_EVENT_SUBSCRIPTIONS = 76003
 
+def _parse_mag_string(mag):
+    if mag == '-':
+        return None
+    mag = float(mag)
+    if int(mag) == mag:
+        mag = int(mag)
+    return mag
+
 class ManualNosepiece(stand.LeicaComponent):
     # Note that objective position is reported as 0 when the objective turret is between positions. The objective
     # turret is between positions when it is in the process of responding to a position change request and also when
@@ -29,10 +37,9 @@ class ManualNosepiece(stand.LeicaComponent):
         self._mags = [None for i in range(self._maxp + 1)]
         self._mags_to_positions = collections.defaultdict(list)
         for p in range(self._minp, self._maxp+1):
-            mag = self.send_message(GET_OBJPAR, p, 1).response.split(' ')[2]
+            mag = _parse_mag_string(self._get_objpar(p, 1))
             # Note: dm6000b reports magnifications in integer units with a dash indicating no magnification / empty
             # turret position
-            mag = None if mag == '-' else int(mag)
             self._mags[p] = mag
             self._mags_to_positions[mag].append(p)
 
@@ -56,11 +63,7 @@ class ManualNosepiece(stand.LeicaComponent):
         '''The current objective's magnification. I.e., the magnification of the objective at the currently selected
         objective turret position. Note that if the objective turret is between positions or is set to an empty position,
         this value will be None.'''
-        mag = self._get_objpar(self.get_position(), 1)
-        if mag == '-':
-            return None
-        else:
-            return int(mag)
+        return _parse_mag_string(self._get_objpar(self.get_position(), 1))
 
     def get_magnification_values(self):
         return list(sorted(filter(lambda m: m is not None, self._mags_to_positions.keys())))
@@ -108,15 +111,20 @@ class ManualNosepiece(stand.LeicaComponent):
                               (17, 'DIC turret fine position'))
 
     def get_objectives_details(self):
-        '''Returns a list of objective parameter dicts / None values. List index corresponds to objective position. None values
-        in the list represent empty objective turret positions. Querying this property causes internal scope components to audibly
+        '''Returns a list of objective parameter dicts / None values. 
+        List index corresponds to objective position-1 (objectives are 1-indexed...). 
+        None values in the list represent empty objective turret positions.
+        
+        Querying this property may cause internal scope components to audibly
         do things. It is therefore advisable to avoid querying this property from a script that runs regularly.'''
-        objectives = [None for i in range(self._maxp + 1)]
+        objectives = []
         for p in range(self._minp, self._maxp+1):
-            mag = self._get_objpar(p, 1)
-            if mag != '-':
+            mag = _parse_mag_string(self._get_objpar(p, 1))
+            if mag is None:
+                details = None
+            else:
                 details = {
-                    'magnification': int(mag),
+                    'magnification': mag,
                     'numerical aperture': float(self._get_objpar(p, 2)),
                     'article number': int(self._get_objpar(p, 3)),
                     'type': self._get_objpar(p, 5),
@@ -135,9 +143,9 @@ class ManualNosepiece(stand.LeicaComponent):
                     meth_objpars = reversed(self._get_objpar(p, objpar_idx))
                     details[objpar_name] = {microscopy_method_names.NAMES[meth_idx]: int(meth_objpar)
                                                  for meth_idx, meth_objpar in enumerate(meth_objpars)}
-                method_mask = reversed(list(self._get_objpar(p, 1)))
-                details['microscopy methods'] = [microscopy_method_names.NAMES[meth_idx] for meth_idx, v in enumerate(method_mask) if bool(int(v))]
-                objectives[p] = details
+                methods_enabled = reversed([bool(int(v)) for v in self._get_objpar(p, 4)])
+                details['microscopy methods'] = [(microscopy_method_names.NAMES[meth_idx], enabled) for meth_idx, enabled in enumerate(methods_enabled)]
+            objectives.append(details)
         return objectives
 
     def _set_objectives_intensities(self, intensity):
