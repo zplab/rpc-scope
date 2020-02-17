@@ -57,6 +57,7 @@ class JobRunner(base_daemon.Runner):
         self.jobs = _JobList(self.base_dir / 'jobs.json')
         self.current_job = _JobFile(self.base_dir / 'job_current')
         self.log_dir = self.base_dir / 'job_logs'
+        self.log_dir.mkdir(exist_ok=True)
         self.audit_log = self.log_dir / 'audit_log'
         super().__init__(name='Scope Job Manager', pidfile_path=self.base_dir / 'scope_job_runner.pid')
 

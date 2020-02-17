@@ -864,7 +864,7 @@ class BufferFactory:
     def convert_buffer(self):
         name = next(self.names)
         output_array = transfer_ism_buffer.create_array(name, shape=self.buffer_shape,
-            dtype=numpy.uint16, order='Fortran')
+            dtype=numpy.uint16, order='F')
         buffer = self.queued_buffers.popleft()
         timestamp = parse_buffer_metadata(buffer, 1) # timestamp is metadata CID 1
         if timestamp is not None:
