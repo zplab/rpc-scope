@@ -125,17 +125,10 @@ def _client_unpack_data(buf, compressor='blosc'):
     if compressor is None:
         data = array_buf
     elif compressor == 'zlib':
-        data = zlib.decompress(array_buf)
+        data = bytearray(zlib.decompress(array_buf))
     elif compressor == 'blosc':
         import blosc
-        try:
-            # This works as of June 2 (pyblosc git repo commit ID 487fe5531abc38faebd47b92a34991a1489a7ac3)
-            data = blosc.decompress(array_buf)
-        except TypeError:
-            # However, as of Aug 11 2015, the version of pyblosc installed by pip-3.4 does not yet include
-            # the fix, so most lab machines will fall through to the following legacy method, which copies
-            # to a temporary intermediate buffer
-            data = blosc.decompress(bytes(array_buf))
+        data = blosc.decompress(array_buf, as_bytearray=True)
     array = numpy.ndarray(shape, dtype=dtype, order=order, buffer=data)
     array.flags.writeable = True
     return array

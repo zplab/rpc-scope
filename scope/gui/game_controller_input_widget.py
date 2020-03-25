@@ -18,7 +18,7 @@ try:
 
             def join(self):
                 self.wait()
-except ModuleNotFoundError:
+except (ModuleNotFoundError, ImportError):
     has_game_controller_input = False
 
 # GameControllerInputWidget is actually just a QAction. QAction provides all the functionality required while avoiding
