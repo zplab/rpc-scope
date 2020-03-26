@@ -350,13 +350,14 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         metadata = {}
         last_autofocus_time = 0
         if self.USE_LAST_FOCUS_POSITION:
-            last_z = self.positions[position_name][2]
+            last_z = None
             for m in position_metadata[::-1]:
                 if 'fine_z' in m:
                     last_autofocus_time = m['timestamp']
                     last_z = m['fine_z']
                     break
-            self.scope.stage.z = last_z
+            if last_z is not None:
+                self.scope.stage.z = last_z
 
         override_autofocus = False
         z_updates = self.experiment_metadata.get('z_updates', {})

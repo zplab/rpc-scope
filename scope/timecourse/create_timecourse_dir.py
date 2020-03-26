@@ -14,6 +14,7 @@ from ris_widget.overlay import roi
 from ris_widget import layer
 
 from ..gui import scope_viewer_widget
+from . import metadata_util
 
 handler_template = \
 '''import pathlib
@@ -312,22 +313,13 @@ def update_z_positions(data_dir, scope):
         scope: scope object.
     """
     data_dir = pathlib.Path(data_dir)
-    experiment_metadata_path = data_dir / 'experiment_metadata.json'
-    with experiment_metadata_path.open() as f:
-        experiment_metadata = json.load(f)
+    experiment_metadata_path, experiment_metadata = metadata_util.get_experiment_metadata(data_dir)
     positions = experiment_metadata['positions']
 
     new_z = {}
-    for position_name, (x,y,z) in sorted(positions.items()):
-        position_dir = data_dir / position_name
-        position_metadata_path = position_dir / 'position_metadata.json'
-        with position_metadata_path.open() as f:
-            position_metadata = json.load(f)
-        for m in position_metadata[::-1]:
-            if 'fine_z' in m:
-                z = m['fine_z']
-                break
-        scope.stage.position = x, y, z
+    for position_name in sorted(positions.keys()):
+        position_dir, metadata_path, position_metadata = metadata_util.get_position_metadata(data_dir position_name)
+        scope.stage.position = metadata_util.get_latest_coordinates(position_name, experiment_metadata, position_metadata)
         input('refine position {} (press enter when done)'.format(position_name))
         new_z[position_name] = scope.stage.z
 
@@ -352,9 +344,7 @@ def update_positions(data_dir, scope, image_type='bf', dry_run=False, ignore_aut
             instead just use the value from the original metadata file.
     """
     data_dir = pathlib.Path(data_dir)
-    experiment_metadata_path = data_dir / 'experiment_metadata.json'
-    with experiment_metadata_path.open() as f:
-        experiment_metadata = json.load(f)
+    experiment_metadata_path, experiment_metadata = metadata_util.get_experiment_metadata(data_dir)
     positions = experiment_metadata['positions']
     new_positions = {}
     names, xyzs = zip(*positions.items())
@@ -372,21 +362,13 @@ def update_positions(data_dir, scope, image_type='bf', dry_run=False, ignore_aut
     with scope.camera.in_state(live_mode=True), scope.tl.lamp.in_state(enabled=True), scope.stage.in_state(async_=True):
         for i in position_order:
             position_name = names[i]
-            x, y, z = xyzs[i]
+            position_dir, metadata_path, position_metadata = metadata_util.get_position_metadata(data_dir position_name)
+            x, y, z = metadata_util.get_latest_coordinates(position_name, experiment_metadata, position_metadata, ignore_autofocus_z)
             # now apply current guess of rotation and translation to get estimated
             # new position
             x, y = numpy.dot([x, y], rotation) + translation
             scope.stage.position = x, y, z
 
-            position_dir = data_dir / position_name
-            position_metadata_path = position_dir / 'position_metadata.json'
-            with position_metadata_path.open() as f:
-                position_metadata = json.load(f)
-            if not ignore_autofocus_z:
-                for m in position_metadata[::-1]:
-                    if 'fine_z' in m:
-                        z = m['fine_z']
-                        break
             image = None
             for m in position_metadata[::-1]:
                 timepoint = m['timepoint']
