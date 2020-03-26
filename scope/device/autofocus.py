@@ -176,16 +176,21 @@ class Autofocus:
         metric = self._start_autofocus(metric, metric_kws, metric_mask, metric_filter_period_range)
         with self._camera.in_state(live_mode=False, trigger_mode='Software'):
             frame_rate, overlap = self._camera.calculate_streaming_mode(steps, desired_frame_rate=1000) # try to get the max possible frame rate...
+            # NB: we know overlap is False bc we're in software trigger mode
+            assert overlap is False
             exposure_time = self._camera.get_exposure_time()
             z_positions = numpy.linspace(start, end, steps)
             runner = MetricRunner(self._camera, frame_rate, steps, metric, return_images)
             with self._stage.in_state(async_=False), self._camera.image_sequence_acquisition(steps):
-                self._stage.set_z(z_positions[0]) # pre-position stage
+                self._stage.set_z(start) # pre-position stage
                 runner.start()
+                next_trigger = time.time() # start triggering immediately
                 for z in z_positions:
                     self._stage.set_z(z)
+                    time.sleep(max(0, next_trigger - time.time()))
                     self._camera.send_software_trigger()
-                    time.sleep(exposure_time)
+                    next_trigger = time.time() + 1/frame_rate # don't trigger again before it's time
+                    time.sleep(exposure_time) # don't move stage until exposure is done
                 image_names, camera_timestamps = runner.join()
         best_z, positions_and_scores = self._finish_autofocus(metric, z_positions)
         if not return_images:
