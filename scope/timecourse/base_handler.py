@@ -181,7 +181,10 @@ class TimepointHandler:
         position_dir.mkdir(exist_ok=True)
         if self.scope is not None:
             with self.debug_timing('Stage positioning'):
-                self.scope.stage.position = position_coords
+                # approach from below for maximum repeatability
+                x, y, z = position_coords
+                self.scope.stage.position = x, y, z-0.2
+                self.scope.z = z
         images, image_names, new_metadata = self.acquire_images(position_name, position_dir, position_metadata)
         new_metadata['timestamp'] = timestamp
         new_metadata['timepoint'] = self.timepoint_prefix

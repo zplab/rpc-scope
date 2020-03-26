@@ -126,11 +126,10 @@ class Autofocus:
             assert callable(metric)
             return AutofocusMetric(metric, shape, mask=metric_mask, fft_period_range=metric_filter_period_range, **metric_kws)
 
-    def _finish_autofocus(self, metric, z_positions):
+    def _finish_autofocus(self, metric, z_positions, direction):
         best_i, z_scores = metric.find_best_focus_index()
         best_z = z_positions[best_i]
-        self._stage.set_z(best_z) # go to focal plane with highest score
-        self._stage.wait() # no op if in sync mode, necessary in async_ mode
+        self._stage.z_from_offset(best_z, direction, async_=False)
         return best_z, zip(z_positions, z_scores)
 
     def autofocus(self, start, end, steps, metric='brenner', metric_kws=None,
@@ -180,9 +179,10 @@ class Autofocus:
             assert overlap is False
             exposure_time = self._camera.get_exposure_time()
             z_positions = numpy.linspace(start, end, steps)
+            direction = numpy.sign(start-end)
             runner = MetricRunner(self._camera, frame_rate, steps, metric, return_images)
             with self._stage.in_state(async_=False), self._camera.image_sequence_acquisition(steps):
-                self._stage.set_z(start) # pre-position stage
+                self._stage.z_from_offset(start, direction) # pre-position stage
                 runner.start()
                 next_trigger = time.time() # start triggering immediately
                 for z in z_positions:
@@ -192,7 +192,7 @@ class Autofocus:
                     next_trigger = time.time() + 1/frame_rate # don't trigger again before it's time
                     time.sleep(exposure_time) # don't move stage until exposure is done
                 image_names, camera_timestamps = runner.join()
-        best_z, positions_and_scores = self._finish_autofocus(metric, z_positions)
+        best_z, positions_and_scores = self._finish_autofocus(metric, z_positions, direction)
         if not return_images:
             image_names = []
         return best_z, positions_and_scores, image_names
@@ -242,11 +242,12 @@ class Autofocus:
                 an empty list
         """
         metric = self._start_autofocus(metric, metric_kws, metric_mask, metric_filter_period_range)
+        direction = numpy.sign(start-end)
         with self._camera.in_state(live_mode=False, trigger_mode='Internal'):
             steps, overlap, frame_rate, speed = self._calculate_autofocus_continuous_move_state(end, start, steps, max_speed)
             runner = MetricRunner(self._camera, frame_rate, steps, metric, return_images)
             zrecorder = ZRecorder(self._camera, self._stage)
-            self._stage.set_z(start) # move to start position at original speed
+            self._stage.z_from_offset(start, direction) # move to start position at original speed
             self._stage.wait()
             cam_state = dict(trigger_mode='External Start', frame_rate=frame_rate, overlap_enabled=overlap)
             with self._stage.in_state(async_=True, z_speed=speed), self._camera.image_sequence_acquisition(steps, **cam_state):
@@ -262,7 +263,7 @@ class Autofocus:
         if len(camera_timestamps) != steps:
             raise RuntimeError('Autofocus image acquisition failed: Expected {} images, got {}.'.format(steps, len(camera_timestamps)))
         z_positions = zrecorder.interpolate_zs(camera_timestamps)
-        best_z, positions_and_scores = self._finish_autofocus(metric, z_positions)
+        best_z, positions_and_scores = self._finish_autofocus(metric, z_positions, direction)
         if not return_images:
             image_names = []
         return best_z, positions_and_scores, image_names

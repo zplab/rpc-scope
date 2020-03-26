@@ -357,7 +357,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
                     last_z = m['fine_z']
                     break
             if last_z is not None:
-                self.scope.stage.z = last_z
+                self.scope.stage.z_from_offset(z, direction=-1) # approach from below always
 
         override_autofocus = False
         z_updates = self.experiment_metadata.get('z_updates', {})
@@ -369,7 +369,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
                 if position_name in latest_z_update:
                     z = latest_z_update[position_name]
                     self.logger.info('Using updated z: {}', z)
-                    self.scope.stage.z = z
+                    self.scope.stage.z_from_offset(z, direction=-1) # approach from below always
                     metadata['fine_z'] = z
                     override_autofocus = True
 
