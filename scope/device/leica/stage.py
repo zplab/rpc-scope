@@ -193,14 +193,15 @@ class Stage(stand.LeicaComponent):
         move command."""
         self._set_pos(z, self._z_mm_per_count, POS_ABS_Z, async_)
 
-    def z_from_offset(self, z, direction, offset=0.2, async_=None):
+    def z_from_offset(self, z, direction, offset=0.2):
         """Set the z-axis position, first moving to a fixed offset from the z position.
         Useful to always approach a z position from above or below, for maximum repeatability.
         Direction parameter used to control whether the offset is approached from below (-1) or
         above (+1)."""
         assert direction in (1, -1)
-        self.set_z(z + offset * direction, async_=True)
-        self.set_z(z, async_=async_)
+        with self.in_state(async_=False):
+            self.set_z(z + offset * direction)
+            self.set_z(z, async_=False)
 
     def get_position(self):
         """Return (x,y,z) positionz in mm."""

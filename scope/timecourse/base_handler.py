@@ -184,7 +184,7 @@ class TimepointHandler:
                 # approach from below for maximum repeatability
                 x, y, z = position_coords
                 self.scope.stage.position = x, y, z-0.2
-                self.scope.z = z
+                self.scope.stage.z = z
         images, image_names, new_metadata = self.acquire_images(position_name, position_dir, position_metadata)
         new_metadata['timestamp'] = timestamp
         new_metadata['timepoint'] = self.timepoint_prefix

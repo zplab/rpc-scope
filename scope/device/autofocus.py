@@ -129,7 +129,7 @@ class Autofocus:
     def _finish_autofocus(self, metric, z_positions, direction):
         best_i, z_scores = metric.find_best_focus_index()
         best_z = z_positions[best_i]
-        self._stage.z_from_offset(best_z, direction, async_=False)
+        self._stage.z_from_offset(best_z, direction)
         return best_z, zip(z_positions, z_scores)
 
     def autofocus(self, start, end, steps, metric='brenner', metric_kws=None,

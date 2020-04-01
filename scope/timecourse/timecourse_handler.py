@@ -12,6 +12,7 @@ from elegant import process_experiment
 from elegant import process_images
 
 from . import base_handler
+from . import metadata_util
 from ..client_util import autofocus
 from ..client_util import calibrate
 from ..config import scope_configuration
@@ -127,7 +128,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
                 reading previous image data.
             position_metadata: list of all the stored position metadata from the
                 previous timepoints, in chronological order.
-            current_timepoint_metadata: the metatdata for the current timepoint.
+            current_timepoint_metadata: the metadata for the current timepoint.
                 It may be used to append to keys like 'image_timestamps' etc.
             images: list of acquired images. Newly-acquired images should be
                 appended to this list.
@@ -219,7 +220,7 @@ class BasicAcquisitionHandler(base_handler.TimepointHandler):
         position_name = self.experiment_metadata.get('bf_meter_position_name')
         if position_name is None:
             position_name = sorted(data_positions.keys())[0]
-        position_dir, metadata_path, position_metadata = self._position_metadata(position_name)
+        position_dir, metadata_path, position_metadata = metadata_util.get_position_metadata(self.data_dir, position_name)
         x, y, z = data_positions[position_name]
         # see if we have an updated z position to use on...
         for m in position_metadata[::-1]:
